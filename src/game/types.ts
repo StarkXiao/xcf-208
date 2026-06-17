@@ -279,7 +279,7 @@ export interface RebirthOption {
 export interface BattleLog {
   id: number;
   message: string;
-  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system' | 'reputation' | 'skill' | 'phase' | 'mp' | 'dodge' | 'critical';
+  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system' | 'reputation' | 'skill' | 'phase' | 'mp' | 'dodge' | 'critical' | 'drop' | 'death';
   timestamp: number;
 }
 
