@@ -2371,3 +2371,198 @@ export const RECRUIT_POOLS: RecruitPool[] = [
 export function getShardConfig(rarity: Companion['rarity']): ShardRecruitConfig {
   return SHARD_RECRUIT_CONFIGS.find((c) => c.rarity === rarity) || SHARD_RECRUIT_CONFIGS[0];
 }
+
+import type { ClassPassive } from './types';
+
+export const CLASS_PASSIVES: ClassPassive[] = [
+  {
+    classId: '战士',
+    className: '战士',
+    icon: '⚔️',
+    tagline: '身经百战的勇者，力量与耐力的化身',
+    levelBonus: {
+      stat: 'attack',
+      multiplier: 1.5,
+      description: '升级加点攻击力时，额外获得 50% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.1,
+      goldMultiplier: 1.15,
+      soulOrbChanceBonus: 0.02,
+      description: '挂机经验 +10%，金币 +15%，魂珠掉落率 +2%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.1,
+      negativeEffectReduction: 0.2,
+      eventWeightBonus: 0.1,
+      description: '事件正面收益 +10%，负面损失 -20%，事件触发率 +10%',
+    },
+    companionBonus: {
+      preferredClasses: ['战士', '骑士'],
+      preferredRaces: ['人类', '兽人', '矮人'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.2,
+      extraBondBonus: { type: 'attack', value: 3 },
+      description: '与战士/骑士伙伴好感度更快提升，伙伴攻防 +20%，羁绊额外 +3 攻击',
+    },
+  },
+  {
+    classId: '法师',
+    className: '法师',
+    icon: '🔮',
+    tagline: '掌控奥术的智者，魔力与智慧的化身',
+    levelBonus: {
+      stat: 'maxMp',
+      multiplier: 2.0,
+      description: '升级加点魔力时，额外获得 100% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.2,
+      goldMultiplier: 1.05,
+      soulOrbChanceBonus: 0.05,
+      description: '挂机经验 +20%，金币 +5%，魂珠掉落率 +5%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.25,
+      negativeEffectReduction: 0.1,
+      eventWeightBonus: 0.15,
+      description: '事件正面收益 +25%，负面损失 -10%，事件触发率 +15%',
+    },
+    companionBonus: {
+      preferredClasses: ['法师', '牧师'],
+      preferredRaces: ['魔族', '精灵', '人类'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.15,
+      extraBondBonus: { type: 'luck', value: 2 },
+      description: '与法师/牧师伙伴好感度更快提升，伙伴攻击 +15%，羁绊额外 +2 幸运',
+    },
+  },
+  {
+    classId: '盗贼',
+    className: '盗贼',
+    icon: '🗡️',
+    tagline: '影中行走的刺客，敏捷与幸运的化身',
+    levelBonus: {
+      stat: 'speed',
+      multiplier: 1.5,
+      description: '升级加点速度时，额外获得 50% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.15,
+      goldMultiplier: 1.25,
+      soulOrbChanceBonus: 0.08,
+      description: '挂机经验 +15%，金币 +25%，魂珠掉落率 +8%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.2,
+      negativeEffectReduction: 0.3,
+      eventWeightBonus: 0.2,
+      description: '事件正面收益 +20%，负面损失 -30%，事件触发率 +20%',
+    },
+    companionBonus: {
+      preferredClasses: ['盗贼', '弓箭手'],
+      preferredRaces: ['精灵', '魔族', '矮人'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.2,
+      extraBondBonus: { type: 'speed', value: 2 },
+      description: '与盗贼/弓箭手伙伴好感度更快提升，伙伴速度 +20%，羁绊额外 +2 速度',
+    },
+  },
+  {
+    classId: '牧师',
+    className: '牧师',
+    icon: '✨',
+    tagline: '传播圣光的使者，治愈与守护的化身',
+    levelBonus: {
+      stat: 'maxHp',
+      multiplier: 1.3,
+      description: '升级加点生命时，额外获得 30% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.08,
+      goldMultiplier: 1.1,
+      soulOrbChanceBonus: 0.03,
+      description: '挂机经验 +8%，金币 +10%，魂珠掉落率 +3%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.15,
+      negativeEffectReduction: 0.4,
+      eventWeightBonus: 0.12,
+      description: '事件正面收益 +15%，负面损失 -40%，事件触发率 +12%',
+    },
+    companionBonus: {
+      preferredClasses: ['牧师', '骑士'],
+      preferredRaces: ['人类', '精灵', '龙族'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.25,
+      extraBondBonus: { type: 'hp', value: 10 },
+      description: '与牧师/骑士伙伴好感度更快提升，伙伴防御 +25%，羁绊额外 +10 生命',
+    },
+  },
+  {
+    classId: '弓箭手',
+    className: '弓箭手',
+    icon: '🏹',
+    tagline: '百步穿杨的神射手，精准与迅捷的化身',
+    levelBonus: {
+      stat: 'luck',
+      multiplier: 2.0,
+      description: '升级加点幸运时，额外获得 100% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.12,
+      goldMultiplier: 1.2,
+      soulOrbChanceBonus: 0.06,
+      description: '挂机经验 +12%，金币 +20%，魂珠掉落率 +6%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.18,
+      negativeEffectReduction: 0.25,
+      eventWeightBonus: 0.18,
+      description: '事件正面收益 +18%，负面损失 -25%，事件触发率 +18%',
+    },
+    companionBonus: {
+      preferredClasses: ['弓箭手', '盗贼'],
+      preferredRaces: ['精灵', '人类', '兽人'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.2,
+      extraBondBonus: { type: 'luck', value: 3 },
+      description: '与弓箭手/盗贼伙伴好感度更快提升，伙伴攻击 +20%，羁绊额外 +3 幸运',
+    },
+  },
+  {
+    classId: '骑士',
+    className: '骑士',
+    icon: '🛡️',
+    tagline: '信守誓言的守护者，荣耀与坚韧的化身',
+    levelBonus: {
+      stat: 'defense',
+      multiplier: 1.5,
+      description: '升级加点防御时，额外获得 50% 属性加成',
+    },
+    idleBonus: {
+      expMultiplier: 1.05,
+      goldMultiplier: 1.12,
+      soulOrbChanceBonus: 0.04,
+      description: '挂机经验 +5%，金币 +12%，魂珠掉落率 +4%',
+    },
+    eventBonus: {
+      positiveEffectMultiplier: 1.12,
+      negativeEffectReduction: 0.35,
+      eventWeightBonus: 0.08,
+      description: '事件正面收益 +12%，负面损失 -35%，事件触发率 +8%',
+    },
+    companionBonus: {
+      preferredClasses: ['骑士', '战士', '牧师'],
+      preferredRaces: ['人类', '龙族', '矮人'],
+      affinityBonus: 5,
+      statBonusMultiplier: 1.3,
+      extraBondBonus: { type: 'defense', value: 3 },
+      description: '与骑士/战士/牧师伙伴好感度更快提升，伙伴防御 +30%，羁绊额外 +3 防御',
+    },
+  },
+];
+
+export function getClassPassive(className: string): ClassPassive | undefined {
+  return CLASS_PASSIVES.find((c) => c.classId === className);
+}

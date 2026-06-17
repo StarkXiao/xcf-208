@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
 import type { PlayerStats, PowerComponent } from '../game/types';
-import { RARITY_COLORS, RARITY_NAMES, TALENT_TREES } from '../game/data';
+import { RARITY_COLORS, RARITY_NAMES, TALENT_TREES, getClassPassive } from '../game/data';
 
 function StatBar({ label, current, max, color }: { label: string; current: number; max: number; color: string }) {
   return (
@@ -23,10 +23,21 @@ function StatBar({ label, current, max, color }: { label: string; current: numbe
   );
 }
 
-function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }: { stat: keyof PlayerStats; label: string; value: number | string; cost?: number; skillPoints: number; onUpgrade: (stat: keyof PlayerStats, cost: number) => void }) {
+function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade, classMultiplier = 1 }: {
+  stat: keyof PlayerStats;
+  label: string;
+  value: number | string;
+  cost?: number;
+  skillPoints: number;
+  onUpgrade: (stat: keyof PlayerStats, cost: number) => void;
+  classMultiplier?: number;
+}) {
   return (
-    <div className="upgrade-item">
-      <span className="upgrade-label">{label}</span>
+    <div className={`upgrade-item ${classMultiplier > 1 ? 'class-bonus' : ''}`}>
+      <span className="upgrade-label">
+        {label}
+        {classMultiplier > 1 && <span className="class-bonus-tag">×{classMultiplier}</span>}
+      </span>
       <span className="upgrade-value">{value}</span>
       <button
         className="upgrade-btn"
@@ -173,7 +184,7 @@ function StatBreakdownSection({
 }
 
 export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, getTotalTalentBonus, getActiveSynergies, getPowerBreakdown } = useGameStore();
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, getTotalTalentBonus, getActiveSynergies, getPowerBreakdown, getClassLevelBonusMultiplier, getClassIdleExpMultiplier, getClassIdleGoldMultiplier, getClassSoulOrbChanceBonus, getClassEventPositiveMultiplier, getClassEventNegativeReduction, getClassEventWeightBonus } = useGameStore();
   const { stats, skillPoints } = player;
 
   const [expandedStats, setExpandedStats] = useState<Record<string, boolean>>({
@@ -183,8 +194,10 @@ export default function StatsPanel() {
     speed: false,
   });
   const [showSources, setShowSources] = useState(false);
+  const [showClassPassive, setShowClassPassive] = useState(true);
 
   const powerBreakdown = getPowerBreakdown();
+  const classPassive = getClassPassive(player.class);
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;
   const goldBonus = rebirthBonuses['gold_boost'] || 0;
@@ -255,14 +268,71 @@ export default function StatsPanel() {
         <span className="skill-points-value">🎯 {skillPoints}</span>
       </div>
 
+      {classPassive && (
+        <div className="class-passive-section">
+          <div className="class-passive-header" onClick={() => setShowClassPassive(!showClassPassive)}>
+            <div className="class-passive-title">
+              <span className="class-passive-icon">{classPassive.icon}</span>
+              <span>{classPassive.className}专属被动</span>
+            </div>
+            <span className={`expand-arrow ${showClassPassive ? 'expanded' : ''}`}>▼</span>
+          </div>
+          <div className="class-passive-tagline">{classPassive.tagline}</div>
+          {showClassPassive && (
+            <div className="class-passive-content">
+              <div className="passive-category">
+                <h5>📈 升级加成</h5>
+                <div className="passive-item">
+                  <span className="passive-desc">{classPassive.levelBonus.description}</span>
+                </div>
+              </div>
+              <div className="passive-category">
+                <h5>⏰ 挂机效率</h5>
+                <div className="passive-item">
+                  <span className="passive-desc">{classPassive.idleBonus.description}</span>
+                </div>
+                <div className="passive-detail-grid">
+                  <span>经验 +{((getClassIdleExpMultiplier() - 1) * 100).toFixed(0)}%</span>
+                  <span>金币 +{((getClassIdleGoldMultiplier() - 1) * 100).toFixed(0)}%</span>
+                  <span>魂珠率 +{(getClassSoulOrbChanceBonus() * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+              <div className="passive-category">
+                <h5>✨ 事件收益</h5>
+                <div className="passive-item">
+                  <span className="passive-desc">{classPassive.eventBonus.description}</span>
+                </div>
+                <div className="passive-detail-grid">
+                  <span>正面 +{((getClassEventPositiveMultiplier() - 1) * 100).toFixed(0)}%</span>
+                  <span>负面 -{(getClassEventNegativeReduction() * 100).toFixed(0)}%</span>
+                  <span>触发率 +{(getClassEventWeightBonus() * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+              <div className="passive-category">
+                <h5>🤝 伙伴搭配</h5>
+                <div className="passive-item">
+                  <span className="passive-desc">{classPassive.companionBonus.description}</span>
+                </div>
+                <div className="passive-detail-grid">
+                  <span>偏好职业: {classPassive.companionBonus.preferredClasses.join('/')}</span>
+                  {classPassive.companionBonus.preferredRaces && (
+                    <span>偏好种族: {classPassive.companionBonus.preferredRaces.join('/')}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="upgrade-section">
         <h4>属性升级</h4>
-        <UpgradeButton stat="maxHp" label="❤️ 生命值" value={`${stats.maxHp} (+10)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
-        <UpgradeButton stat="maxMp" label="💙 魔力值" value={`${stats.maxMp} (+5)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
-        <UpgradeButton stat="attack" label="⚔️ 攻击力" value={`${stats.attack} (+2)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
-        <UpgradeButton stat="defense" label="🛡️ 防御力" value={`${stats.defense} (+2)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
-        <UpgradeButton stat="speed" label="👟 速度" value={`${stats.speed} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
-        <UpgradeButton stat="luck" label="🍀 幸运" value={`${stats.luck} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="maxHp" label="❤️ 生命值" value={`${stats.maxHp} (+${Math.floor(10 * getClassLevelBonusMultiplier('maxHp'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('maxHp')} />
+        <UpgradeButton stat="maxMp" label="💙 魔力值" value={`${stats.maxMp} (+${Math.floor(5 * getClassLevelBonusMultiplier('maxMp'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('maxMp')} />
+        <UpgradeButton stat="attack" label="⚔️ 攻击力" value={`${stats.attack} (+${Math.floor(2 * getClassLevelBonusMultiplier('attack'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('attack')} />
+        <UpgradeButton stat="defense" label="🛡️ 防御力" value={`${stats.defense} (+${Math.floor(2 * getClassLevelBonusMultiplier('defense'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('defense')} />
+        <UpgradeButton stat="speed" label="👟 速度" value={`${stats.speed} (+${Math.floor(1 * getClassLevelBonusMultiplier('speed'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('speed')} />
+        <UpgradeButton stat="luck" label="🍀 幸运" value={`${stats.luck} (+${Math.floor(1 * getClassLevelBonusMultiplier('luck'))})`} skillPoints={skillPoints} onUpgrade={upgradeStat} classMultiplier={getClassLevelBonusMultiplier('luck')} />
       </div>
 
       <div className="power-breakdown-section">

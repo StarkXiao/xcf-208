@@ -41,6 +41,7 @@ import type {
   MonsterKillStats,
   RebirthChallengeTarget,
   Monster,
+  ClassPassive,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -65,6 +66,7 @@ import {
   RECRUIT_POOLS,
   getShardConfig,
   REBIRTH_CHALLENGE_TARGETS,
+  getClassPassive,
 } from './data';
 
 interface GameState {
@@ -264,6 +266,18 @@ interface GameState {
   getDiscountedRecruitCost: (baseCost: number) => number;
   convertDuplicateToShards: (companionId: string) => number;
   clearLastRecruitResults: () => void;
+
+  getClassPassive: () => ClassPassive | undefined;
+  getClassLevelBonusMultiplier: (stat: 'attack' | 'defense' | 'maxHp' | 'maxMp' | 'speed' | 'luck') => number;
+  getClassIdleExpMultiplier: () => number;
+  getClassIdleGoldMultiplier: () => number;
+  getClassSoulOrbChanceBonus: () => number;
+  getClassEventPositiveMultiplier: () => number;
+  getClassEventNegativeReduction: () => number;
+  getClassEventWeightBonus: () => number;
+  isPreferredCompanion: (companion: Companion) => boolean;
+  getClassCompanionAffinityBonus: (companion: Companion) => number;
+  getClassCompanionStatMultiplier: (companion: Companion) => number;
 }
 
 let logIdCounter = 0;
@@ -381,16 +395,16 @@ function getStarUpConfig(rarity: Companion['rarity']) {
   return STAR_UP_CONFIGS.find((c) => c.rarity === rarity) || STAR_UP_CONFIGS[0];
 }
 
-function computeEffectiveAttack(companion: Companion): number {
+function computeEffectiveAttack(companion: Companion, classMultiplier = 1): number {
   const config = getStarUpConfig(companion.rarity);
   const multiplier = config.attackMultiplier[companion.stars] || config.attackMultiplier[config.attackMultiplier.length - 1];
-  return Math.floor(companion.attack * multiplier * companion.level);
+  return Math.floor(companion.attack * multiplier * companion.level * classMultiplier);
 }
 
-function computeEffectiveDefense(companion: Companion): number {
+function computeEffectiveDefense(companion: Companion, classMultiplier = 1): number {
   const config = getStarUpConfig(companion.rarity);
   const multiplier = config.defenseMultiplier[companion.stars] || config.defenseMultiplier[config.defenseMultiplier.length - 1];
-  return Math.floor(companion.defense * multiplier * companion.level);
+  return Math.floor(companion.defense * multiplier * companion.level * classMultiplier);
 }
 
 export const useGameStore = create<GameState>()(
@@ -615,16 +629,17 @@ export const useGameStore = create<GameState>()(
 
         set((state) => {
           const newStats = { ...state.player.stats };
-          if (stat === 'attack') newStats.attack += 2 * amount;
-          else if (stat === 'defense') newStats.defense += 2 * amount;
+          const multiplier = get().getClassLevelBonusMultiplier(stat as 'attack' | 'defense' | 'maxHp' | 'maxMp' | 'speed' | 'luck');
+          if (stat === 'attack') newStats.attack += Math.floor(2 * amount * multiplier);
+          else if (stat === 'defense') newStats.defense += Math.floor(2 * amount * multiplier);
           else if (stat === 'maxHp') {
-            newStats.maxHp += 10 * amount;
-            newStats.hp += 10 * amount;
+            newStats.maxHp += Math.floor(10 * amount * multiplier);
+            newStats.hp += Math.floor(10 * amount * multiplier);
           } else if (stat === 'maxMp') {
-            newStats.maxMp += 5 * amount;
-            newStats.mp += 5 * amount;
-          } else if (stat === 'speed') newStats.speed += 1 * amount;
-          else if (stat === 'luck') newStats.luck += 1 * amount;
+            newStats.maxMp += Math.floor(5 * amount * multiplier);
+            newStats.mp += Math.floor(5 * amount * multiplier);
+          } else if (stat === 'speed') newStats.speed += Math.floor(1 * amount * multiplier);
+          else if (stat === 'luck') newStats.luck += Math.floor(1 * amount * multiplier);
 
           return {
             player: {
@@ -737,11 +752,13 @@ export const useGameStore = create<GameState>()(
       },
 
       getCompanionEffectiveAttack: (companion) => {
-        return computeEffectiveAttack(companion);
+        const classMultiplier = get().getClassCompanionStatMultiplier(companion);
+        return computeEffectiveAttack(companion, classMultiplier);
       },
 
       getCompanionEffectiveDefense: (companion) => {
-        return computeEffectiveDefense(companion);
+        const classMultiplier = get().getClassCompanionStatMultiplier(companion);
+        return computeEffectiveDefense(companion, classMultiplier);
       },
 
       getActiveBonds: () => {
@@ -759,6 +776,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const activeBondIds = state.formation.activeBondIds;
         const bonus = { attack: 0, defense: 0, hp: 0, speed: 0, luck: 0 };
+        const classPassive = get().getClassPassive();
 
         activeBondIds.forEach((bondId) => {
           const bond = BONDS.find((b) => b.id === bondId);
@@ -778,6 +796,11 @@ export const useGameStore = create<GameState>()(
             bonus[b.type] += b.value * minStars;
           });
         });
+
+        if (classPassive?.companionBonus.extraBondBonus && activeBondIds.length > 0) {
+          const extra = classPassive.companionBonus.extraBondBonus;
+          bonus[extra.type] += extra.value;
+        }
 
         return bonus;
       },
@@ -841,6 +864,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const currentAreaId = state.currentAreaId;
         const repLevel = get().getAreaReputationLevel(currentAreaId);
+        const classEventBonus = get().getClassEventWeightBonus();
 
         const filterByTags = (events: GameEvent[]) => {
           return events.filter((e) => {
@@ -858,7 +882,7 @@ export const useGameStore = create<GameState>()(
         const genericEvents = filterByTags(RANDOM_EVENTS.filter((e) => !e.areaId));
 
         const eventBonus = get().getAreaEventBonus(currentAreaId);
-        const areaWeight = 0.3 + eventBonus;
+        const areaWeight = 0.3 + eventBonus + classEventBonus;
 
         let availableEvents: GameEvent[];
         if (areaSpecificEvents.length > 0 && Math.random() < areaWeight) {
@@ -876,7 +900,7 @@ export const useGameStore = create<GameState>()(
         const weighted = availableEvents.map((e) => {
           const base = e.baseWeight ?? 1.0;
           const mod = get().getEventWeight(e.id);
-          return { event: e, weight: Math.max(0.05, base + mod) };
+          return { event: e, weight: Math.max(0.05, base + mod + classEventBonus) };
         });
 
         const totalWeight = weighted.reduce((s, w) => s + w.weight, 0);
@@ -902,48 +926,57 @@ export const useGameStore = create<GameState>()(
         if (!choice) return;
 
         const currentAreaId = state.currentAreaId;
+        const posMultiplier = get().getClassEventPositiveMultiplier();
+        const negReduction = get().getClassEventNegativeReduction();
 
         choice.effects.forEach((effect) => {
+          let adjustedValue = effect.value;
+          if (adjustedValue > 0) {
+            adjustedValue = Math.floor(adjustedValue * posMultiplier);
+          } else if (adjustedValue < 0) {
+            adjustedValue = Math.ceil(adjustedValue * (1 - negReduction));
+          }
+
           switch (effect.type) {
             case 'gold':
-              if (effect.value > 0) {
-                get().addGold(effect.value);
+              if (adjustedValue > 0) {
+                get().addGold(adjustedValue);
               } else {
                 set((s) => ({
                   player: {
                     ...s.player,
                     stats: {
                       ...s.player.stats,
-                      gold: Math.max(0, s.player.stats.gold + effect.value),
+                      gold: Math.max(0, s.player.stats.gold + adjustedValue),
                     },
                   },
                 }));
               }
               break;
             case 'exp':
-              if (effect.value > 0) {
-                get().addExp(effect.value);
+              if (adjustedValue > 0) {
+                get().addExp(adjustedValue);
               } else {
                 set((s) => ({
                   player: {
                     ...s.player,
                     stats: {
                       ...s.player.stats,
-                      exp: Math.max(0, s.player.stats.exp + effect.value),
+                      exp: Math.max(0, s.player.stats.exp + adjustedValue),
                     },
                   },
                 }));
               }
               break;
             case 'hp':
-              if (effect.value > 0) {
-                get().healHp(effect.value);
+              if (adjustedValue > 0) {
+                get().healHp(adjustedValue);
               } else {
-                get().takeDamage(Math.abs(effect.value));
+                get().takeDamage(Math.abs(adjustedValue));
               }
               break;
             case 'mp':
-              get().healMp(effect.value);
+              get().healMp(adjustedValue);
               break;
             case 'attack':
               set((s) => ({
@@ -951,7 +984,7 @@ export const useGameStore = create<GameState>()(
                   ...s.player,
                   stats: {
                     ...s.player.stats,
-                    attack: s.player.stats.attack + effect.value,
+                    attack: s.player.stats.attack + adjustedValue,
                   },
                 },
               }));
@@ -962,7 +995,7 @@ export const useGameStore = create<GameState>()(
                   ...s.player,
                   stats: {
                     ...s.player.stats,
-                    defense: s.player.stats.defense + effect.value,
+                    defense: s.player.stats.defense + adjustedValue,
                   },
                 },
               }));
@@ -973,7 +1006,7 @@ export const useGameStore = create<GameState>()(
                   ...s.player,
                   stats: {
                     ...s.player.stats,
-                    speed: s.player.stats.speed + effect.value,
+                    speed: s.player.stats.speed + adjustedValue,
                   },
                 },
               }));
@@ -984,17 +1017,17 @@ export const useGameStore = create<GameState>()(
                   ...s.player,
                   stats: {
                     ...s.player.stats,
-                    luck: s.player.stats.luck + effect.value,
+                    luck: s.player.stats.luck + adjustedValue,
                   },
                 },
               }));
               break;
             case 'soulOrbs':
-              get().addSoulOrbs(effect.value);
+              get().addSoulOrbs(adjustedValue);
               break;
             case 'reputation':
               if (currentAreaId) {
-                get().addAreaReputation(currentAreaId, effect.value);
+                get().addAreaReputation(currentAreaId, adjustedValue);
               }
               break;
           }
@@ -1174,10 +1207,16 @@ export const useGameStore = create<GameState>()(
       },
 
       addCompanionAffinity: (companionId, value) => {
+        const companion = COMPANIONS.find((c) => c.id === companionId);
+        let adjustedValue = value;
+        if (companion && value > 0) {
+          const affinityBonus = get().getClassCompanionAffinityBonus(companion);
+          adjustedValue = value + affinityBonus;
+        }
         set((state) => {
           const existing = state.companionAffinities.find((a) => a.companionId === companionId);
           if (existing) {
-            const newValue = existing.value + value;
+            const newValue = existing.value + adjustedValue;
             return {
               companionAffinities: state.companionAffinities.map((a) =>
                 a.companionId === companionId
@@ -1189,7 +1228,7 @@ export const useGameStore = create<GameState>()(
           return {
             companionAffinities: [
               ...state.companionAffinities,
-              { companionId, value, level: getAffinityLevel(value) },
+              { companionId, value: adjustedValue, level: getAffinityLevel(adjustedValue) },
             ],
           };
         });
@@ -1228,7 +1267,7 @@ export const useGameStore = create<GameState>()(
         const baseAttack = state.player.stats.attack;
         const formationCompanions = get().getFormationCompanions();
         const companionAttack = formationCompanions.reduce(
-          (sum, c) => sum + computeEffectiveAttack(c),
+          (sum, c) => sum + get().getCompanionEffectiveAttack(c),
           0
         );
         const bondBonus = get().getBondBonus();
@@ -1242,7 +1281,7 @@ export const useGameStore = create<GameState>()(
         const baseDefense = state.player.stats.defense;
         const formationCompanions = get().getFormationCompanions();
         const companionDefense = formationCompanions.reduce(
-          (sum, c) => sum + computeEffectiveDefense(c),
+          (sum, c) => sum + get().getCompanionEffectiveDefense(c),
           0
         );
         const bondBonus = get().getBondBonus();
@@ -1255,14 +1294,16 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const mapModifierBonus = get().getMapModifierTotalBonus('gold') * 0.01;
         const talentBonus = get().getTotalTalentBonus('gold').percent;
-        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus;
+        const classBonus = get().getClassIdleGoldMultiplier() - 1;
+        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus + classBonus;
       },
 
       calculateExpBonus: () => {
         const state = get();
         const mapModifierBonus = get().getMapModifierTotalBonus('exp') * 0.01;
         const talentBonus = get().getTotalTalentBonus('exp').percent;
-        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus;
+        const classBonus = get().getClassIdleExpMultiplier() - 1;
+        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus + classBonus;
       },
 
       getTotalAttack: () => {
@@ -1270,7 +1311,7 @@ export const useGameStore = create<GameState>()(
         const playerAttack = state.player.stats.attack;
         const formationCompanions = get().getFormationCompanions();
         const companionAttack = formationCompanions.reduce(
-          (sum, c) => sum + computeEffectiveAttack(c),
+          (sum, c) => sum + get().getCompanionEffectiveAttack(c),
           0
         );
         const bondBonus = get().getBondBonus();
@@ -1284,7 +1325,7 @@ export const useGameStore = create<GameState>()(
         const playerDefense = state.player.stats.defense;
         const formationCompanions = get().getFormationCompanions();
         const companionDefense = formationCompanions.reduce(
-          (sum, c) => sum + computeEffectiveDefense(c),
+          (sum, c) => sum + get().getCompanionEffectiveDefense(c),
           0
         );
         const bondBonus = get().getBondBonus();
@@ -1686,7 +1727,7 @@ export const useGameStore = create<GameState>()(
         );
         const companionCountBonus = companionCount * 0.08;
         const companionPowerBonus = 1 + formationCompanions.reduce(
-          (sum, c) => sum + (computeEffectiveAttack(c) + computeEffectiveDefense(c)) * 0.001,
+          (sum, c) => sum + (get().getCompanionEffectiveAttack(c) + get().getCompanionEffectiveDefense(c)) * 0.001,
           0
         );
         const bondBonus = get().getBondBonus();
@@ -1832,7 +1873,7 @@ export const useGameStore = create<GameState>()(
         const playerPower = state.player.stats.attack + state.player.stats.defense;
         const companionPower = state.ownedCompanions
           .filter((c) => companionIds.includes(c.id))
-          .reduce((sum, c) => sum + computeEffectiveAttack(c) + computeEffectiveDefense(c), 0);
+          .reduce((sum, c) => sum + get().getCompanionEffectiveAttack(c) + get().getCompanionEffectiveDefense(c), 0);
         const bondBonus = get().getBondBonus();
         return playerPower + companionPower + bondBonus.attack + bondBonus.defense;
       },
@@ -3397,9 +3438,10 @@ export const useGameStore = create<GameState>()(
 
         const tierConfig = MONSTER_TIER_CONFIGS[monster.tier];
         const dropBonus = get().getAreaDropBonus(get().currentAreaId);
+        const soulOrbChanceBonus = get().getClassSoulOrbChanceBonus();
 
         let soulOrbs = 0;
-        if (Math.random() < tierConfig.soulOrbChance) {
+        if (Math.random() < tierConfig.soulOrbChance + soulOrbChanceBonus) {
           soulOrbs = tierConfig.soulOrbMin + Math.floor(Math.random() * (tierConfig.soulOrbMax - tierConfig.soulOrbMin + 1));
         }
 
@@ -3409,6 +3451,72 @@ export const useGameStore = create<GameState>()(
           soulOrbs,
           shardChance: tierConfig.shardChance,
         };
+      },
+
+      getClassPassive: () => {
+        const state = get();
+        return getClassPassive(state.player.class);
+      },
+
+      getClassLevelBonusMultiplier: (stat) => {
+        const passive = get().getClassPassive();
+        if (!passive) return 1;
+        if (passive.levelBonus.stat === stat) {
+          return passive.levelBonus.multiplier;
+        }
+        return 1;
+      },
+
+      getClassIdleExpMultiplier: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.idleBonus.expMultiplier : 1;
+      },
+
+      getClassIdleGoldMultiplier: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.idleBonus.goldMultiplier : 1;
+      },
+
+      getClassSoulOrbChanceBonus: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.idleBonus.soulOrbChanceBonus : 0;
+      },
+
+      getClassEventPositiveMultiplier: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.eventBonus.positiveEffectMultiplier : 1;
+      },
+
+      getClassEventNegativeReduction: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.eventBonus.negativeEffectReduction : 0;
+      },
+
+      getClassEventWeightBonus: () => {
+        const passive = get().getClassPassive();
+        return passive ? passive.eventBonus.eventWeightBonus : 0;
+      },
+
+      isPreferredCompanion: (companion) => {
+        const passive = get().getClassPassive();
+        if (!passive) return false;
+        const classMatch = passive.companionBonus.preferredClasses.includes(companion.class);
+        const raceMatch = !passive.companionBonus.preferredRaces || passive.companionBonus.preferredRaces.length === 0
+          ? true
+          : passive.companionBonus.preferredRaces.includes(companion.race);
+        return classMatch && raceMatch;
+      },
+
+      getClassCompanionAffinityBonus: (companion) => {
+        if (!get().isPreferredCompanion(companion)) return 0;
+        const passive = get().getClassPassive();
+        return passive ? passive.companionBonus.affinityBonus : 0;
+      },
+
+      getClassCompanionStatMultiplier: (companion) => {
+        if (!get().isPreferredCompanion(companion)) return 1;
+        const passive = get().getClassPassive();
+        return passive ? passive.companionBonus.statBonusMultiplier : 1;
       },
     }),
     {

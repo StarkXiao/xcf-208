@@ -745,6 +745,119 @@
   cursor: not-allowed;
 }
 
+.upgrade-item.class-bonus {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.1) 0%, transparent 100%);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 4px -10px;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.class-bonus-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 4px;
+}
+
+.class-passive-section {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.class-passive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.class-passive-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.class-passive-icon {
+  font-size: 20px;
+}
+
+.expand-arrow {
+  color: #9ca3af;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.expand-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.class-passive-tagline {
+  color: #c4b5fd;
+  font-size: 12px;
+  font-style: italic;
+  margin: 8px 0;
+}
+
+.class-passive-content {
+  margin-top: 12px;
+}
+
+.passive-category {
+  margin-bottom: 12px;
+}
+
+.passive-category:last-child {
+  margin-bottom: 0;
+}
+
+.passive-category h5 {
+  color: #e9d5ff;
+  font-size: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.passive-item {
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.passive-desc {
+  color: #d1d5db;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.passive-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.passive-detail-grid span {
+  color: #a78bfa;
+  font-size: 11px;
+  text-align: center;
+  padding: 4px 6px;
+  background: rgba(139, 92, 246, 0.15);
+  border-radius: 4px;
+}
+
 .total-stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

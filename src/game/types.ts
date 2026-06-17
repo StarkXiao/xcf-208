@@ -667,3 +667,43 @@ export interface PowerBreakdown {
   affinityDetails: { companionId: string; name: string; level: string; value: number; color: string }[];
   bondDetails: { id: string; name: string; icon: string; members: string[]; bonus: { type: 'attack' | 'defense' | 'hp' | 'speed' | 'luck'; value: number }[] }[];
 }
+
+export interface ClassPassiveLevelBonus {
+  stat: 'attack' | 'defense' | 'maxHp' | 'maxMp' | 'speed' | 'luck';
+  multiplier: number;
+  description: string;
+}
+
+export interface ClassPassiveIdleBonus {
+  expMultiplier: number;
+  goldMultiplier: number;
+  soulOrbChanceBonus: number;
+  description: string;
+}
+
+export interface ClassPassiveEventBonus {
+  positiveEffectMultiplier: number;
+  negativeEffectReduction: number;
+  eventWeightBonus: number;
+  description: string;
+}
+
+export interface ClassPassiveCompanionBonus {
+  preferredClasses: string[];
+  preferredRaces?: string[];
+  affinityBonus: number;
+  statBonusMultiplier: number;
+  extraBondBonus?: { type: 'attack' | 'defense' | 'hp' | 'speed' | 'luck'; value: number };
+  description: string;
+}
+
+export interface ClassPassive {
+  classId: string;
+  className: string;
+  icon: string;
+  tagline: string;
+  levelBonus: ClassPassiveLevelBonus;
+  idleBonus: ClassPassiveIdleBonus;
+  eventBonus: ClassPassiveEventBonus;
+  companionBonus: ClassPassiveCompanionBonus;
+}
