@@ -6,7 +6,7 @@ import {
   EXPEDITION_DIFFICULTY_NAMES,
   RARITY_COLORS,
 } from '../game/data';
-import type { ExpeditionMission } from '../game/types';
+import type { ExpeditionMission, ExpeditionCasualty } from '../game/types';
 
 export default function ExpeditionPanel() {
   const {
@@ -19,7 +19,6 @@ export default function ExpeditionPanel() {
     skipExpeditionEvent,
     completeExpedition,
     cancelExpedition,
-    setExpeditionPhase,
     getExpeditionPower,
   } = useGameStore();
 
@@ -27,6 +26,9 @@ export default function ExpeditionPanel() {
   const [selectedCompanionIds, setSelectedCompanionIds] = useState<string[]>([]);
   const [showSettlement, setShowSettlement] = useState(false);
   const [finalLoot, setFinalLoot] = useState<{ gold: number; exp: number; soulOrbs: number; reputation: number } | null>(null);
+  const [settlementCasualties, setSettlementCasualties] = useState<ExpeditionCasualty[]>([]);
+  const [settlementLog, setSettlementLog] = useState<string[]>([]);
+  const [settlementMissionName, setSettlementMissionName] = useState<string>('');
 
   const maxCompanions = 4;
 
@@ -46,6 +48,14 @@ export default function ExpeditionPanel() {
   };
 
   const handleCompleteExpedition = useCallback(() => {
+    const state = useGameStore.getState();
+    const active = state.activeExpedition;
+    if (active) {
+      setSettlementCasualties([...active.casualties]);
+      setSettlementLog([...active.eventLog]);
+      const mission = EXPEDITION_MISSIONS.find((m) => m.id === active.missionId);
+      setSettlementMissionName(mission?.name || '远征');
+    }
     const loot = completeExpedition();
     setFinalLoot(loot);
     setShowSettlement(true);
@@ -77,7 +87,7 @@ export default function ExpeditionPanel() {
       <div className="expedition-settlement">
         <div className="settlement-header">
           <span className="settlement-icon">🏁</span>
-          <h3>远征结算</h3>
+          <h3>{settlementMissionName} · 远征结算</h3>
         </div>
 
         <div className="settlement-result-banner">
@@ -119,11 +129,11 @@ export default function ExpeditionPanel() {
           </div>
         </div>
 
-        {activeExpedition && activeExpedition.casualties.length > 0 && (
+        {settlementCasualties.length > 0 && (
           <div className="settlement-casualty-section">
             <h4>🏥 伤亡回营</h4>
             <div className="casualty-list">
-              {activeExpedition.casualties.map((c) => (
+              {settlementCasualties.map((c) => (
                 <div
                   key={c.companionId}
                   className={`casualty-item ${c.status === 'critical' ? 'critical' : 'injured'}`}
@@ -142,7 +152,7 @@ export default function ExpeditionPanel() {
         <div className="settlement-log">
           <h4>📜 远征日志</h4>
           <div className="expedition-log-list">
-            {activeExpedition?.eventLog.map((log, i) => (
+            {settlementLog.map((log, i) => (
               <div key={i} className="expedition-log-item">{log}</div>
             ))}
           </div>
@@ -153,6 +163,9 @@ export default function ExpeditionPanel() {
           onClick={() => {
             setShowSettlement(false);
             setFinalLoot(null);
+            setSettlementCasualties([]);
+            setSettlementLog([]);
+            setSettlementMissionName('');
           }}
         >
           确认结算

@@ -11,8 +11,6 @@ import type {
   GameTab,
   AreaReputation,
   ActiveExpedition,
-  ExpeditionEvent,
-  ExpeditionCasualty,
   ExpeditionLoot,
   ExpeditionPhase,
 } from './types';
