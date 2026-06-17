@@ -434,7 +434,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -830,3 +830,83 @@ export interface GuildTechProgress {
 }
 
 export type GuildTab = 'map' | 'formation' | 'tech' | 'daily' | 'info';
+
+export type EquipmentSlotType = 'weapon' | 'helmet' | 'armor' | 'boots' | 'accessory';
+export type EquipmentRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type AffixType = 'prefix' | 'suffix';
+export type AffixStat = 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'goldBonus' | 'expBonus';
+
+export interface EquipmentAffix {
+  id: string;
+  name: string;
+  type: AffixType;
+  stats: { stat: AffixStat; minValue: number; maxValue: number; isPercent: boolean }[];
+  rarityWeights: Record<EquipmentRarity, number>;
+  slotRestrictions?: EquipmentSlotType[];
+}
+
+export interface EquipmentAffixInstance {
+  affixId: string;
+  name: string;
+  stats: { stat: AffixStat; value: number; isPercent: boolean }[];
+}
+
+export interface Equipment {
+  uid: string;
+  baseId: string;
+  name: string;
+  slot: EquipmentSlotType;
+  rarity: EquipmentRarity;
+  level: number;
+  icon: string;
+  baseStats: { stat: AffixStat; value: number; isPercent: boolean }[];
+  affixes: EquipmentAffixInstance[];
+  equippedBy: string | null;
+  forgeExp: number;
+  forgeExpToNext: number;
+}
+
+export interface EquipmentBase {
+  id: string;
+  name: string;
+  slot: EquipmentSlotType;
+  icon: string;
+  baseStats: { stat: AffixStat; value: number; isPercent: boolean }[];
+  minAreaLevel: number;
+  rarityWeights: Record<EquipmentRarity, number>;
+}
+
+export interface EquipmentRarityConfig {
+  rarity: EquipmentRarity;
+  name: string;
+  color: string;
+  minAffixes: number;
+  maxAffixes: number;
+  statMultiplier: number;
+  recycleGoldBase: number;
+  recycleGoldPerLevel: number;
+  forgeCostMultiplier: number;
+}
+
+export interface EquipmentDropConfig {
+  monsterTier: MonsterTier;
+  dropChance: number;
+  rarityBonus: number;
+}
+
+export interface ForgeRecipe {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  currency: 'gold' | 'soulOrbs';
+  inputSlots: number;
+  minRarity: EquipmentRarity;
+  outputRarityBoost: number;
+  rerollAffixes: boolean;
+}
+
+export interface EquipmentEquipResult {
+  success: boolean;
+  message: string;
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG, RECRUIT_POOLS, getShardConfig } from '../game/data';
+import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG, RECRUIT_POOLS, getShardConfig, EQUIPMENT_RARITY_COLORS, EQUIPMENT_RARITY_NAMES, EQUIPMENT_SLOT_NAMES } from '../game/data';
 import { AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from '../game/types';
 import type { RecruitPoolType } from '../game/types';
 
@@ -27,6 +27,9 @@ export default function CompanionsPanel() {
     recruitFromPool,
     getDiscountedRecruitCost,
     clearLastRecruitResults,
+    getEquippedItems,
+    companionEquipments,
+    equipmentInventory,
   } = useGameStore();
 
   const [activeSubTab, setActiveSubTab] = useState<'formation' | 'owned' | 'bonds' | 'recruit' | 'codex'>('recruit');
@@ -491,6 +494,24 @@ export default function CompanionsPanel() {
                         <span className="bond-tag">{bond.icon} {bond.name}</span>
                       </div>
                     )}
+                    {(() => {
+                      const eqItems = getEquippedItems(companion.id);
+                      if (eqItems.length === 0) return null;
+                      return (
+                        <div className="companion-equipment-info">
+                          <span className="eq-label">🛡️ 装备:</span>
+                          {eqItems.map((eq) => (
+                            <span
+                              key={eq.uid}
+                              className="eq-mini-tag"
+                              style={{ color: EQUIPMENT_RARITY_COLORS[eq.rarity], borderColor: EQUIPMENT_RARITY_COLORS[eq.rarity] }}
+                            >
+                              {eq.icon} {eq.name}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );

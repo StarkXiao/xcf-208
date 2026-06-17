@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -3038,3 +3038,108 @@ export const GUILD_DAILY_REWARDS: Omit<GuildDailyReward, 'claimed'>[] = [
   { day: 6, rewards: [{ type: 'gold', value: 700 }, { type: 'exp', value: 350 }] },
   { day: 7, rewards: [{ type: 'gold', value: 1000 }, { type: 'soulOrbs', value: 3 }, { type: 'exp', value: 500 }] },
 ];
+
+export const EQUIPMENT_SLOT_CONFIG: { slot: EquipmentSlotType; name: string; icon: string }[] = [
+  { slot: 'weapon', name: '武器', icon: '⚔️' },
+  { slot: 'helmet', name: '头盔', icon: '⛑️' },
+  { slot: 'armor', name: '铠甲', icon: '🛡️' },
+  { slot: 'boots', name: '靴子', icon: '👢' },
+  { slot: 'accessory', name: '饰品', icon: '💍' },
+];
+
+export const EQUIPMENT_RARITY_CONFIGS: EquipmentRarityConfig[] = [
+  { rarity: 'common', name: '普通', color: '#9ca3af', minAffixes: 0, maxAffixes: 1, statMultiplier: 1.0, recycleGoldBase: 10, recycleGoldPerLevel: 5, forgeCostMultiplier: 1.0 },
+  { rarity: 'rare', name: '稀有', color: '#3b82f6', minAffixes: 1, maxAffixes: 2, statMultiplier: 1.3, recycleGoldBase: 50, recycleGoldPerLevel: 15, forgeCostMultiplier: 1.5 },
+  { rarity: 'epic', name: '史诗', color: '#a855f7', minAffixes: 2, maxAffixes: 3, statMultiplier: 1.7, recycleGoldBase: 200, recycleGoldPerLevel: 40, forgeCostMultiplier: 2.5 },
+  { rarity: 'legendary', name: '传说', color: '#f59e0b', minAffixes: 3, maxAffixes: 4, statMultiplier: 2.2, recycleGoldBase: 800, recycleGoldPerLevel: 100, forgeCostMultiplier: 4.0 },
+];
+
+export const EQUIPMENT_RARITY_NAMES: Record<EquipmentRarity, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
+
+export const EQUIPMENT_RARITY_COLORS: Record<EquipmentRarity, string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#a855f7',
+  legendary: '#f59e0b',
+};
+
+export const EQUIPMENT_SLOT_NAMES: Record<EquipmentSlotType, string> = {
+  weapon: '武器',
+  helmet: '头盔',
+  armor: '铠甲',
+  boots: '靴子',
+  accessory: '饰品',
+};
+
+export const EQUIPMENT_BASES: EquipmentBase[] = [
+  { id: 'iron_sword', name: '铁剑', slot: 'weapon', icon: '⚔️', baseStats: [{ stat: 'attack', value: 5, isPercent: false }], minAreaLevel: 1, rarityWeights: { common: 70, rare: 20, epic: 8, legendary: 2 } },
+  { id: 'steel_sword', name: '钢剑', slot: 'weapon', icon: '⚔️', baseStats: [{ stat: 'attack', value: 12, isPercent: false }], minAreaLevel: 10, rarityWeights: { common: 60, rare: 25, epic: 12, legendary: 3 } },
+  { id: 'rune_blade', name: '符文之刃', slot: 'weapon', icon: '⚔️', baseStats: [{ stat: 'attack', value: 25, isPercent: false }, { stat: 'critRate', value: 2, isPercent: true }], minAreaLevel: 25, rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'dragon_slayer', name: '屠龙剑', slot: 'weapon', icon: '⚔️', baseStats: [{ stat: 'attack', value: 50, isPercent: false }, { stat: 'critDamage', value: 10, isPercent: true }], minAreaLevel: 50, rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+  { id: 'leather_cap', name: '皮帽', slot: 'helmet', icon: '⛑️', baseStats: [{ stat: 'defense', value: 3, isPercent: false }], minAreaLevel: 1, rarityWeights: { common: 70, rare: 20, epic: 8, legendary: 2 } },
+  { id: 'iron_helm', name: '铁盔', slot: 'helmet', icon: '⛑️', baseStats: [{ stat: 'defense', value: 8, isPercent: false }, { stat: 'hp', value: 15, isPercent: false }], minAreaLevel: 10, rarityWeights: { common: 60, rare: 25, epic: 12, legendary: 3 } },
+  { id: 'crown_of_wisdom', name: '智慧王冠', slot: 'helmet', icon: '⛑️', baseStats: [{ stat: 'defense', value: 15, isPercent: false }, { stat: 'mp', value: 30, isPercent: false }], minAreaLevel: 25, rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'dragon_helm', name: '龙骨盔', slot: 'helmet', icon: '⛑️', baseStats: [{ stat: 'defense', value: 30, isPercent: false }, { stat: 'hp', value: 80, isPercent: false }], minAreaLevel: 50, rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+  { id: 'cloth_armor', name: '布甲', slot: 'armor', icon: '🛡️', baseStats: [{ stat: 'defense', value: 4, isPercent: false }, { stat: 'hp', value: 10, isPercent: false }], minAreaLevel: 1, rarityWeights: { common: 70, rare: 20, epic: 8, legendary: 2 } },
+  { id: 'chain_mail', name: '锁子甲', slot: 'armor', icon: '🛡️', baseStats: [{ stat: 'defense', value: 10, isPercent: false }, { stat: 'hp', value: 25, isPercent: false }], minAreaLevel: 10, rarityWeights: { common: 60, rare: 25, epic: 12, legendary: 3 } },
+  { id: 'plate_armor', name: '板甲', slot: 'armor', icon: '🛡️', baseStats: [{ stat: 'defense', value: 22, isPercent: false }, { stat: 'hp', value: 60, isPercent: false }], minAreaLevel: 25, rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'dragon_armor', name: '龙鳞铠', slot: 'armor', icon: '🛡️', baseStats: [{ stat: 'defense', value: 45, isPercent: false }, { stat: 'hp', value: 150, isPercent: false }], minAreaLevel: 50, rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+  { id: 'sandals', name: '草鞋', slot: 'boots', icon: '👢', baseStats: [{ stat: 'speed', value: 2, isPercent: false }], minAreaLevel: 1, rarityWeights: { common: 70, rare: 20, epic: 8, legendary: 2 } },
+  { id: 'leather_boots', name: '皮靴', slot: 'boots', icon: '👢', baseStats: [{ stat: 'speed', value: 5, isPercent: false }, { stat: 'dodge', value: 1, isPercent: true }], minAreaLevel: 10, rarityWeights: { common: 60, rare: 25, epic: 12, legendary: 3 } },
+  { id: 'wind_boots', name: '疾风靴', slot: 'boots', icon: '👢', baseStats: [{ stat: 'speed', value: 12, isPercent: false }, { stat: 'dodge', value: 3, isPercent: true }], minAreaLevel: 25, rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'dragon_greaves', name: '龙骨护胫', slot: 'boots', icon: '👢', baseStats: [{ stat: 'speed', value: 20, isPercent: false }, { stat: 'dodge', value: 5, isPercent: true }], minAreaLevel: 50, rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+  { id: 'wooden_ring', name: '木戒', slot: 'accessory', icon: '💍', baseStats: [{ stat: 'luck', value: 2, isPercent: false }], minAreaLevel: 1, rarityWeights: { common: 70, rare: 20, epic: 8, legendary: 2 } },
+  { id: 'silver_pendant', name: '银坠', slot: 'accessory', icon: '💍', baseStats: [{ stat: 'luck', value: 5, isPercent: false }, { stat: 'goldBonus', value: 3, isPercent: true }], minAreaLevel: 10, rarityWeights: { common: 60, rare: 25, epic: 12, legendary: 3 } },
+  { id: 'arcane_orb', name: '奥术宝珠', slot: 'accessory', icon: '💍', baseStats: [{ stat: 'luck', value: 10, isPercent: false }, { stat: 'expBonus', value: 5, isPercent: true }], minAreaLevel: 25, rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'dragon_heart', name: '龙之心', slot: 'accessory', icon: '💍', baseStats: [{ stat: 'luck', value: 15, isPercent: false }, { stat: 'critRate', value: 5, isPercent: true }, { stat: 'goldBonus', value: 8, isPercent: true }], minAreaLevel: 50, rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+];
+
+export const EQUIPMENT_AFFIXES: EquipmentAffix[] = [
+  { id: 'sharp', name: '锋利的', type: 'prefix', stats: [{ stat: 'attack', minValue: 2, maxValue: 15, isPercent: false }], rarityWeights: { common: 50, rare: 30, epic: 15, legendary: 5 } },
+  { id: 'sturdy', name: '坚固的', type: 'prefix', stats: [{ stat: 'defense', minValue: 2, maxValue: 12, isPercent: false }], rarityWeights: { common: 50, rare: 30, epic: 15, legendary: 5 } },
+  { id: 'vigorous', name: '活力的', type: 'prefix', stats: [{ stat: 'hp', minValue: 10, maxValue: 80, isPercent: false }], rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'swift', name: '迅捷的', type: 'prefix', stats: [{ stat: 'speed', minValue: 1, maxValue: 8, isPercent: false }], rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'lucky', name: '幸运的', type: 'prefix', stats: [{ stat: 'luck', minValue: 1, maxValue: 10, isPercent: false }], rarityWeights: { common: 30, rare: 30, epic: 25, legendary: 15 } },
+  { id: 'arcane', name: '奥术的', type: 'prefix', stats: [{ stat: 'mp', minValue: 5, maxValue: 50, isPercent: false }], rarityWeights: { common: 40, rare: 30, epic: 20, legendary: 10 } },
+  { id: 'deadly', name: '致命的', type: 'prefix', stats: [{ stat: 'critRate', minValue: 1, maxValue: 8, isPercent: true }], rarityWeights: { common: 10, rare: 30, epic: 35, legendary: 25 }, slotRestrictions: ['weapon', 'accessory'] },
+  { id: 'devastating', name: '毁灭的', type: 'prefix', stats: [{ stat: 'critDamage', minValue: 5, maxValue: 25, isPercent: true }], rarityWeights: { common: 5, rare: 20, epic: 40, legendary: 35 }, slotRestrictions: ['weapon'] },
+  { id: 'evasive', name: '闪避的', type: 'prefix', stats: [{ stat: 'dodge', minValue: 1, maxValue: 6, isPercent: true }], rarityWeights: { common: 10, rare: 30, epic: 35, legendary: 25 }, slotRestrictions: ['boots', 'accessory'] },
+  { id: 'of_power', name: '之力', type: 'suffix', stats: [{ stat: 'attack', minValue: 1, maxValue: 10, isPercent: true }], rarityWeights: { common: 5, rare: 25, epic: 40, legendary: 30 } },
+  { id: 'of_guardian', name: '守护之', type: 'suffix', stats: [{ stat: 'defense', minValue: 1, maxValue: 8, isPercent: true }], rarityWeights: { common: 5, rare: 25, epic: 40, legendary: 30 } },
+  { id: 'of_vitality', name: '生命之', type: 'suffix', stats: [{ stat: 'hp', minValue: 2, maxValue: 15, isPercent: true }], rarityWeights: { common: 5, rare: 25, epic: 40, legendary: 30 } },
+  { id: 'of_fortune', name: '财富之', type: 'suffix', stats: [{ stat: 'goldBonus', minValue: 2, maxValue: 12, isPercent: true }], rarityWeights: { common: 20, rare: 30, epic: 30, legendary: 20 } },
+  { id: 'of_wisdom', name: '智慧之', type: 'suffix', stats: [{ stat: 'expBonus', minValue: 2, maxValue: 10, isPercent: true }], rarityWeights: { common: 15, rare: 30, epic: 35, legendary: 20 } },
+  { id: 'of_fury', name: '狂暴之', type: 'suffix', stats: [{ stat: 'attack', minValue: 3, maxValue: 8, isPercent: true }, { stat: 'critRate', minValue: 1, maxValue: 4, isPercent: true }], rarityWeights: { common: 0, rare: 10, epic: 40, legendary: 50 }, slotRestrictions: ['weapon'] },
+  { id: 'of_warding', name: '庇护之', type: 'suffix', stats: [{ stat: 'defense', minValue: 2, maxValue: 6, isPercent: true }, { stat: 'hp', minValue: 3, maxValue: 10, isPercent: true }], rarityWeights: { common: 0, rare: 10, epic: 40, legendary: 50 }, slotRestrictions: ['armor', 'helmet'] },
+];
+
+export const EQUIPMENT_DROP_CONFIGS: EquipmentDropConfig[] = [
+  { monsterTier: 'normal', dropChance: 0.08, rarityBonus: 0 },
+  { monsterTier: 'elite', dropChance: 0.25, rarityBonus: 0.15 },
+  { monsterTier: 'boss', dropChance: 0.60, rarityBonus: 0.35 },
+];
+
+export const FORGE_RECIPES: ForgeRecipe[] = [
+  { id: 'basic_forge', name: '普通锻造', description: '将3件装备锻造为1件更高品质装备', cost: 200, currency: 'gold', inputSlots: 3, minRarity: 'common', outputRarityBoost: 1, rerollAffixes: true },
+  { id: 'advanced_forge', name: '高级锻造', description: '将3件稀有以上装备锻造为史诗装备', cost: 1000, currency: 'gold', inputSlots: 3, minRarity: 'rare', outputRarityBoost: 1, rerollAffixes: true },
+  { id: 'legendary_forge', name: '传说锻造', description: '将3件史诗装备锻造为传说装备', cost: 5, currency: 'soulOrbs', inputSlots: 3, minRarity: 'epic', outputRarityBoost: 1, rerollAffixes: true },
+  { id: 'affix_reroll', name: '词条重铸', description: '保留装备品质和等级，随机刷新词条属性', cost: 500, currency: 'gold', inputSlots: 1, minRarity: 'rare', outputRarityBoost: 0, rerollAffixes: true },
+];
+
+export const EQUIPMENT_FORGE_EXP_TABLE = [0, 20, 50, 100, 200, 400, 800, 1500, 3000, 6000];
+
+export const EQUIPMENT_MAX_LEVEL = 10;
+
+export function getEquipmentRarityConfig(rarity: EquipmentRarity): EquipmentRarityConfig {
+  return EQUIPMENT_RARITY_CONFIGS.find((c) => c.rarity === rarity) || EQUIPMENT_RARITY_CONFIGS[0];
+}
+
+export function getEquipmentForgeExpToNext(level: number): number {
+  if (level >= EQUIPMENT_MAX_LEVEL) return Infinity;
+  return EQUIPMENT_FORGE_EXP_TABLE[level] || EQUIPMENT_FORGE_EXP_TABLE[EQUIPMENT_FORGE_EXP_TABLE.length - 1];
+}

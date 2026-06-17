@@ -48,6 +48,11 @@ import type {
   GuildDailyReward,
   GuildTechProgress,
   GuildTab,
+  Equipment,
+  EquipmentSlotType,
+  EquipmentRarity,
+  AffixStat,
+  EquipmentAffixInstance,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -79,6 +84,15 @@ import {
   GUILD_CHAPTERS,
   GUILD_TECH_TREE,
   GUILD_DAILY_REWARDS,
+  EQUIPMENT_BASES,
+  EQUIPMENT_AFFIXES,
+  EQUIPMENT_DROP_CONFIGS,
+  FORGE_RECIPES,
+  EQUIPMENT_RARITY_CONFIGS,
+  EQUIPMENT_FORGE_EXP_TABLE,
+  EQUIPMENT_MAX_LEVEL,
+  getEquipmentRarityConfig,
+  getEquipmentForgeExpToNext,
 } from './data';
 
 interface GameState {
@@ -353,6 +367,25 @@ interface GameState {
   setGuildActiveTab: (tab: GuildTab) => void;
   setGuildFormation: (companionIds: string[]) => void;
   getGuildFormationPower: () => number;
+
+  equipmentInventory: Equipment[];
+  companionEquipments: Record<string, Record<EquipmentSlotType, string | null>>;
+  equipmentUidCounter: number;
+
+  generateEquipmentDrop: (monsterTier: MonsterTier, areaMinLevel: number) => Equipment | null;
+  addEquipmentToInventory: (equipment: Equipment) => void;
+  removeEquipment: (uid: string) => void;
+  equipItem: (uid: string, companionId: string) => boolean;
+  unequipItem: (uid: string) => void;
+  unequipSlot: (companionId: string, slot: EquipmentSlotType) => void;
+  getEquippedItems: (companionId: string) => Equipment[];
+  getEquipmentStatBonus: (companionId: string, stat: AffixStat) => { flat: number; percent: number };
+  getPlayerEquipmentStatBonus: (stat: AffixStat) => { flat: number; percent: number };
+  recycleEquipment: (uid: string) => number;
+  forgeEquipments: (recipeId: string, inputUids: string[]) => Equipment | null;
+  getForgeRecipe: (recipeId: string) => typeof FORGE_RECIPES[number] | undefined;
+  canForge: (recipeId: string, inputUids: string[]) => boolean;
+  addEquipmentForgeExp: (uid: string, exp: number) => void;
 }
 
 let logIdCounter = 0;
@@ -567,6 +600,10 @@ export const useGameStore = create<GameState>()(
       lastDailyRewardDate: null,
       guildActiveTab: 'map',
       guildFormation: [],
+
+      equipmentInventory: [],
+      companionEquipments: {},
+      equipmentUidCounter: 0,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -870,12 +907,17 @@ export const useGameStore = create<GameState>()(
 
       getCompanionEffectiveAttack: (companion) => {
         const classMultiplier = get().getClassCompanionStatMultiplier(companion);
-        return computeEffectiveAttack(companion, classMultiplier);
+        const baseAtk = computeEffectiveAttack(companion, classMultiplier);
+        const eqBonus = get().getEquipmentStatBonus(companion.id, 'attack');
+        const critBonus = get().getEquipmentStatBonus(companion.id, 'critRate');
+        return Math.floor((baseAtk + eqBonus.flat) * (1 + eqBonus.percent / 100) * (1 + critBonus.percent / 200));
       },
 
       getCompanionEffectiveDefense: (companion) => {
         const classMultiplier = get().getClassCompanionStatMultiplier(companion);
-        return computeEffectiveDefense(companion, classMultiplier);
+        const baseDef = computeEffectiveDefense(companion, classMultiplier);
+        const eqBonus = get().getEquipmentStatBonus(companion.id, 'defense');
+        return Math.floor((baseDef + eqBonus.flat) * (1 + eqBonus.percent / 100));
       },
 
       getActiveBonds: () => {
@@ -1334,6 +1376,9 @@ export const useGameStore = create<GameState>()(
           companionCodex: initCompanionCodex(),
           recruitPullCounters: initRecruitCounters(),
           lastRecruitResults: null,
+          equipmentInventory: [],
+          companionEquipments: {},
+          equipmentUidCounter: 0,
         });
 
         return true;
@@ -1449,7 +1494,8 @@ export const useGameStore = create<GameState>()(
         const talentBonus = get().getTotalTalentBonus('gold').percent;
         const classBonus = get().getClassIdleGoldMultiplier() - 1;
         const guildBonus = state.getGuildGoldBonus();
-        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus;
+        const eqBonus = get().getPlayerEquipmentStatBonus('goldBonus').percent / 100;
+        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus + eqBonus;
       },
 
       calculateExpBonus: () => {
@@ -1458,7 +1504,8 @@ export const useGameStore = create<GameState>()(
         const talentBonus = get().getTotalTalentBonus('exp').percent;
         const classBonus = get().getClassIdleExpMultiplier() - 1;
         const guildBonus = state.getGuildExpBonus();
-        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus;
+        const eqBonus = get().getPlayerEquipmentStatBonus('expBonus').percent / 100;
+        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus + eqBonus;
       },
 
       getTotalAttack: () => {
@@ -4497,10 +4544,392 @@ export const useGameStore = create<GameState>()(
         
         return totalPower + state.getTotalAttack() + state.getTotalDefense();
       },
+
+      generateEquipmentDrop: (monsterTier, areaMinLevel) => {
+        const dropConfig = EQUIPMENT_DROP_CONFIGS.find((c) => c.monsterTier === monsterTier);
+        if (!dropConfig) return null;
+
+        const dropBonus = get().getAreaDropBonus(get().currentAreaId);
+        if (Math.random() > dropConfig.dropChance * (1 + dropBonus)) return null;
+
+        const availableBases = EQUIPMENT_BASES.filter((b) => b.minAreaLevel <= areaMinLevel + 10);
+        if (availableBases.length === 0) return null;
+
+        const base = availableBases[Math.floor(Math.random() * availableBases.length)];
+
+        let rarity: EquipmentRarity = 'common';
+        const rarityRoll = Math.random();
+        const rarityBonus = dropConfig.rarityBonus + dropBonus * 0.5;
+        const adjustedWeights = { ...base.rarityWeights };
+        if (rarityBonus > 0) {
+          adjustedWeights.rare = (adjustedWeights.rare || 0) + rarityBonus * 30;
+          adjustedWeights.epic = (adjustedWeights.epic || 0) + rarityBonus * 15;
+          adjustedWeights.legendary = (adjustedWeights.legendary || 0) + rarityBonus * 5;
+        }
+        const totalWeight = Object.values(adjustedWeights).reduce((s, w) => s + w, 0);
+        let cumulative = 0;
+        const rarityOrder: EquipmentRarity[] = ['common', 'rare', 'epic', 'legendary'];
+        for (const r of rarityOrder) {
+          cumulative += (adjustedWeights[r] || 0);
+          if (rarityRoll <= cumulative / totalWeight) {
+            rarity = r;
+            break;
+          }
+        }
+
+        const rarityConfig = getEquipmentRarityConfig(rarity);
+        const affixCount = rarityConfig.minAffixes + Math.floor(Math.random() * (rarityConfig.maxAffixes - rarityConfig.minAffixes + 1));
+        const affixes: EquipmentAffixInstance[] = [];
+
+        const eligibleAffixes = EQUIPMENT_AFFIXES.filter((a) => {
+          if (a.slotRestrictions && !a.slotRestrictions.includes(base.slot)) return false;
+          if ((a.rarityWeights[rarity] || 0) <= 0) return false;
+          return true;
+        });
+
+        const shuffledAffixes = [...eligibleAffixes].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < Math.min(affixCount, shuffledAffixes.length); i++) {
+          const affix = shuffledAffixes[i];
+          const stats = affix.stats.map((s) => {
+            const range = s.maxValue - s.minValue;
+            const rarityMultiplier = rarityConfig.statMultiplier;
+            const value = Math.floor((s.minValue + Math.random() * range) * rarityMultiplier);
+            return { stat: s.stat, value, isPercent: s.isPercent };
+          });
+          affixes.push({ affixId: affix.id, name: affix.name, stats });
+        }
+
+        const uid = `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const levelScale = Math.max(1, Math.floor(areaMinLevel / 5));
+        const scaledBaseStats = base.baseStats.map((s) => ({
+          stat: s.stat,
+          value: Math.floor(s.value * (1 + levelScale * 0.1) * rarityConfig.statMultiplier),
+          isPercent: s.isPercent,
+        }));
+
+        const equipName = affixes.length > 0
+          ? `${affixes.filter((a) => { const af = EQUIPMENT_AFFIXES.find((aa) => aa.id === a.affixId); return af?.type === 'prefix'; }).map((a) => a.name).join('')}${base.name}${affixes.filter((a) => { const af = EQUIPMENT_AFFIXES.find((aa) => aa.id === a.affixId); return af?.type === 'suffix'; }).map((a) => a.name).join('')}`
+          : base.name;
+
+        return {
+          uid,
+          baseId: base.id,
+          name: equipName,
+          slot: base.slot,
+          rarity,
+          level: 1,
+          icon: base.icon,
+          baseStats: scaledBaseStats,
+          affixes,
+          equippedBy: null,
+          forgeExp: 0,
+          forgeExpToNext: getEquipmentForgeExpToNext(1),
+        };
+      },
+
+      addEquipmentToInventory: (equipment) => {
+        set((state) => ({
+          equipmentInventory: [...state.equipmentInventory, equipment],
+        }));
+      },
+
+      removeEquipment: (uid) => {
+        const state = get();
+        const eq = state.equipmentInventory.find((e) => e.uid === uid);
+        if (!eq) return;
+        if (eq.equippedBy) {
+          get().unequipItem(uid);
+        }
+        set((state) => ({
+          equipmentInventory: state.equipmentInventory.filter((e) => e.uid !== uid),
+        }));
+      },
+
+      equipItem: (uid, companionId) => {
+        const state = get();
+        const eq = state.equipmentInventory.find((e) => e.uid === uid);
+        if (!eq) return false;
+        if (eq.equippedBy) return false;
+        const companion = state.ownedCompanions.find((c) => c.id === companionId);
+        if (!companion) return false;
+
+        const currentEquipped = state.companionEquipments[companionId];
+        const slotItem = currentEquipped?.[eq.slot];
+        if (slotItem) {
+          get().unequipSlot(companionId, eq.slot);
+        }
+
+        set((state) => {
+          const newCompanionEquipments = { ...state.companionEquipments };
+          if (!newCompanionEquipments[companionId]) {
+            newCompanionEquipments[companionId] = {
+              weapon: null, helmet: null, armor: null, boots: null, accessory: null,
+            };
+          }
+          newCompanionEquipments[companionId] = {
+            ...newCompanionEquipments[companionId],
+            [eq.slot]: uid,
+          };
+
+          return {
+            companionEquipments: newCompanionEquipments,
+            equipmentInventory: state.equipmentInventory.map((e) =>
+              e.uid === uid ? { ...e, equippedBy: companionId } : e
+            ),
+          };
+        });
+
+        return true;
+      },
+
+      unequipItem: (uid) => {
+        const state = get();
+        const eq = state.equipmentInventory.find((e) => e.uid === uid);
+        if (!eq || !eq.equippedBy) return;
+
+        const companionId = eq.equippedBy;
+        set((state) => {
+          const newCompanionEquipments = { ...state.companionEquipments };
+          if (newCompanionEquipments[companionId]) {
+            newCompanionEquipments[companionId] = {
+              ...newCompanionEquipments[companionId],
+              [eq.slot]: null,
+            };
+          }
+
+          return {
+            companionEquipments: newCompanionEquipments,
+            equipmentInventory: state.equipmentInventory.map((e) =>
+              e.uid === uid ? { ...e, equippedBy: null } : e
+            ),
+          };
+        });
+      },
+
+      unequipSlot: (companionId, slot) => {
+        const state = get();
+        const equipped = state.companionEquipments[companionId];
+        if (!equipped) return;
+        const uid = equipped[slot];
+        if (!uid) return;
+        get().unequipItem(uid);
+      },
+
+      getEquippedItems: (companionId) => {
+        const state = get();
+        const equipped = state.companionEquipments[companionId];
+        if (!equipped) return [];
+        const uids = Object.values(equipped).filter((u): u is string => u !== null);
+        return uids
+          .map((uid) => state.equipmentInventory.find((e) => e.uid === uid))
+          .filter((e): e is Equipment => e !== undefined);
+      },
+
+      getEquipmentStatBonus: (companionId, stat) => {
+        const items = get().getEquippedItems(companionId);
+        let flat = 0;
+        let percent = 0;
+        for (const item of items) {
+          for (const s of item.baseStats) {
+            if (s.stat === stat) {
+              if (s.isPercent) percent += s.value;
+              else flat += s.value;
+            }
+          }
+          for (const affix of item.affixes) {
+            for (const s of affix.stats) {
+              if (s.stat === stat) {
+                if (s.isPercent) percent += s.value;
+                else flat += s.value;
+              }
+            }
+          }
+        }
+        return { flat, percent };
+      },
+
+      getPlayerEquipmentStatBonus: (stat) => {
+        const state = get();
+        const formationCompanions = state.getFormationCompanions();
+        let flat = 0;
+        let percent = 0;
+        for (const companion of formationCompanions) {
+          const bonus = get().getEquipmentStatBonus(companion.id, stat);
+          flat += bonus.flat;
+          percent += bonus.percent;
+        }
+        return { flat, percent };
+      },
+
+      recycleEquipment: (uid) => {
+        const state = get();
+        const eq = state.equipmentInventory.find((e) => e.uid === uid);
+        if (!eq) return 0;
+        if (eq.equippedBy) return 0;
+
+        const rarityConfig = getEquipmentRarityConfig(eq.rarity);
+        const goldReward = rarityConfig.recycleGoldBase + rarityConfig.recycleGoldPerLevel * eq.level;
+
+        get().removeEquipment(uid);
+        get().addGold(goldReward);
+        get().addBattleLog(`♻️ 回收了 ${eq.name}，获得 ${goldReward} 金币`, 'drop');
+
+        return goldReward;
+      },
+
+      forgeEquipments: (recipeId, inputUids) => {
+        const state = get();
+        const recipe = FORGE_RECIPES.find((r) => r.id === recipeId);
+        if (!recipe) return null;
+
+        if (!get().canForge(recipeId, inputUids)) return null;
+
+        if (recipe.currency === 'gold' && state.player.stats.gold < recipe.cost) return null;
+        if (recipe.currency === 'soulOrbs' && state.player.stats.soulOrbs < recipe.cost) return null;
+
+        const inputItems = inputUids.map((uid) => state.equipmentInventory.find((e) => e.uid === uid)).filter((e): e is Equipment => e !== undefined);
+        if (inputItems.length !== recipe.inputSlots) return null;
+
+        const bestItem = inputItems.reduce((best, item) => {
+          const order: EquipmentRarity[] = ['common', 'rare', 'epic', 'legendary'];
+          return order.indexOf(item.rarity) > order.indexOf(best.rarity) ? item : best;
+        });
+
+        const rarityOrder: EquipmentRarity[] = ['common', 'rare', 'epic', 'legendary'];
+        const currentIdx = rarityOrder.indexOf(bestItem.rarity);
+        const newRarityIdx = Math.min(rarityOrder.length - 1, currentIdx + recipe.outputRarityBoost);
+        const newRarity = recipe.outputRarityBoost > 0 ? rarityOrder[newRarityIdx] : bestItem.rarity;
+
+        const base = EQUIPMENT_BASES.find((b) => b.id === bestItem.baseId) || EQUIPMENT_BASES[0];
+        const rarityConfig = getEquipmentRarityConfig(newRarity);
+        const affixCount = rarityConfig.minAffixes + Math.floor(Math.random() * (rarityConfig.maxAffixes - rarityConfig.minAffixes + 1));
+        const newAffixes: EquipmentAffixInstance[] = [];
+
+        if (recipe.rerollAffixes) {
+          const eligibleAffixes = EQUIPMENT_AFFIXES.filter((a) => {
+            if (a.slotRestrictions && !a.slotRestrictions.includes(base.slot)) return false;
+            if ((a.rarityWeights[newRarity] || 0) <= 0) return false;
+            return true;
+          });
+          const shuffled = [...eligibleAffixes].sort(() => Math.random() - 0.5);
+          for (let i = 0; i < Math.min(affixCount, shuffled.length); i++) {
+            const affix = shuffled[i];
+            const stats = affix.stats.map((s) => {
+              const range = s.maxValue - s.minValue;
+              const value = Math.floor((s.minValue + Math.random() * range) * rarityConfig.statMultiplier);
+              return { stat: s.stat, value, isPercent: s.isPercent };
+            });
+            newAffixes.push({ affixId: affix.id, name: affix.name, stats });
+          }
+        } else {
+          newAffixes.push(...bestItem.affixes);
+        }
+
+        const scaledBaseStats = base.baseStats.map((s) => ({
+          stat: s.stat,
+          value: Math.floor(s.value * (1 + (bestItem.level - 1) * 0.1) * rarityConfig.statMultiplier),
+          isPercent: s.isPercent,
+        }));
+
+        const equipName = newAffixes.length > 0
+          ? `${newAffixes.filter((a) => { const af = EQUIPMENT_AFFIXES.find((aa) => aa.id === a.affixId); return af?.type === 'prefix'; }).map((a) => a.name).join('')}${base.name}${newAffixes.filter((a) => { const af = EQUIPMENT_AFFIXES.find((aa) => aa.id === a.affixId); return af?.type === 'suffix'; }).map((a) => a.name).join('')}`
+          : base.name;
+
+        const uid = `eq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const newEquipment: Equipment = {
+          uid,
+          baseId: base.id,
+          name: equipName,
+          slot: base.slot,
+          rarity: newRarity,
+          level: bestItem.level,
+          icon: base.icon,
+          baseStats: scaledBaseStats,
+          affixes: newAffixes,
+          equippedBy: null,
+          forgeExp: bestItem.forgeExp,
+          forgeExpToNext: getEquipmentForgeExpToNext(bestItem.level),
+        };
+
+        inputUids.forEach((uid) => get().removeEquipment(uid));
+
+        if (recipe.currency === 'gold') {
+          set((s) => ({
+            player: { ...s.player, stats: { ...s.player.stats, gold: s.player.stats.gold - recipe.cost } },
+          }));
+        } else {
+          set((s) => ({
+            player: { ...s.player, stats: { ...s.player.stats, soulOrbs: s.player.stats.soulOrbs - recipe.cost } },
+          }));
+        }
+
+        get().addEquipmentToInventory(newEquipment);
+        get().addBattleLog(`🔨 锻造成功！获得 ${equipName}（${rarityConfig.name}）`, 'levelup');
+
+        return newEquipment;
+      },
+
+      getForgeRecipe: (recipeId) => {
+        return FORGE_RECIPES.find((r) => r.id === recipeId);
+      },
+
+      canForge: (recipeId, inputUids) => {
+        const state = get();
+        const recipe = FORGE_RECIPES.find((r) => r.id === recipeId);
+        if (!recipe) return false;
+
+        if (inputUids.length !== recipe.inputSlots) return false;
+
+        const rarityOrder: EquipmentRarity[] = ['common', 'rare', 'epic', 'legendary'];
+        const minIdx = rarityOrder.indexOf(recipe.minRarity);
+
+        for (const uid of inputUids) {
+          const eq = state.equipmentInventory.find((e) => e.uid === uid);
+          if (!eq) return false;
+          if (eq.equippedBy) return false;
+          if (rarityOrder.indexOf(eq.rarity) < minIdx) return false;
+        }
+
+        if (recipe.currency === 'gold' && state.player.stats.gold < recipe.cost) return false;
+        if (recipe.currency === 'soulOrbs' && state.player.stats.soulOrbs < recipe.cost) return false;
+
+        return true;
+      },
+
+      addEquipmentForgeExp: (uid, exp) => {
+        set((state) => ({
+          equipmentInventory: state.equipmentInventory.map((eq) => {
+            if (eq.uid !== uid) return eq;
+            if (eq.level >= EQUIPMENT_MAX_LEVEL) return eq;
+            let newExp = eq.forgeExp + exp;
+            let newLevel = eq.level;
+            let newExpToNext = eq.forgeExpToNext;
+            while (newLevel < EQUIPMENT_MAX_LEVEL && newExp >= newExpToNext) {
+              newExp -= newExpToNext;
+              newLevel += 1;
+              newExpToNext = getEquipmentForgeExpToNext(newLevel);
+            }
+            if (newLevel > eq.level) {
+              const levelBonus = 1 + (newLevel - eq.level) * 0.1;
+              return {
+                ...eq,
+                level: newLevel,
+                forgeExp: newExp,
+                forgeExpToNext: newExpToNext,
+                baseStats: eq.baseStats.map((s) => ({
+                  ...s,
+                  value: Math.floor(s.value * levelBonus),
+                })),
+              };
+            }
+            return { ...eq, forgeExp: newExp };
+          }),
+        }));
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 9,
+      version: 10,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {

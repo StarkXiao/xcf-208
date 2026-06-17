@@ -73,6 +73,9 @@ export default function GameCanvas() {
     updateKillStats,
     getMonsterDropReward,
     addShards,
+    generateEquipmentDrop,
+    addEquipmentToInventory,
+    addEquipmentForgeExp,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -242,10 +245,23 @@ export default function GameCanvas() {
         }
       }
 
+      const areaMinLevel = currentArea?.minLevel || 1;
+      const equipDrop = generateEquipmentDrop(currentMonster.tier, areaMinLevel);
+      if (equipDrop) {
+        addEquipmentToInventory(equipDrop);
+        const rarityName = equipDrop.rarity === 'common' ? '普通' : equipDrop.rarity === 'rare' ? '稀有' : equipDrop.rarity === 'epic' ? '史诗' : '传说';
+        addBattleLog(`🛡️ 掉落装备：${equipDrop.name}（${rarityName}）`, 'drop');
+      }
+
       const fc = useGameStore.getState().getFormationCompanions();
       fc.forEach((c) => {
         const starExp = Math.max(1, Math.floor(expReward * 0.08));
         addCompanionStarExp(c.id, starExp);
+        const equippedItems = useGameStore.getState().getEquippedItems(c.id);
+        equippedItems.forEach((eq) => {
+          const forgeExp = Math.max(1, Math.floor(expReward * 0.02));
+          addEquipmentForgeExp(eq.uid, forgeExp);
+        });
       });
 
       eventTriggerTimerRef.current += 1;
