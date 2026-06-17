@@ -435,7 +435,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -734,3 +734,100 @@ export interface ClassPassive {
   eventBonus: ClassPassiveEventBonus;
   companionBonus: ClassPassiveCompanionBonus;
 }
+
+export type GuildNodeType = 'start' | 'normal' | 'elite' | 'boss' | 'treasure' | 'shrine' | 'shop' | 'rest';
+
+export interface GuildMapNode {
+  id: string;
+  name: string;
+  type: GuildNodeType;
+  description: string;
+  x: number;
+  y: number;
+  connections: string[];
+  minLevel: number;
+  rewards: StarReward[];
+  enemies?: string[];
+  eventId?: string;
+  icon: string;
+  bgColor: string;
+  staminaCost: number;
+}
+
+export interface GuildMapProgress {
+  nodeId: string;
+  cleared: boolean;
+  bestStars: number;
+  claimed: boolean;
+  firstClearedAt: number | null;
+}
+
+export interface GuildChapter {
+  id: string;
+  name: string;
+  description: string;
+  chapterNumber: number;
+  areaId: string;
+  nodes: GuildMapNode[];
+  startNodeId: string;
+  bossNodeId: string;
+  minLevel: number;
+  bgColor: string;
+  icon: string;
+}
+
+export interface GuildExpeditionState {
+  currentChapterId: string;
+  currentNodeId: string | null;
+  chapterProgress: Record<string, GuildMapProgress[]>;
+  totalStamina: number;
+  currentStamina: number;
+  maxStamina: number;
+  staminaRegenRate: number;
+  lastStaminaRegen: number;
+  guildExp: number;
+  guildLevel: number;
+  guildContribution: number;
+  activeFormation: string[];
+  isInBattle: boolean;
+  currentBattleEnemy: string | null;
+}
+
+export interface GuildLevelConfig {
+  level: number;
+  expRequired: number;
+  maxStaminaBonus: number;
+  staminaRegenBonus: number;
+  attackBonus: number;
+  defenseBonus: number;
+  hpBonus: number;
+  goldBonus: number;
+  expBonus: number;
+  unlockFeature: string | null;
+}
+
+export interface GuildDailyReward {
+  day: number;
+  claimed: boolean;
+  rewards: StarReward[];
+}
+
+export interface GuildTechTree {
+  id: string;
+  name: string;
+  description: string;
+  category: 'combat' | 'economy' | 'support';
+  maxLevel: number;
+  costPerLevel: number;
+  effectType: 'attack' | 'defense' | 'hp' | 'gold' | 'exp' | 'stamina' | 'luck';
+  effectValuePerLevel: number;
+  icon: string;
+  prerequisites: string[];
+}
+
+export interface GuildTechProgress {
+  techId: string;
+  level: number;
+}
+
+export type GuildTab = 'map' | 'formation' | 'tech' | 'daily' | 'info';

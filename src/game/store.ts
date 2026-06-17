@@ -42,6 +42,12 @@ import type {
   RebirthChallengeTarget,
   Monster,
   ClassPassive,
+  GuildChapter,
+  GuildMapProgress,
+  GuildLevelConfig,
+  GuildDailyReward,
+  GuildTechProgress,
+  GuildTab,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -69,6 +75,10 @@ import {
   getClassPassive,
   RESOURCE_EXCHANGE_RATES,
   COMPANION_DISMISS_SOUL_ORBS,
+  GUILD_LEVEL_CONFIGS,
+  GUILD_CHAPTERS,
+  GUILD_TECH_TREE,
+  GUILD_DAILY_REWARDS,
 } from './data';
 
 interface GameState {
@@ -157,6 +167,7 @@ interface GameState {
   updateLastOnlineTime: () => void;
   getTotalAttack: () => number;
   getTotalDefense: () => number;
+  getTotalMaxHp: () => number;
   addAreaReputation: (areaId: string, points: number) => void;
   getAreaReputation: (areaId: string) => AreaReputation;
   getAreaReputationLevel: (areaId: string) => number;
@@ -289,6 +300,58 @@ interface GameState {
     firstClearRewards: string[];
     rebirthChallengeRewards: string[];
   };
+
+  guildLevel: number;
+  guildExp: number;
+  guildContribution: number;
+  currentStamina: number;
+  maxStamina: number;
+  lastStaminaRegen: number;
+  guildChapterProgress: Record<string, GuildMapProgress[]>;
+  currentGuildChapterId: string;
+  currentGuildNodeId: string | null;
+  guildTechProgress: GuildTechProgress[];
+  guildDailyRewards: GuildDailyReward[];
+  lastDailyRewardDate: string | null;
+  guildActiveTab: GuildTab;
+  guildFormation: string[];
+
+  getGuildLevelConfig: () => GuildLevelConfig;
+  getGuildExpToNextLevel: () => number;
+  addGuildExp: (amount: number) => void;
+  addGuildContribution: (amount: number) => void;
+  regenStamina: () => void;
+  consumeStamina: (amount: number) => boolean;
+  getGuildAttackBonus: () => number;
+  getGuildDefenseBonus: () => number;
+  getGuildHpBonus: () => number;
+  getGuildGoldBonus: () => number;
+  getGuildExpBonus: () => number;
+  getGuildMaxStamina: () => number;
+
+  getCurrentGuildChapter: () => GuildChapter | undefined;
+  getGuildChapterProgress: (chapterId: string) => GuildMapProgress[];
+  getNodeProgress: (chapterId: string, nodeId: string) => GuildMapProgress | undefined;
+  isNodeAccessible: (chapterId: string, nodeId: string) => boolean;
+  enterGuildNode: (chapterId: string, nodeId: string) => boolean;
+  clearGuildNode: (chapterId: string, nodeId: string, stars: number) => void;
+  claimNodeReward: (chapterId: string, nodeId: string) => boolean;
+  canClaimNodeReward: (chapterId: string, nodeId: string) => boolean;
+  setCurrentGuildChapter: (chapterId: string) => void;
+
+  getGuildTechLevel: (techId: string) => number;
+  upgradeGuildTech: (techId: string) => boolean;
+  canUpgradeGuildTech: (techId: string) => boolean;
+  getTotalTechBonus: (effectType: string) => number;
+
+  getDailyStreak: () => number;
+  claimDailyReward: (day: number) => boolean;
+  canClaimDailyReward: (day: number) => boolean;
+  checkAndResetDailyRewards: () => void;
+
+  setGuildActiveTab: (tab: GuildTab) => void;
+  setGuildFormation: (companionIds: string[]) => void;
+  getGuildFormationPower: () => number;
 }
 
 let logIdCounter = 0;
@@ -392,6 +455,34 @@ function initRebirthChallenges(): RebirthChallengeTarget[] {
   }));
 }
 
+function initGuildChapterProgress(): Record<string, GuildMapProgress[]> {
+  const progress: Record<string, GuildMapProgress[]> = {};
+  GUILD_CHAPTERS.forEach((chapter) => {
+    progress[chapter.id] = chapter.nodes.map((node) => ({
+      nodeId: node.id,
+      cleared: false,
+      bestStars: 0,
+      claimed: false,
+      firstClearedAt: null,
+    }));
+  });
+  return progress;
+}
+
+function initGuildTechProgress(): GuildTechProgress[] {
+  return GUILD_TECH_TREE.map((tech) => ({
+    techId: tech.id,
+    level: 0,
+  }));
+}
+
+function initGuildDailyRewards(): GuildDailyReward[] {
+  return GUILD_DAILY_REWARDS.map((reward) => ({
+    ...reward,
+    claimed: false,
+  }));
+}
+
 function initFormation(playerLevel: number): Formation {
   const slots: FormationSlot[] = FORMATION_SLOT_CONFIG.map((cfg) => ({
     index: cfg.index,
@@ -461,6 +552,20 @@ export const useGameStore = create<GameState>()(
       lastRecruitResults: null,
       monsterKillStats: initMonsterKillStats(),
       rebirthChallenges: initRebirthChallenges(),
+      guildLevel: 1,
+      guildExp: 0,
+      guildContribution: 0,
+      currentStamina: 100,
+      maxStamina: 100,
+      lastStaminaRegen: Date.now(),
+      guildChapterProgress: initGuildChapterProgress(),
+      currentGuildChapterId: 'chapter_forest',
+      currentGuildNodeId: null,
+      guildTechProgress: initGuildTechProgress(),
+      guildDailyRewards: initGuildDailyRewards(),
+      lastDailyRewardDate: null,
+      guildActiveTab: 'map',
+      guildFormation: [],
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1306,7 +1411,8 @@ export const useGameStore = create<GameState>()(
         const mapModifierBonus = get().getMapModifierTotalBonus('gold') * 0.01;
         const talentBonus = get().getTotalTalentBonus('gold').percent;
         const classBonus = get().getClassIdleGoldMultiplier() - 1;
-        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus + classBonus;
+        const guildBonus = state.getGuildGoldBonus();
+        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus;
       },
 
       calculateExpBonus: () => {
@@ -1314,7 +1420,8 @@ export const useGameStore = create<GameState>()(
         const mapModifierBonus = get().getMapModifierTotalBonus('exp') * 0.01;
         const talentBonus = get().getTotalTalentBonus('exp').percent;
         const classBonus = get().getClassIdleExpMultiplier() - 1;
-        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus + classBonus;
+        const guildBonus = state.getGuildExpBonus();
+        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus + classBonus + guildBonus;
       },
 
       getTotalAttack: () => {
@@ -1327,8 +1434,9 @@ export const useGameStore = create<GameState>()(
         );
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('attack');
+        const guildBonus = state.getGuildAttackBonus();
         const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
-        return Math.floor((playerAttack + companionAttack + bondBonus.attack + mapModifierBonus) * affinityMultiplier);
+        return Math.floor((playerAttack + companionAttack + bondBonus.attack + mapModifierBonus + guildBonus) * affinityMultiplier);
       },
 
       getTotalDefense: () => {
@@ -1341,8 +1449,19 @@ export const useGameStore = create<GameState>()(
         );
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('defense');
+        const guildBonus = state.getGuildDefenseBonus();
         const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
-        return Math.floor((playerDefense + companionDefense + bondBonus.defense + mapModifierBonus) * affinityMultiplier);
+        return Math.floor((playerDefense + companionDefense + bondBonus.defense + mapModifierBonus + guildBonus) * affinityMultiplier);
+      },
+
+      getTotalMaxHp: () => {
+        const state = get();
+        const playerMaxHp = state.player.stats.maxHp;
+        const bondBonus = get().getBondBonus();
+        const mapModifierBonus = get().getMapModifierTotalBonus('maxHp');
+        const guildBonus = state.getGuildHpBonus();
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+        return Math.floor((playerMaxHp + bondBonus.hp + mapModifierBonus + guildBonus) * affinityMultiplier);
       },
 
       getMapModifierTotalBonus: (stat) => {
@@ -1772,7 +1891,7 @@ export const useGameStore = create<GameState>()(
         );
         const monsterCount = currentArea.monsters.length;
         const avgMonsterPower = (avgMonster.attack + avgMonster.defense + avgMonster.hp / 10) / monsterCount;
-        const playerTotalPower = get().getTotalAttack() + get().getTotalDefense() + state.player.stats.maxHp / 10;
+        const playerTotalPower = get().getTotalAttack() + get().getTotalDefense() + get().getTotalMaxHp() / 10;
         const powerRatio = avgMonsterPower > 0 ? playerTotalPower / avgMonsterPower : 5;
         
         let deathRiskPercent: number;
@@ -2043,6 +2162,7 @@ export const useGameStore = create<GameState>()(
       },
 
       updateLastOnlineTime: () => {
+        get().regenStamina();
         set({ lastOnlineTime: Date.now() });
       },
 
@@ -3542,8 +3662,7 @@ export const useGameStore = create<GameState>()(
       },
 
       getTotalPower: () => {
-        const state = get();
-        return get().getTotalAttack() + get().getTotalDefense() + Math.floor(state.player.stats.maxHp / 10) + get().getTotalSpeed();
+        return get().getTotalAttack() + get().getTotalDefense() + Math.floor(get().getTotalMaxHp() / 10) + get().getTotalSpeed();
       },
 
       checkRebirthChallenges: () => {
@@ -3816,10 +3935,416 @@ export const useGameStore = create<GameState>()(
 
         return { starRewards, firstClearRewards, rebirthChallengeRewards };
       },
+
+      getGuildLevelConfig: () => {
+        const state = get();
+        return GUILD_LEVEL_CONFIGS.find(c => c.level === state.guildLevel) || GUILD_LEVEL_CONFIGS[0];
+      },
+
+      getGuildExpToNextLevel: () => {
+        const state = get();
+        const currentConfig = GUILD_LEVEL_CONFIGS.find(c => c.level === state.guildLevel);
+        const nextConfig = GUILD_LEVEL_CONFIGS.find(c => c.level === state.guildLevel + 1);
+        if (!nextConfig) return 0;
+        return nextConfig.expRequired - (currentConfig?.expRequired || 0);
+      },
+
+      addGuildExp: (amount) => {
+        const state = get();
+        let newExp = state.guildExp + amount;
+        let newLevel = state.guildLevel;
+        
+        while (true) {
+          const nextConfig = GUILD_LEVEL_CONFIGS.find(c => c.level === newLevel + 1);
+          if (!nextConfig) break;
+          if (newExp < nextConfig.expRequired) break;
+          newLevel += 1;
+          get().addBattleLog(`🎉 公会升级了！当前等级：${newLevel}`, 'levelup');
+        }
+
+        set({ guildExp: newExp, guildLevel: newLevel });
+      },
+
+      addGuildContribution: (amount) => {
+        set((state) => ({ guildContribution: state.guildContribution + amount }));
+      },
+
+      regenStamina: () => {
+        const state = get();
+        const now = Date.now();
+        const elapsed = now - state.lastStaminaRegen;
+        const levelConfig = state.getGuildLevelConfig();
+        const baseRegenRate = 1 / 60000;
+        const regenRate = baseRegenRate * (1 + levelConfig.staminaRegenBonus);
+        const maxStamina = state.getGuildMaxStamina();
+        
+        const regenAmount = Math.floor(elapsed * regenRate);
+        
+        if (regenAmount > 0 && state.currentStamina < maxStamina) {
+          set({
+            currentStamina: Math.min(maxStamina, state.currentStamina + regenAmount),
+            lastStaminaRegen: now,
+          });
+        } else if (regenAmount > 0) {
+          set({ lastStaminaRegen: now });
+        }
+      },
+
+      consumeStamina: (amount) => {
+        const state = get();
+        state.regenStamina();
+        if (state.currentStamina < amount) return false;
+        set((s) => ({ currentStamina: s.currentStamina - amount }));
+        return true;
+      },
+
+      getGuildAttackBonus: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('attack');
+        return levelConfig.attackBonus + techBonus;
+      },
+
+      getGuildDefenseBonus: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('defense');
+        return levelConfig.defenseBonus + techBonus;
+      },
+
+      getGuildHpBonus: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('hp');
+        return levelConfig.hpBonus + techBonus;
+      },
+
+      getGuildGoldBonus: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('gold');
+        return levelConfig.goldBonus + techBonus;
+      },
+
+      getGuildExpBonus: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('exp');
+        return levelConfig.expBonus + techBonus;
+      },
+
+      getGuildMaxStamina: () => {
+        const state = get();
+        const levelConfig = state.getGuildLevelConfig();
+        const techBonus = state.getTotalTechBonus('stamina');
+        return 100 + levelConfig.maxStaminaBonus + techBonus;
+      },
+
+      getCurrentGuildChapter: () => {
+        const state = get();
+        return GUILD_CHAPTERS.find(c => c.id === state.currentGuildChapterId);
+      },
+
+      getGuildChapterProgress: (chapterId) => {
+        const state = get();
+        return state.guildChapterProgress[chapterId] || [];
+      },
+
+      getNodeProgress: (chapterId, nodeId) => {
+        const state = get();
+        const progress = state.guildChapterProgress[chapterId];
+        return progress?.find(p => p.nodeId === nodeId);
+      },
+
+      isNodeAccessible: (chapterId, nodeId) => {
+        const state = get();
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        if (!chapter) return false;
+        
+        const node = chapter.nodes.find(n => n.id === nodeId);
+        if (!node) return false;
+        
+        if (node.type === 'start') return true;
+        
+        const progress = state.guildChapterProgress[chapterId];
+        if (!progress) return false;
+        
+        for (const otherNode of chapter.nodes) {
+          if (otherNode.connections.includes(nodeId)) {
+            const otherProgress = progress.find(p => p.nodeId === otherNode.id);
+            if (otherProgress?.cleared) return true;
+          }
+        }
+        
+        return false;
+      },
+
+      enterGuildNode: (chapterId, nodeId) => {
+        const state = get();
+        if (!state.isNodeAccessible(chapterId, nodeId)) return false;
+        
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        const node = chapter?.nodes.find(n => n.id === nodeId);
+        if (!node) return false;
+        
+        if (!state.consumeStamina(node.staminaCost)) return false;
+        
+        set({ currentGuildNodeId: nodeId, currentGuildChapterId: chapterId });
+        return true;
+      },
+
+      clearGuildNode: (chapterId, nodeId, stars) => {
+        const state = get();
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        const node = chapter?.nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        
+        const progress = [...state.guildChapterProgress[chapterId]];
+        const nodeIndex = progress.findIndex(p => p.nodeId === nodeId);
+        
+        if (nodeIndex >= 0) {
+          const oldProgress = progress[nodeIndex];
+          progress[nodeIndex] = {
+            ...oldProgress,
+            cleared: true,
+            bestStars: Math.max(oldProgress.bestStars, stars),
+            firstClearedAt: oldProgress.firstClearedAt || Date.now(),
+          };
+          
+          set({
+            guildChapterProgress: {
+              ...state.guildChapterProgress,
+              [chapterId]: progress,
+            },
+          });
+          
+          node.rewards.forEach(reward => {
+            switch (reward.type) {
+              case 'gold':
+                get().addGold(reward.value);
+                break;
+              case 'exp':
+                get().addExp(reward.value);
+                break;
+              case 'soulOrbs':
+                get().addSoulOrbs(reward.value);
+                break;
+              case 'attack':
+              case 'defense':
+              case 'hp':
+              case 'speed':
+              case 'reputation':
+                break;
+            }
+          });
+          
+          const expGain = Math.floor((stars + 1) * 10);
+          get().addGuildExp(expGain);
+          get().addGuildContribution(stars * 5);
+          
+          get().addBattleLog(`🏰 公会据点 ${node.name} 通关！获得 ${stars} 星评价`, 'event');
+        }
+      },
+
+      claimNodeReward: (chapterId, nodeId) => {
+        const state = get();
+        if (!state.canClaimNodeReward(chapterId, nodeId)) return false;
+        
+        const progress = [...state.guildChapterProgress[chapterId]];
+        const nodeIndex = progress.findIndex(p => p.nodeId === nodeId);
+        
+        if (nodeIndex >= 0) {
+          progress[nodeIndex] = {
+            ...progress[nodeIndex],
+            claimed: true,
+          };
+          
+          set({
+            guildChapterProgress: {
+              ...state.guildChapterProgress,
+              [chapterId]: progress,
+            },
+          });
+          
+          return true;
+        }
+        return false;
+      },
+
+      canClaimNodeReward: (chapterId, nodeId) => {
+        const state = get();
+        const progress = state.guildChapterProgress[chapterId];
+        const nodeProgress = progress?.find(p => p.nodeId === nodeId);
+        return !!(nodeProgress?.cleared && !nodeProgress.claimed);
+      },
+
+      setCurrentGuildChapter: (chapterId) => {
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        if (chapter) {
+          set({ currentGuildChapterId: chapterId });
+        }
+      },
+
+      getGuildTechLevel: (techId) => {
+        const state = get();
+        const tech = state.guildTechProgress.find(t => t.techId === techId);
+        return tech?.level || 0;
+      },
+
+      upgradeGuildTech: (techId) => {
+        const state = get();
+        if (!state.canUpgradeGuildTech(techId)) return false;
+        
+        const tech = GUILD_TECH_TREE.find(t => t.id === techId);
+        if (!tech) return false;
+        
+        const currentLevel = state.getGuildTechLevel(techId);
+        const cost = tech.costPerLevel * (currentLevel + 1);
+        
+        if (state.guildContribution < cost) return false;
+        
+        const newProgress = state.guildTechProgress.map(t => 
+          t.techId === techId 
+            ? { ...t, level: t.level + 1 }
+            : t
+        );
+        
+        set({
+          guildTechProgress: newProgress,
+          guildContribution: state.guildContribution - cost,
+        });
+        
+        get().addBattleLog(`🔧 公会科技 ${tech.name} 升至 ${currentLevel + 1} 级！`, 'event');
+        return true;
+      },
+
+      canUpgradeGuildTech: (techId) => {
+        const state = get();
+        const tech = GUILD_TECH_TREE.find(t => t.id === techId);
+        if (!tech) return false;
+        
+        const currentLevel = state.getGuildTechLevel(techId);
+        if (currentLevel >= tech.maxLevel) return false;
+        
+        const prereqsMet = tech.prerequisites.every(
+          prereqId => state.getGuildTechLevel(prereqId) > 0
+        );
+        
+        return prereqsMet;
+      },
+
+      getTotalTechBonus: (effectType) => {
+        const state = get();
+        let total = 0;
+        
+        GUILD_TECH_TREE.forEach(tech => {
+          if (tech.effectType === effectType) {
+            const level = state.getGuildTechLevel(tech.id);
+            total += tech.effectValuePerLevel * level;
+          }
+        });
+        
+        return total;
+      },
+
+      getDailyStreak: () => {
+        const state = get();
+        if (!state.lastDailyRewardDate) return 0;
+        
+        const claimedDays = state.guildDailyRewards.filter(r => r.claimed).length;
+        return claimedDays;
+      },
+
+      claimDailyReward: (day) => {
+        const state = get();
+        if (!state.canClaimDailyReward(day)) return false;
+        
+        const reward = state.guildDailyRewards.find(r => r.day === day);
+        if (!reward) return false;
+        
+        reward.rewards.forEach(r => {
+          switch (r.type) {
+            case 'gold':
+              get().addGold(r.value);
+              break;
+            case 'exp':
+              get().addExp(r.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(r.value);
+              break;
+          }
+        });
+        
+        const newRewards = state.guildDailyRewards.map(r => 
+          r.day === day ? { ...r, claimed: true } : r
+        );
+        
+        const today = new Date().toDateString();
+        
+        set({
+          guildDailyRewards: newRewards,
+          lastDailyRewardDate: today,
+        });
+        
+        get().addBattleLog(`🎁 领取了第 ${day} 天每日奖励！`, 'event');
+        return true;
+      },
+
+      canClaimDailyReward: (day) => {
+        const state = get();
+        const reward = state.guildDailyRewards.find(r => r.day === day);
+        if (!reward || reward.claimed) return false;
+        
+        const streak = state.getDailyStreak();
+        return day === streak + 1;
+      },
+
+      checkAndResetDailyRewards: () => {
+        const state = get();
+        const today = new Date().toDateString();
+        
+        if (state.lastDailyRewardDate && state.lastDailyRewardDate !== today) {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toDateString();
+          
+          if (state.lastDailyRewardDate !== yesterdayStr) {
+            set({
+              guildDailyRewards: initGuildDailyRewards(),
+              lastDailyRewardDate: null,
+            });
+          }
+        }
+      },
+
+      setGuildActiveTab: (tab) => {
+        set({ guildActiveTab: tab });
+      },
+
+      setGuildFormation: (companionIds) => {
+        set({ guildFormation: companionIds });
+      },
+
+      getGuildFormationPower: () => {
+        const state = get();
+        let totalPower = 0;
+        
+        state.guildFormation.forEach(companionId => {
+          const companion = state.ownedCompanions.find(c => c.id === companionId);
+          if (companion) {
+            const atk = state.getCompanionEffectiveAttack(companion);
+            const def = state.getCompanionEffectiveDefense(companion);
+            totalPower += atk + def;
+          }
+        });
+        
+        return totalPower + state.getTotalAttack() + state.getTotalDefense();
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 8,
+      version: 9,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -3891,6 +4416,22 @@ export const useGameStore = create<GameState>()(
               bossKills: Math.floor(ownedCompanions.length * 0.2),
             };
           }
+        }
+        if (version < 9) {
+          state.guildLevel = 1;
+          state.guildExp = 0;
+          state.guildContribution = 0;
+          state.currentStamina = 100;
+          state.maxStamina = 100;
+          state.lastStaminaRegen = Date.now();
+          state.guildChapterProgress = initGuildChapterProgress();
+          state.currentGuildChapterId = 'chapter_forest';
+          state.currentGuildNodeId = null;
+          state.guildTechProgress = initGuildTechProgress();
+          state.guildDailyRewards = initGuildDailyRewards();
+          state.lastDailyRewardDate = null;
+          state.guildActiveTab = 'map';
+          state.guildFormation = [];
         }
         return state as unknown as GameState;
       },

@@ -7,6 +7,7 @@ import EventModal from './EventModal';
 import OfflineRewardsModal from './OfflineRewardsModal';
 import ExpeditionPanel from './ExpeditionPanel';
 import TalentPanel from './TalentPanel';
+import GuildPanel from './GuildPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -73,6 +74,7 @@ export default function GameScreen() {
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
+    { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
@@ -686,6 +688,8 @@ export default function GameScreen() {
         return <CompanionsPanel />;
       case 'expedition':
         return <ExpeditionPanel />;
+      case 'guild':
+        return <GuildPanel />;
       case 'talents':
         return <TalentPanel />;
       case 'events':
