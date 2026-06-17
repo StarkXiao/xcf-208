@@ -266,6 +266,13 @@ interface GameState {
   getDiscountedRecruitCost: (baseCost: number) => number;
   convertDuplicateToShards: (companionId: string) => number;
   clearLastRecruitResults: () => void;
+  dismissCompanion: (companionId: string) => { shards: number; gold: number } | null;
+  exchangeGoldToSoulOrbs: (goldAmount: number) => number;
+  getUnclaimedRewards: () => {
+    starRewards: { areaId: string; areaName: string; stars: number }[];
+    firstClearRewards: { areaId: string; areaName: string }[];
+    rebirthChallengeRewards: { id: string; description: string }[];
+  };
 
   getClassPassive: () => ClassPassive | undefined;
   getClassLevelBonusMultiplier: (stat: 'attack' | 'defense' | 'maxHp' | 'maxMp' | 'speed' | 'luck') => number;
@@ -3164,6 +3171,105 @@ export const useGameStore = create<GameState>()(
 
       clearLastRecruitResults: () => {
         set({ lastRecruitResults: null });
+      },
+
+      dismissCompanion: (companionId) => {
+        const state = get();
+        const companion = state.ownedCompanions.find((c) => c.id === companionId);
+        if (!companion) return null;
+
+        const shardConfig = getShardConfig(companion.rarity);
+        const baseShards = shardConfig.duplicateToShards;
+        const starBonusShards = (companion.stars - 1) * Math.ceil(baseShards * 0.3);
+        const levelBonusShards = Math.floor(companion.level * 0.5);
+        const totalShards = baseShards + starBonusShards + levelBonusShards;
+        const goldRefund = Math.floor(companion.cost * 0.3);
+
+        get().addShards(companionId, totalShards);
+
+        set((s) => {
+          const newFormation = { ...s.formation };
+          newFormation.slots = newFormation.slots.map((slot) =>
+            slot.companionId === companionId ? { ...slot, companionId: null } : slot
+          );
+          const formationIds = newFormation.slots
+            .filter((sl) => sl.unlocked && sl.companionId !== null)
+            .map((sl) => sl.companionId!);
+          newFormation.activeBondIds = BONDS
+            .filter((bond) => bond.memberIds.every((id) => formationIds.includes(id)))
+            .map((b) => b.id);
+
+          return {
+            ownedCompanions: s.ownedCompanions.filter((c) => c.id !== companionId),
+            formation: newFormation,
+            player: {
+              ...s.player,
+              stats: {
+                ...s.player.stats,
+                gold: s.player.stats.gold + goldRefund,
+              },
+            },
+          };
+        });
+
+        get().addBattleLog(`👋 遣散了 ${companion.name}，获得 💎${totalShards} 碎片和 💰${goldRefund} 金币`, 'event');
+        return { shards: totalShards, gold: goldRefund };
+      },
+
+      exchangeGoldToSoulOrbs: (goldAmount) => {
+        const state = get();
+        if (goldAmount <= 0 || state.player.stats.gold < goldAmount) return 0;
+
+        const EXCHANGE_RATE = 1000;
+        const soulOrbs = Math.floor(goldAmount / EXCHANGE_RATE);
+        if (soulOrbs <= 0) return 0;
+
+        const actualGoldCost = soulOrbs * EXCHANGE_RATE;
+        set((s) => ({
+          player: {
+            ...s.player,
+            stats: {
+              ...s.player.stats,
+              gold: s.player.stats.gold - actualGoldCost,
+              soulOrbs: s.player.stats.soulOrbs + soulOrbs,
+            },
+          },
+        }));
+
+        get().addBattleLog(`🔄 兑换了 ${actualGoldCost} 金币为 💎${soulOrbs} 魂珠`, 'event');
+        return soulOrbs;
+      },
+
+      getUnclaimedRewards: () => {
+        const state = get();
+        const starRewards: { areaId: string; areaName: string; stars: number }[] = [];
+        const firstClearRewards: { areaId: string; areaName: string }[] = [];
+        const rebirthChallengeRewards: { id: string; description: string }[] = [];
+
+        state.mapAreas.forEach((area) => {
+          if (!area.unlocked) return;
+          const progress = state.levelProgresses.find((p) => p.areaId === area.id);
+          if (!progress) return;
+
+          if (get().canClaimFirstClearReward(area.id)) {
+            firstClearRewards.push({ areaId: area.id, areaName: area.name });
+          }
+
+          const starConfigs = get().getStarConfig(area.id);
+          starConfigs.forEach((config) => {
+            if (get().canClaimStarReward(area.id, config.stars)) {
+              starRewards.push({ areaId: area.id, areaName: area.name, stars: config.stars });
+            }
+          });
+        });
+
+        state.rebirthChallenges.forEach((challenge) => {
+          if (challenge.completed && !challenge.claimed) {
+            rebirthChallengeRewards.push({ id: challenge.id, description: challenge.description });
+          }
+        });
+
+        return { starRewards, firstClearRewards, rebirthChallengeRewards };
       },
 
       recruitFromPool: (poolType, count) => {
