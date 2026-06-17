@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../game/store';
 import type { Skill } from '../game/types';
+import { MONSTER_TIER_COLORS, MONSTER_TIER_NAMES } from '../game/types';
 
 interface Particle {
   x: number;
@@ -49,6 +50,7 @@ export default function GameCanvas() {
     setCurrentMonster,
     addExp,
     addGold,
+    addSoulOrbs,
     takeDamage,
     healHp,
     healMp,
@@ -59,7 +61,6 @@ export default function GameCanvas() {
     isAutoBattle,
     triggerRandomEvent,
     player,
-    getAreaDropBonus,
     addAreaReputation,
     addCompanionStarExp,
     getPlayerSkills,
@@ -68,6 +69,10 @@ export default function GameCanvas() {
     getMonsterPhases,
     updateLevelStatsOnKill,
     updateLevelStatsOnDamage,
+    generateMonster,
+    updateKillStats,
+    getMonsterDropReward,
+    addShards,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -75,31 +80,15 @@ export default function GameCanvas() {
   const spawnMonster = () => {
     if (!currentArea || currentArea.monsters.length === 0) return;
     
-    const monsters = currentArea.monsters;
-    const monster = monsters[Math.floor(Math.random() * monsters.length)];
+    const monster = generateMonster(currentAreaId);
+    if (!monster) return;
     
-    const levelBonus = 1 + (player.stats.level - 1) * 0.1;
-    const baseAttack = Math.floor(monster.attack * levelBonus);
-    const baseDefense = Math.floor(monster.defense * levelBonus);
-    const baseSpeed = Math.floor(monster.speed * levelBonus);
-    const maxHp = Math.floor(monster.hp * levelBonus);
+    setCurrentMonster(monster);
     
-    setCurrentMonster({
-      id: monster.id,
-      name: monster.name,
-      hp: maxHp,
-      maxHp: maxHp,
-      attack: baseAttack,
-      defense: baseDefense,
-      speed: baseSpeed,
-      expReward: Math.floor(monster.expReward * levelBonus),
-      goldReward: Math.floor(monster.goldReward * levelBonus),
-      color: monster.color,
-      baseAttack: baseAttack,
-      baseDefense: baseDefense,
-      baseSpeed: baseSpeed,
-      currentPhase: -1,
-    });
+    if (monster.tier !== 'normal') {
+      const tierName = MONSTER_TIER_NAMES[monster.tier];
+      addBattleLog(`⚠️ 遭遇了 ${tierName}怪物！`, 'phase');
+    }
     
     playerAttackChargeRef.current = 0;
     monsterAttackChargeRef.current = 0;
@@ -210,16 +199,48 @@ export default function GameCanvas() {
     
     if (newHp <= 0) {
       addParticles(monsterX, monsterY - 20, currentMonster.color, 20);
-      const dropBonus = getAreaDropBonus(currentAreaId);
-      const expReward = Math.floor(currentMonster.expReward * (1 + dropBonus));
-      const goldReward = Math.floor(currentMonster.goldReward * (1 + dropBonus));
+      
+      const drops = getMonsterDropReward(currentMonster);
+      const expReward = drops.exp;
+      const goldReward = drops.gold;
+      const soulOrbs = drops.soulOrbs;
+      const shardChance = drops.shardChance;
+      
       addExp(expReward);
       addGold(goldReward);
-      const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
+      if (soulOrbs > 0) {
+        addSoulOrbs(soulOrbs);
+      }
+      
+      const repGain = Math.max(1, Math.floor(currentMonster.baseExpReward / 10));
       addAreaReputation(currentAreaId, repGain);
       updateLevelStatsOnKill(actualDamage, goldReward, expReward);
+      
+      updateKillStats(currentMonster.tier, currentAreaId, currentMonster.id);
+      
       addBattleLog(`⚔️ 击杀了 ${currentMonster.name}！`, 'damage');
-      addBattleLog(`🎁 掉落：+${expReward} 经验, +${goldReward} 金币, +${repGain} 声望`, 'drop');
+      
+      let dropMsg = `🎁 掉落：+${expReward} 经验, +${goldReward} 金币`;
+      if (soulOrbs > 0) {
+        dropMsg += `, +${soulOrbs} 魂珠`;
+      }
+      dropMsg += `, +${repGain} 声望`;
+      addBattleLog(dropMsg, 'drop');
+      
+      if (currentMonster.tier === 'boss') {
+        addBattleLog(`🏆 击败了首领！获得丰厚奖励！`, 'levelup');
+      } else if (currentMonster.tier === 'elite') {
+        addBattleLog(`✨ 击败了精英怪物！`, 'levelup');
+      }
+      
+      if (Math.random() < shardChance) {
+        const formationCompanions = useGameStore.getState().getFormationCompanions();
+        if (formationCompanions.length > 0) {
+          const randomCompanion = formationCompanions[Math.floor(Math.random() * formationCompanions.length)];
+          const shardCount = currentMonster.tier === 'boss' ? 3 : currentMonster.tier === 'elite' ? 2 : 1;
+          addShards(randomCompanion.id, shardCount);
+        }
+      }
 
       const fc = useGameStore.getState().getFormationCompanions();
       fc.forEach((c) => {
@@ -368,7 +389,13 @@ export default function GameCanvas() {
         ctx.fillStyle = '#333';
         ctx.fillRect(monsterX - hpBarWidth / 2, monsterYRef.current - 70, hpBarWidth, hpBarHeight);
         
-        ctx.fillStyle = hpPercent > 0.5 ? '#22c55e' : hpPercent > 0.25 ? '#eab308' : '#ef4444';
+        let hpColor = hpPercent > 0.5 ? '#22c55e' : hpPercent > 0.25 ? '#eab308' : '#ef4444';
+        if (currentMonster.tier === 'elite') {
+          hpColor = hpPercent > 0.5 ? '#3b82f6' : hpPercent > 0.25 ? '#60a5fa' : '#93c5fd';
+        } else if (currentMonster.tier === 'boss') {
+          hpColor = hpPercent > 0.5 ? '#dc2626' : hpPercent > 0.25 ? '#f87171' : '#fca5a5';
+        }
+        ctx.fillStyle = hpColor;
         ctx.fillRect(monsterX - hpBarWidth / 2, monsterYRef.current - 70, hpBarWidth * hpPercent, hpBarHeight);
         
         ctx.strokeStyle = '#fff';
@@ -380,12 +407,29 @@ export default function GameCanvas() {
         ctx.textAlign = 'center';
         ctx.fillText(currentMonster.name, monsterX, monsterYRef.current - 80);
         
+        if (currentMonster.tier !== 'normal') {
+          const tierColor = MONSTER_TIER_COLORS[currentMonster.tier];
+          const tierName = MONSTER_TIER_NAMES[currentMonster.tier];
+          ctx.fillStyle = tierColor;
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(`【${tierName}】`, monsterX, monsterYRef.current - 92);
+          
+          ctx.strokeStyle = tierColor;
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.3;
+          ctx.beginPath();
+          ctx.arc(monsterX, monsterYRef.current - 20, 45, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        
         const phases = getMonsterPhases();
         if (phases.length > 0 && currentMonster.currentPhase >= 0) {
           const phase = phases[currentMonster.currentPhase];
+          const offsetY = currentMonster.tier !== 'normal' ? -104 : -92;
           ctx.fillStyle = phase.color || '#fbbf24';
           ctx.font = 'bold 10px sans-serif';
-          ctx.fillText(`[${phase.name}]`, monsterX, monsterYRef.current - 92);
+          ctx.fillText(`[${phase.name}]`, monsterX, monsterYRef.current + offsetY);
         }
       }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
 import { RACES, CLASSES, REBIRTH_OPTIONS, REPUTATION_LEVELS, TALENTS } from '../game/data';
+import { MONSTER_TIER_COLORS } from '../game/types';
 
 export default function RebirthScreen() {
   const [name, setName] = useState('');
@@ -14,6 +15,9 @@ export default function RebirthScreen() {
     areaReputations,
     mapAreas,
     getActiveSynergies,
+    rebirthChallenges,
+    claimRebirthChallengeReward,
+    monsterKillStats,
   } = useGameStore();
 
   const isRebirth = player.rebirthCount > 0;
@@ -95,6 +99,109 @@ export default function RebirthScreen() {
                 {preserveRatio === 0 && (
                   <p className="rep-reset-warning">⚠️ 未选择声望传承，声望将重置为0</p>
                 )}
+              </div>
+            )}
+
+            <div className="monster-kill-stats-summary">
+              <p className="bonus-summary-title">⚔️ 怪物击杀统计</p>
+              <div className="kill-stats-grid">
+                <div className="kill-stat-item">
+                  <span className="kill-stat-icon">👹</span>
+                  <span className="kill-stat-label">普通怪物</span>
+                  <span className="kill-stat-value">{monsterKillStats.normalKills}</span>
+                </div>
+                <div className="kill-stat-item">
+                  <span className="kill-stat-icon" style={{ color: MONSTER_TIER_COLORS.elite }}>✨</span>
+                  <span className="kill-stat-label" style={{ color: MONSTER_TIER_COLORS.elite }}>精英怪物</span>
+                  <span className="kill-stat-value" style={{ color: MONSTER_TIER_COLORS.elite }}>{monsterKillStats.eliteKills}</span>
+                </div>
+                <div className="kill-stat-item">
+                  <span className="kill-stat-icon" style={{ color: MONSTER_TIER_COLORS.boss }}>👑</span>
+                  <span className="kill-stat-label" style={{ color: MONSTER_TIER_COLORS.boss }}>首领怪物</span>
+                  <span className="kill-stat-value" style={{ color: MONSTER_TIER_COLORS.boss }}>{monsterKillStats.bossKills}</span>
+                </div>
+              </div>
+            </div>
+
+            {rebirthChallenges.length > 0 && (
+              <div className="rebirth-challenges-section">
+                <p className="bonus-summary-title">🎯 转生挑战目标</p>
+                <div className="challenges-list">
+                  {rebirthChallenges.map((challenge) => {
+                    let currentProgress = 0;
+                    if (challenge.type === 'eliteKills') {
+                      currentProgress = monsterKillStats.eliteKills;
+                    } else if (challenge.type === 'bossKills') {
+                      currentProgress = monsterKillStats.bossKills;
+                    } else if (challenge.type === 'level') {
+                      currentProgress = player.stats.level;
+                    } else if (challenge.type === 'totalKills') {
+                      currentProgress = monsterKillStats.normalKills + monsterKillStats.eliteKills + monsterKillStats.bossKills;
+                    }
+                    
+                    const progressPercent = Math.min(100, (currentProgress / challenge.target) * 100);
+                    const canClaim = challenge.completed && !challenge.claimed;
+                    
+                    let typeIcon = '🎯';
+                    if (challenge.type === 'eliteKills') typeIcon = '✨';
+                    if (challenge.type === 'bossKills') typeIcon = '👑';
+                    if (challenge.type === 'level') typeIcon = '⭐';
+                    if (challenge.type === 'totalKills') typeIcon = '⚔️';
+                    
+                    return (
+                      <div 
+                        key={challenge.id} 
+                        className={`challenge-card ${challenge.completed ? 'completed' : ''} ${challenge.claimed ? 'claimed' : ''}`}
+                      >
+                        <div className="challenge-header">
+                          <span className="challenge-icon">{typeIcon}</span>
+                          <span className="challenge-description">{challenge.description}</span>
+                          {challenge.claimed && <span className="claimed-badge">已领取</span>}
+                        </div>
+                        
+                        <div className="challenge-progress-bar">
+                          <div 
+                            className="challenge-progress-fill"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                        
+                        <div className="challenge-footer">
+                          <span className="challenge-progress-text">
+                            {currentProgress} / {challenge.target}
+                          </span>
+                          <div className="challenge-rewards">
+                            {challenge.reward.map((r, i) => {
+                              let icon = '💰';
+                              let label = r.value.toString();
+                              switch (r.type) {
+                                case 'gold': icon = '💰'; label = `${r.value} 金币`; break;
+                                case 'exp': icon = '⭐'; label = `${r.value} 经验`; break;
+                                case 'soulOrbs': icon = '💎'; label = `${r.value} 魂珠`; break;
+                                case 'attack': icon = '⚔️'; label = `+${r.value} 攻击`; break;
+                                case 'defense': icon = '🛡️'; label = `+${r.value} 防御`; break;
+                                case 'hp': icon = '❤️'; label = `+${r.value} 生命`; break;
+                              }
+                              return (
+                                <span key={i} className="reward-mini">
+                                  {icon} {label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          {canClaim && (
+                            <button
+                              className="claim-challenge-btn"
+                              onClick={() => claimRebirthChallengeReward(challenge.id)}
+                            >
+                              领取奖励
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

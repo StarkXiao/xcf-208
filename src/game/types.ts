@@ -96,7 +96,7 @@ export interface StarCondition {
 }
 
 export interface StarReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation';
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed';
   value: number;
 }
 
@@ -139,6 +139,8 @@ export interface FirstClearReward {
   title: string;
 }
 
+export type MonsterTier = 'normal' | 'elite' | 'boss';
+
 export interface Monster {
   id: string;
   name: string;
@@ -150,7 +152,136 @@ export interface Monster {
   goldReward: number;
   color: string;
   phases?: MonsterPhase[];
+  tier?: MonsterTier;
+  eliteHpMultiplier?: number;
+  eliteAtkMultiplier?: number;
+  bossHpMultiplier?: number;
+  bossAtkMultiplier?: number;
+  isEliteSpawnable?: boolean;
+  isBossSpawnable?: boolean;
 }
+
+export interface MonsterTierConfig {
+  tier: MonsterTier;
+  name: string;
+  color: string;
+  spawnChance: number;
+  hpMultiplier: number;
+  attackMultiplier: number;
+  defenseMultiplier: number;
+  expMultiplier: number;
+  goldMultiplier: number;
+  soulOrbChance: number;
+  soulOrbMin: number;
+  soulOrbMax: number;
+  shardChance: number;
+}
+
+export interface AreaUnlockCondition {
+  type: 'level' | 'eliteKills' | 'bossKills' | 'totalKills' | 'stars';
+  threshold: number;
+  areaId?: string;
+  description: string;
+}
+
+export interface MapArea {
+  id: string;
+  name: string;
+  description: string;
+  minLevel: number;
+  baseExp: number;
+  baseGold: number;
+  monsters: Monster[];
+  bgColor: string;
+  unlocked: boolean;
+  unlockConditions?: AreaUnlockCondition[];
+  eliteKillCount?: number;
+  bossKillCount?: number;
+  eliteSpawnChance?: number;
+  bossSpawnChance?: number;
+  minLevelForElite?: number;
+  minLevelForBoss?: number;
+}
+
+export interface RebirthChallengeTarget {
+  id: string;
+  type: 'bossKills' | 'eliteKills' | 'areaClear' | 'totalPower' | 'level' | 'totalKills';
+  target: number;
+  areaId?: string;
+  description: string;
+  reward: StarReward[];
+  completed: boolean;
+  claimed: boolean;
+}
+
+export interface MonsterKillStats {
+  normalKills: number;
+  eliteKills: number;
+  bossKills: number;
+  totalKills: number;
+  killsByArea: Record<string, { normal: number; elite: number; boss: number }>;
+  bossesDefeated: string[];
+}
+
+export const MONSTER_TIER_CONFIGS: Record<MonsterTier, MonsterTierConfig> = {
+  normal: {
+    tier: 'normal',
+    name: '普通',
+    color: '#9ca3af',
+    spawnChance: 0.75,
+    hpMultiplier: 1.0,
+    attackMultiplier: 1.0,
+    defenseMultiplier: 1.0,
+    expMultiplier: 1.0,
+    goldMultiplier: 1.0,
+    soulOrbChance: 0.02,
+    soulOrbMin: 0,
+    soulOrbMax: 0,
+    shardChance: 0.05,
+  },
+  elite: {
+    tier: 'elite',
+    name: '精英',
+    color: '#3b82f6',
+    spawnChance: 0.20,
+    hpMultiplier: 2.5,
+    attackMultiplier: 1.8,
+    defenseMultiplier: 1.5,
+    expMultiplier: 3.0,
+    goldMultiplier: 3.0,
+    soulOrbChance: 0.15,
+    soulOrbMin: 0,
+    soulOrbMax: 1,
+    shardChance: 0.25,
+  },
+  boss: {
+    tier: 'boss',
+    name: '首领',
+    color: '#ef4444',
+    spawnChance: 0.05,
+    hpMultiplier: 8.0,
+    attackMultiplier: 3.0,
+    defenseMultiplier: 2.5,
+    expMultiplier: 10.0,
+    goldMultiplier: 10.0,
+    soulOrbChance: 0.6,
+    soulOrbMin: 1,
+    soulOrbMax: 3,
+    shardChance: 0.5,
+  },
+};
+
+export const MONSTER_TIER_NAMES: Record<MonsterTier, string> = {
+  normal: '普通',
+  elite: '精英',
+  boss: '首领',
+};
+
+export const MONSTER_TIER_COLORS: Record<MonsterTier, string> = {
+  normal: '#9ca3af',
+  elite: '#3b82f6',
+  boss: '#ef4444',
+};
 
 export interface MonsterPhase {
   name: string;

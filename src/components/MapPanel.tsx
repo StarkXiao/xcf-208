@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../game/store';
 import { REPUTATION_LEVELS, RARITY_COLORS, RARITY_NAMES } from '../game/data';
-import { MAP_MODIFIER_ICONS } from '../game/types';
+import { MAP_MODIFIER_ICONS, MONSTER_TIER_COLORS, MONSTER_TIER_NAMES } from '../game/types';
 import type { ShopItem } from '../game/types';
 import GameCanvas from './GameCanvas';
 import BattleLog from './BattleLog';
@@ -44,6 +44,7 @@ export default function MapPanel() {
     getShopInventory,
     shouldRestockShop,
     restockShop,
+    monsterKillStats,
   } = useGameStore();
 
   useEffect(() => {
@@ -123,6 +124,39 @@ export default function MapPanel() {
               const areaMods = getMapAreaModifiers(area.id);
               const progress = getLevelProgress(area.id);
               const canClaimFirst = canClaimFirstClearReward(area.id);
+              
+              const unlockConditions = area.unlockConditions || [];
+              const getConditionProgress = (cond: { type: string; threshold: number; areaId?: string }) => {
+                if (cond.type === 'level') {
+                  return {
+                    current: player.stats.level,
+                    total: cond.threshold,
+                    met: player.stats.level >= cond.threshold,
+                  };
+                }
+                if (cond.type === 'eliteKills') {
+                  const kills = cond.areaId 
+                    ? (monsterKillStats.killsByArea[cond.areaId]?.elite || 0)
+                    : monsterKillStats.eliteKills;
+                  return {
+                    current: kills,
+                    total: cond.threshold,
+                    met: kills >= cond.threshold,
+                  };
+                }
+                if (cond.type === 'bossKills') {
+                  const kills = cond.areaId 
+                    ? (monsterKillStats.killsByArea[cond.areaId]?.boss || 0)
+                    : monsterKillStats.bossKills;
+                  return {
+                    current: kills,
+                    total: cond.threshold,
+                    met: kills >= cond.threshold,
+                  };
+                }
+                return { current: 0, total: cond.threshold, met: false };
+              };
+              
               return (
                 <button
                   key={area.id}
@@ -143,14 +177,60 @@ export default function MapPanel() {
                   <div className="map-info">
                     <h4>{area.name}</h4>
                     <p>{area.description}</p>
+                    
+                    {!area.unlocked && unlockConditions.length > 0 && (
+                      <div className="unlock-conditions">
+                        {unlockConditions.map((cond, i) => {
+                          const prog = getConditionProgress(cond);
+                          let icon = '📊';
+                          if (cond.type === 'eliteKills') icon = '✨';
+                          if (cond.type === 'bossKills') icon = '👑';
+                          if (cond.type === 'level') icon = '⭐';
+                          return (
+                            <div key={i} className={`unlock-condition ${prog.met ? 'met' : ''}`}>
+                              <span>{icon} {cond.description}</span>
+                              <span className="condition-progress">
+                                {prog.current} / {prog.total}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    
                     <p className="map-requirement">
                       {area.unlocked ? '✅ 已解锁' : `🔒 需要等级 ${area.minLevel}`}
                     </p>
+                    
                     {area.unlocked && (
                       <>
                         <p className="map-rep-badge" style={{ color: repData.color }}>
                           🏛️ {repData.name} ({rep.points})
                         </p>
+                        
+                        <div className="map-monster-info">
+                          <span className="monster-spawn-info">
+                            <span style={{ color: MONSTER_TIER_COLORS.elite }}>✨ 精英: {((area.eliteSpawnChance || 0) * 100).toFixed(0)}%</span>
+                            {' | '}
+                            <span style={{ color: MONSTER_TIER_COLORS.boss }}>👑 首领: {((area.bossSpawnChance || 0) * 100).toFixed(0)}%</span>
+                          </span>
+                        </div>
+                        
+                        <div className="map-area-kill-stats">
+                          <span>累计击杀：</span>
+                          <span style={{ color: MONSTER_TIER_COLORS.normal }}>
+                            普通 {monsterKillStats.killsByArea[area.id]?.normal || 0}
+                          </span>
+                          {' | '}
+                          <span style={{ color: MONSTER_TIER_COLORS.elite }}>
+                            精英 {monsterKillStats.killsByArea[area.id]?.elite || 0}
+                          </span>
+                          {' | '}
+                          <span style={{ color: MONSTER_TIER_COLORS.boss }}>
+                            首领 {monsterKillStats.killsByArea[area.id]?.boss || 0}
+                          </span>
+                        </div>
+                        
                         <div className="map-stars">
                           {[1, 2, 3].map((star) => (
                             <span
@@ -562,17 +642,40 @@ export default function MapPanel() {
 
         {currentMonster && (
           <div className="monster-info-overlay">
-            <div className="monster-name">{currentMonster.name}</div>
+            <div className="monster-name-row">
+              {currentMonster.tier !== 'normal' && (
+                <span 
+                  className="monster-tier-badge"
+                  style={{ 
+                    backgroundColor: MONSTER_TIER_COLORS[currentMonster.tier],
+                    color: '#fff'
+                  }}
+                >
+                  {MONSTER_TIER_NAMES[currentMonster.tier]}
+                </span>
+              )}
+              <span className="monster-name">{currentMonster.name}</span>
+            </div>
             <div className="monster-hp-bar">
               <div
                 className="monster-hp-fill"
                 style={{
-                  width: `${(currentMonster.hp / currentMonster.maxHp) * 100}%`
+                  width: `${(currentMonster.hp / currentMonster.maxHp) * 100}%`,
+                  backgroundColor: currentMonster.tier === 'elite' 
+                    ? '#3b82f6' 
+                    : currentMonster.tier === 'boss' 
+                      ? '#dc2626' 
+                      : '#22c55e'
                 }}
               />
             </div>
             <div className="monster-hp-text">
               {Math.floor(currentMonster.hp)} / {currentMonster.maxHp}
+            </div>
+            <div className="monster-stats-row">
+              <span>⚔️ {currentMonster.attack}</span>
+              <span>🛡️ {currentMonster.defense}</span>
+              <span>👟 {currentMonster.speed}</span>
             </div>
           </div>
         )}

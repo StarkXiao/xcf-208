@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -109,10 +109,18 @@ export const MAP_AREAS: MapArea[] = [
     baseGold: 5,
     bgColor: '#2d5a27',
     unlocked: true,
+    eliteSpawnChance: 0.15,
+    bossSpawnChance: 0.03,
+    minLevelForElite: 3,
+    minLevelForBoss: 5,
+    unlockConditions: [
+      { type: 'level', threshold: 1, description: '达到1级' },
+    ],
     monsters: [
-      { id: 'slime', name: '史莱姆', hp: 30, attack: 5, defense: 2, speed: 3, expReward: 15, goldReward: 8, color: '#7dd87d' },
-      { id: 'goblin', name: '哥布林', hp: 50, attack: 8, defense: 3, speed: 6, expReward: 25, goldReward: 12, color: '#5a8f3c' },
-      { id: 'wolf', name: '野狼', hp: 45, attack: 12, defense: 2, speed: 8, expReward: 20, goldReward: 10, color: '#6b6b6b' },
+      { id: 'slime', name: '史莱姆', hp: 30, attack: 5, defense: 2, speed: 3, expReward: 15, goldReward: 8, color: '#7dd87d', isEliteSpawnable: true, isBossSpawnable: false },
+      { id: 'goblin', name: '哥布林', hp: 50, attack: 8, defense: 3, speed: 6, expReward: 25, goldReward: 12, color: '#5a8f3c', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'wolf', name: '野狼', hp: 45, attack: 12, defense: 2, speed: 8, expReward: 20, goldReward: 10, color: '#6b6b6b', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'forest_treant', name: '森林树人', hp: 150, attack: 18, defense: 12, speed: 2, expReward: 100, goldReward: 80, color: '#2d6a4f', tier: 'boss', isBossSpawnable: true, bossHpMultiplier: 6.0, bossAtkMultiplier: 2.5 },
     ],
   },
   {
@@ -124,10 +132,19 @@ export const MAP_AREAS: MapArea[] = [
     baseGold: 15,
     bgColor: '#3d3d3d',
     unlocked: false,
+    eliteSpawnChance: 0.20,
+    bossSpawnChance: 0.05,
+    minLevelForElite: 12,
+    minLevelForBoss: 15,
+    unlockConditions: [
+      { type: 'level', threshold: 10, description: '达到10级' },
+      { type: 'eliteKills', threshold: 5, areaId: 'forest', description: '在新手森林击杀5只精英怪物' },
+    ],
     monsters: [
-      { id: 'bat', name: '巨型蝙蝠', hp: 60, attack: 15, defense: 4, speed: 10, expReward: 40, goldReward: 20, color: '#4a4a4a' },
-      { id: 'spider', name: '毒蜘蛛', hp: 80, attack: 20, defense: 5, speed: 7, expReward: 55, goldReward: 28, color: '#5c3d5c' },
-      { id: 'orc', name: '兽人战士', hp: 120, attack: 25, defense: 10, speed: 5, expReward: 70, goldReward: 35, color: '#8b6914' },
+      { id: 'bat', name: '巨型蝙蝠', hp: 60, attack: 15, defense: 4, speed: 10, expReward: 40, goldReward: 20, color: '#4a4a4a', isEliteSpawnable: true, isBossSpawnable: false },
+      { id: 'spider', name: '毒蜘蛛', hp: 80, attack: 20, defense: 5, speed: 7, expReward: 55, goldReward: 28, color: '#5c3d5c', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'orc', name: '兽人战士', hp: 120, attack: 25, defense: 10, speed: 5, expReward: 70, goldReward: 35, color: '#8b6914', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'cave_troll', name: '洞穴巨魔', hp: 400, attack: 45, defense: 20, speed: 3, expReward: 250, goldReward: 200, color: '#4a5568', tier: 'boss', isBossSpawnable: true, bossHpMultiplier: 7.0, bossAtkMultiplier: 2.8 },
     ],
   },
   {
@@ -139,10 +156,20 @@ export const MAP_AREAS: MapArea[] = [
     baseGold: 40,
     bgColor: '#8b7355',
     unlocked: false,
+    eliteSpawnChance: 0.25,
+    bossSpawnChance: 0.07,
+    minLevelForElite: 27,
+    minLevelForBoss: 30,
+    unlockConditions: [
+      { type: 'level', threshold: 25, description: '达到25级' },
+      { type: 'eliteKills', threshold: 10, areaId: 'cave', description: '在幽暗洞穴击杀10只精英怪物' },
+      { type: 'bossKills', threshold: 1, areaId: 'cave', description: '在幽暗洞穴击败1只首领怪物' },
+    ],
     monsters: [
-      { id: 'skeleton', name: '骷髅战士', hp: 150, attack: 35, defense: 15, speed: 6, expReward: 100, goldReward: 50, color: '#e0e0e0' },
-      { id: 'golem', name: '石像鬼', hp: 250, attack: 45, defense: 25, speed: 3, expReward: 150, goldReward: 80, color: '#8b8b8b' },
-      { id: 'lich', name: '巫妖', hp: 180, attack: 60, defense: 12, speed: 7, expReward: 180, goldReward: 100, color: '#6b2d6b' },
+      { id: 'skeleton', name: '骷髅战士', hp: 150, attack: 35, defense: 15, speed: 6, expReward: 100, goldReward: 50, color: '#e0e0e0', isEliteSpawnable: true, isBossSpawnable: false },
+      { id: 'golem', name: '石像鬼', hp: 250, attack: 45, defense: 25, speed: 3, expReward: 150, goldReward: 80, color: '#8b8b8b', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'lich', name: '巫妖', hp: 180, attack: 60, defense: 12, speed: 7, expReward: 180, goldReward: 100, color: '#6b2d6b', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'ancient_guardian', name: '远古守护者', hp: 800, attack: 80, defense: 35, speed: 4, expReward: 500, goldReward: 400, color: '#92400e', tier: 'boss', isBossSpawnable: true, bossHpMultiplier: 8.0, bossAtkMultiplier: 3.0 },
     ],
   },
   {
@@ -154,10 +181,120 @@ export const MAP_AREAS: MapArea[] = [
     baseGold: 100,
     bgColor: '#8b2500',
     unlocked: false,
+    eliteSpawnChance: 0.30,
+    bossSpawnChance: 0.10,
+    minLevelForElite: 52,
+    minLevelForBoss: 55,
+    unlockConditions: [
+      { type: 'level', threshold: 50, description: '达到50级' },
+      { type: 'eliteKills', threshold: 20, areaId: 'ruins', description: '在远古遗迹击杀20只精英怪物' },
+      { type: 'bossKills', threshold: 3, areaId: 'ruins', description: '在远古遗迹击败3只首领怪物' },
+      { type: 'stars', threshold: 3, areaId: 'ruins', description: '在远古遗迹获得3星评价' },
+    ],
     monsters: [
-      { id: 'fireslime', name: '火焰史莱姆', hp: 300, attack: 70, defense: 20, speed: 4, expReward: 250, goldReward: 120, color: '#ff6b35' },
-      { id: 'dragonkin', name: '龙人战士', hp: 500, attack: 90, defense: 35, speed: 6, expReward: 400, goldReward: 200, color: '#cc2936' },
-      { id: 'phoenix', name: '火焰凤凰', hp: 400, attack: 120, defense: 25, speed: 9, expReward: 500, goldReward: 300, color: '#ff9500' },
+      { id: 'fireslime', name: '火焰史莱姆', hp: 300, attack: 70, defense: 20, speed: 4, expReward: 250, goldReward: 120, color: '#ff6b35', isEliteSpawnable: true, isBossSpawnable: false },
+      { id: 'dragonkin', name: '龙人战士', hp: 500, attack: 90, defense: 35, speed: 6, expReward: 400, goldReward: 200, color: '#cc2936', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'phoenix', name: '火焰凤凰', hp: 400, attack: 120, defense: 25, speed: 9, expReward: 500, goldReward: 300, color: '#ff9500', isEliteSpawnable: true, isBossSpawnable: true },
+      { id: 'flame_dragon', name: '炎龙', hp: 1500, attack: 150, defense: 50, speed: 5, expReward: 1000, goldReward: 800, color: '#dc2626', tier: 'boss', isBossSpawnable: true, bossHpMultiplier: 10.0, bossAtkMultiplier: 3.5 },
+    ],
+  },
+];
+
+export const REBIRTH_CHALLENGE_TARGETS: Omit<RebirthChallengeTarget, 'completed' | 'claimed'>[] = [
+  {
+    id: 'first_boss',
+    type: 'bossKills',
+    target: 1,
+    description: '击败任意1只首领怪物',
+    reward: [
+      { type: 'soulOrbs', value: 3 },
+      { type: 'gold', value: 500 },
+    ],
+  },
+  {
+    id: 'forest_cleared',
+    type: 'areaClear',
+    target: 1,
+    areaId: 'forest',
+    description: '解锁新手森林所有区域',
+    reward: [
+      { type: 'soulOrbs', value: 2 },
+      { type: 'exp', value: 200 },
+    ],
+  },
+  {
+    id: 'elite_hunter',
+    type: 'eliteKills',
+    target: 20,
+    description: '累计击杀20只精英怪物',
+    reward: [
+      { type: 'soulOrbs', value: 5 },
+      { type: 'attack', value: 2 },
+    ],
+  },
+  {
+    id: 'boss_slayer',
+    type: 'bossKills',
+    target: 5,
+    description: '累计击败5只首领怪物',
+    reward: [
+      { type: 'soulOrbs', value: 10 },
+      { type: 'defense', value: 3 },
+    ],
+  },
+  {
+    id: 'cave_conqueror',
+    type: 'bossKills',
+    target: 3,
+    areaId: 'cave',
+    description: '在幽暗洞穴击败3只首领怪物',
+    reward: [
+      { type: 'soulOrbs', value: 8 },
+      { type: 'hp', value: 50 },
+    ],
+  },
+  {
+    id: 'ruins_explorer',
+    type: 'bossKills',
+    target: 5,
+    areaId: 'ruins',
+    description: '在远古遗迹击败5只首领怪物',
+    reward: [
+      { type: 'soulOrbs', value: 15 },
+      { type: 'attack', value: 5 },
+      { type: 'defense', value: 5 },
+    ],
+  },
+  {
+    id: 'dragon_tamer',
+    type: 'bossKills',
+    target: 1,
+    areaId: 'volcano',
+    description: '击败炎龙',
+    reward: [
+      { type: 'soulOrbs', value: 30 },
+      { type: 'hp', value: 100 },
+      { type: 'attack', value: 10 },
+    ],
+  },
+  {
+    id: 'level_50',
+    type: 'level',
+    target: 50,
+    description: '达到50级',
+    reward: [
+      { type: 'soulOrbs', value: 20 },
+      { type: 'exp', value: 1000 },
+    ],
+  },
+  {
+    id: 'total_power',
+    type: 'totalPower',
+    target: 500,
+    description: '总战力达到500',
+    reward: [
+      { type: 'soulOrbs', value: 25 },
+      { type: 'speed', value: 5 },
     ],
   },
 ];

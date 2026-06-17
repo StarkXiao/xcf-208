@@ -36,8 +36,13 @@ import type {
   RecruitPoolType,
   ShopInventory,
   ShopItem,
+  MonsterTier,
+  MonsterTierConfig,
+  MonsterKillStats,
+  RebirthChallengeTarget,
+  Monster,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -59,6 +64,7 @@ import {
   FIRST_CLEAR_REWARDS,
   RECRUIT_POOLS,
   getShardConfig,
+  REBIRTH_CHALLENGE_TARGETS,
 } from './data';
 
 interface GameState {
@@ -93,7 +99,30 @@ interface GameState {
     baseDefense: number;
     baseSpeed: number;
     currentPhase: number;
+    tier: MonsterTier;
+    baseMaxHp: number;
+    baseExpReward: number;
+    baseGoldReward: number;
   } | null;
+
+  monsterKillStats: MonsterKillStats;
+  rebirthChallenges: RebirthChallengeTarget[];
+
+  generateMonster: (areaId: string, forceTier?: MonsterTier) => GameState['currentMonster'];
+  getMonsterTierConfig: (tier: MonsterTier) => MonsterTierConfig;
+  updateKillStats: (monsterTier: MonsterTier, areaId: string, monsterId?: string) => void;
+  getAreaEliteKills: (areaId: string) => number;
+  getAreaBossKills: (areaId: string) => number;
+  getTotalEliteKills: () => number;
+  getTotalBossKills: () => number;
+  checkMapUnlockConditions: (areaId: string) => boolean;
+  getUnlockProgress: (areaId: string) => { condition: string; current: number; target: number; completed: boolean }[];
+  checkRebirthChallenges: () => void;
+  claimRebirthChallengeReward: (challengeId: string) => boolean;
+  canClaimRebirthChallenge: (challengeId: string) => boolean;
+  getTotalPower: () => number;
+  calculateMonsterStats: (monster: Monster, tier: MonsterTier, playerLevel: number, area: MapArea) => GameState['currentMonster'];
+  getMonsterDropReward: (monster: GameState['currentMonster']) => { exp: number; gold: number; soulOrbs: number; shardChance: number };
 
   setScreen: (screen: GameScreen) => void;
   setActiveTab: (tab: GameTab) => void;
@@ -315,6 +344,29 @@ function initRecruitCounters(): Record<RecruitPoolType, number> {
   };
 }
 
+function initMonsterKillStats(): MonsterKillStats {
+  const killsByArea: Record<string, { normal: number; elite: number; boss: number }> = {};
+  MAP_AREAS.forEach((area) => {
+    killsByArea[area.id] = { normal: 0, elite: 0, boss: 0 };
+  });
+  return {
+    normalKills: 0,
+    eliteKills: 0,
+    bossKills: 0,
+    totalKills: 0,
+    killsByArea,
+    bossesDefeated: [],
+  };
+}
+
+function initRebirthChallenges(): RebirthChallengeTarget[] {
+  return REBIRTH_CHALLENGE_TARGETS.map((target) => ({
+    ...target,
+    completed: false,
+    claimed: false,
+  }));
+}
+
 function initFormation(playerLevel: number): Formation {
   const slots: FormationSlot[] = FORMATION_SLOT_CONFIG.map((cfg) => ({
     index: cfg.index,
@@ -382,6 +434,8 @@ export const useGameStore = create<GameState>()(
       companionCodex: initCompanionCodex(),
       recruitPullCounters: initRecruitCounters(),
       lastRecruitResults: null,
+      monsterKillStats: initMonsterKillStats(),
+      rebirthChallenges: initRebirthChallenges(),
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -3015,10 +3069,351 @@ export const useGameStore = create<GameState>()(
         );
         return true;
       },
+
+      getMonsterTierConfig: (tier) => {
+        return MONSTER_TIER_CONFIGS[tier];
+      },
+
+      calculateMonsterStats: (monster, tier, playerLevel, _area) => {
+        const tierConfig = MONSTER_TIER_CONFIGS[tier];
+        const levelBonus = 1 + (playerLevel - 1) * 0.1;
+
+        let hpMultiplier = tierConfig.hpMultiplier;
+        let attackMultiplier = tierConfig.attackMultiplier;
+        let defenseMultiplier = tierConfig.defenseMultiplier;
+
+        if (tier === 'elite' && monster.eliteHpMultiplier) {
+          hpMultiplier = monster.eliteHpMultiplier;
+        }
+        if (tier === 'elite' && monster.eliteAtkMultiplier) {
+          attackMultiplier = monster.eliteAtkMultiplier;
+        }
+        if (tier === 'boss' && monster.bossHpMultiplier) {
+          hpMultiplier = monster.bossHpMultiplier;
+        }
+        if (tier === 'boss' && monster.bossAtkMultiplier) {
+          attackMultiplier = monster.bossAtkMultiplier;
+        }
+
+        const baseHp = Math.floor(monster.hp * levelBonus);
+        const baseAttack = Math.floor(monster.attack * levelBonus);
+        const baseDefense = Math.floor(monster.defense * levelBonus);
+        const baseSpeed = Math.floor(monster.speed * levelBonus);
+        const baseExp = Math.floor(monster.expReward * levelBonus);
+        const baseGold = Math.floor(monster.goldReward * levelBonus);
+
+        const maxHp = Math.floor(baseHp * hpMultiplier);
+        const attack = Math.floor(baseAttack * attackMultiplier);
+        const defense = Math.floor(baseDefense * defenseMultiplier);
+        const speed = baseSpeed;
+        const expReward = Math.floor(baseExp * tierConfig.expMultiplier);
+        const goldReward = Math.floor(baseGold * tierConfig.goldMultiplier);
+
+        const tierName = MONSTER_TIER_NAMES[tier];
+        const displayName = tier === 'normal' ? monster.name : `${tierName}·${monster.name}`;
+
+        return {
+          id: monster.id,
+          name: displayName,
+          hp: maxHp,
+          maxHp,
+          attack,
+          defense,
+          speed,
+          expReward,
+          goldReward,
+          color: monster.color,
+          baseAttack,
+          baseDefense,
+          baseSpeed,
+          currentPhase: -1,
+          tier,
+          baseMaxHp: baseHp,
+          baseExpReward: baseExp,
+          baseGoldReward: baseGold,
+        };
+      },
+
+      generateMonster: (areaId, forceTier) => {
+        const state = get();
+        const area = state.mapAreas.find((a) => a.id === areaId);
+        if (!area || area.monsters.length === 0) return null;
+
+        const playerLevel = state.player.stats.level;
+        const minEliteLevel = area.minLevelForElite || 1;
+        const minBossLevel = area.minLevelForBoss || 10;
+
+        let selectedTier: MonsterTier = 'normal';
+        if (forceTier) {
+          selectedTier = forceTier;
+        } else {
+          const roll = Math.random();
+          const eliteChance = (area.eliteSpawnChance || 0.15) * (playerLevel >= minEliteLevel ? 1 : 0);
+          const bossChance = (area.bossSpawnChance || 0.05) * (playerLevel >= minBossLevel ? 1 : 0);
+
+          if (roll < bossChance) {
+            selectedTier = 'boss';
+          } else if (roll < bossChance + eliteChance) {
+            selectedTier = 'elite';
+          } else {
+            selectedTier = 'normal';
+          }
+        }
+
+        let availableMonsters: Monster[] = [];
+        if (selectedTier === 'boss') {
+          const bossMonsters = area.monsters.filter((m) => m.tier === 'boss' || m.isBossSpawnable);
+          if (bossMonsters.length > 0) {
+            availableMonsters = bossMonsters;
+          } else {
+            availableMonsters = area.monsters.filter((m) => m.isBossSpawnable !== false);
+          }
+        } else if (selectedTier === 'elite') {
+          const eliteMonsters = area.monsters.filter((m) => m.isEliteSpawnable && m.tier !== 'boss');
+          if (eliteMonsters.length > 0) {
+            availableMonsters = eliteMonsters;
+          } else {
+            availableMonsters = area.monsters.filter((m) => m.tier !== 'boss');
+          }
+        } else {
+          availableMonsters = area.monsters.filter((m) => m.tier !== 'boss');
+        }
+
+        if (availableMonsters.length === 0) {
+          availableMonsters = area.monsters.filter((m) => m.tier !== 'boss');
+        }
+        if (availableMonsters.length === 0) {
+          availableMonsters = area.monsters;
+        }
+
+        const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+        const actualTier = monster.tier === 'boss' ? 'boss' : selectedTier;
+
+        return get().calculateMonsterStats(monster, actualTier, playerLevel, area);
+      },
+
+      updateKillStats: (monsterTier, areaId, monsterId) => {
+        set((state) => {
+          const newStats = { ...state.monsterKillStats };
+          newStats.totalKills += 1;
+
+          if (monsterTier === 'normal') {
+            newStats.normalKills += 1;
+          } else if (monsterTier === 'elite') {
+            newStats.eliteKills += 1;
+          } else if (monsterTier === 'boss') {
+            newStats.bossKills += 1;
+            if (monsterId && !newStats.bossesDefeated.includes(monsterId)) {
+              newStats.bossesDefeated = [...newStats.bossesDefeated, monsterId];
+            }
+          }
+
+          if (!newStats.killsByArea[areaId]) {
+            newStats.killsByArea[areaId] = { normal: 0, elite: 0, boss: 0 };
+          }
+          newStats.killsByArea[areaId][monsterTier] += 1;
+
+          return { monsterKillStats: newStats };
+        });
+
+        setTimeout(() => {
+          get().checkRebirthChallenges();
+          const state = get();
+          state.mapAreas.forEach((area) => {
+            if (!area.unlocked && get().checkMapUnlockConditions(area.id)) {
+              get().unlockMapArea(area.id);
+            }
+          });
+        }, 100);
+      },
+
+      getAreaEliteKills: (areaId) => {
+        const stats = get().monsterKillStats;
+        return stats.killsByArea[areaId]?.elite || 0;
+      },
+
+      getAreaBossKills: (areaId) => {
+        const stats = get().monsterKillStats;
+        return stats.killsByArea[areaId]?.boss || 0;
+      },
+
+      getTotalEliteKills: () => {
+        return get().monsterKillStats.eliteKills;
+      },
+
+      getTotalBossKills: () => {
+        return get().monsterKillStats.bossKills;
+      },
+
+      checkMapUnlockConditions: (areaId) => {
+        const state = get();
+        const area = state.mapAreas.find((a) => a.id === areaId);
+        if (!area) return false;
+        if (area.unlocked) return true;
+
+        const conditions = area.unlockConditions || [];
+        if (conditions.length === 0) {
+          return state.player.stats.level >= area.minLevel;
+        }
+
+        return conditions.every((cond) => {
+          switch (cond.type) {
+            case 'level':
+              return state.player.stats.level >= cond.threshold;
+            case 'eliteKills':
+              return get().getAreaEliteKills(cond.areaId || areaId) >= cond.threshold;
+            case 'bossKills':
+              return get().getAreaBossKills(cond.areaId || areaId) >= cond.threshold;
+            case 'totalKills':
+              const areaKills = state.monsterKillStats.killsByArea[cond.areaId || areaId];
+              const total = areaKills ? areaKills.normal + areaKills.elite + areaKills.boss : 0;
+              return total >= cond.threshold;
+            case 'stars':
+              const progress = get().getLevelProgress(cond.areaId || areaId);
+              return progress.bestStars >= cond.threshold;
+            default:
+              return true;
+          }
+        });
+      },
+
+      getUnlockProgress: (areaId) => {
+        const state = get();
+        const area = state.mapAreas.find((a) => a.id === areaId);
+        if (!area) return [];
+
+        const conditions = area.unlockConditions || [];
+        if (conditions.length === 0) {
+          return [{
+            condition: `达到${area.minLevel}级`,
+            current: state.player.stats.level,
+            target: area.minLevel,
+            completed: state.player.stats.level >= area.minLevel,
+          }];
+        }
+
+        return conditions.map((cond) => {
+          let current = 0;
+          switch (cond.type) {
+            case 'level':
+              current = state.player.stats.level;
+              break;
+            case 'eliteKills':
+              current = get().getAreaEliteKills(cond.areaId || areaId);
+              break;
+            case 'bossKills':
+              current = get().getAreaBossKills(cond.areaId || areaId);
+              break;
+            case 'totalKills':
+              const areaKills = state.monsterKillStats.killsByArea[cond.areaId || areaId];
+              current = areaKills ? areaKills.normal + areaKills.elite + areaKills.boss : 0;
+              break;
+            case 'stars':
+              const progress = get().getLevelProgress(cond.areaId || areaId);
+              current = progress.bestStars;
+              break;
+          }
+          return {
+            condition: cond.description,
+            current,
+            target: cond.threshold,
+            completed: current >= cond.threshold,
+          };
+        });
+      },
+
+      getTotalPower: () => {
+        const state = get();
+        return get().getTotalAttack() + get().getTotalDefense() + Math.floor(state.player.stats.maxHp / 10) + get().getTotalSpeed();
+      },
+
+      checkRebirthChallenges: () => {
+        const state = get();
+        const newChallenges = state.rebirthChallenges.map((challenge) => {
+          if (challenge.completed) return challenge;
+
+          let completed = false;
+          switch (challenge.type) {
+            case 'bossKills':
+              if (challenge.areaId) {
+                completed = get().getAreaBossKills(challenge.areaId) >= challenge.target;
+              } else {
+                completed = get().getTotalBossKills() >= challenge.target;
+              }
+              break;
+            case 'eliteKills':
+              completed = get().getTotalEliteKills() >= challenge.target;
+              break;
+            case 'areaClear':
+              if (challenge.areaId) {
+                const area = state.mapAreas.find((a) => a.id === challenge.areaId);
+                completed = area?.unlocked || false;
+              }
+              break;
+            case 'level':
+              completed = state.player.stats.level >= challenge.target;
+              break;
+            case 'totalPower':
+              completed = get().getTotalPower() >= challenge.target;
+              break;
+          }
+
+          if (completed && !challenge.completed) {
+            get().addBattleLog(`🏆 挑战目标完成：${challenge.description}`, 'levelup');
+          }
+
+          return { ...challenge, completed };
+        });
+
+        set({ rebirthChallenges: newChallenges });
+      },
+
+      canClaimRebirthChallenge: (challengeId) => {
+        const state = get();
+        const challenge = state.rebirthChallenges.find((c) => c.id === challengeId);
+        if (!challenge) return false;
+        return challenge.completed && !challenge.claimed;
+      },
+
+      claimRebirthChallengeReward: (challengeId) => {
+        const state = get();
+        const challenge = state.rebirthChallenges.find((c) => c.id === challengeId);
+        if (!challenge || !get().canClaimRebirthChallenge(challengeId)) return false;
+
+        get().applyStarReward(challenge.reward, 'forest');
+
+        set((s) => ({
+          rebirthChallenges: s.rebirthChallenges.map((c) =>
+            c.id === challengeId ? { ...c, claimed: true } : c
+          ),
+        }));
+
+        get().addBattleLog(`🎁 领取了挑战奖励：${challenge.description}`, 'levelup');
+        return true;
+      },
+
+      getMonsterDropReward: (monster) => {
+        if (!monster) return { exp: 0, gold: 0, soulOrbs: 0, shardChance: 0 };
+
+        const tierConfig = MONSTER_TIER_CONFIGS[monster.tier];
+        const dropBonus = get().getAreaDropBonus(get().currentAreaId);
+
+        let soulOrbs = 0;
+        if (Math.random() < tierConfig.soulOrbChance) {
+          soulOrbs = tierConfig.soulOrbMin + Math.floor(Math.random() * (tierConfig.soulOrbMax - tierConfig.soulOrbMin + 1));
+        }
+
+        return {
+          exp: Math.floor(monster.expReward * (1 + dropBonus)),
+          gold: Math.floor(monster.goldReward * (1 + dropBonus)),
+          soulOrbs,
+          shardChance: tierConfig.shardChance,
+        };
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 7,
+      version: 8,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -3076,6 +3471,20 @@ export const useGameStore = create<GameState>()(
                 : entry
             );
           });
+        }
+        if (version < 8) {
+          state.monsterKillStats = initMonsterKillStats();
+          state.rebirthChallenges = initRebirthChallenges();
+          state.currentMonster = null;
+
+          const ownedCompanions = (state.ownedCompanions as Companion[]) || [];
+          if (ownedCompanions.length > 0) {
+            state.monsterKillStats = {
+              ...initMonsterKillStats(),
+              eliteKills: Math.floor(ownedCompanions.length * 0.5),
+              bossKills: Math.floor(ownedCompanions.length * 0.2),
+            };
+          }
         }
         return state as unknown as GameState;
       },
