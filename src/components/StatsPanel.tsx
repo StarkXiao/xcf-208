@@ -38,7 +38,7 @@ function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }:
 }
 
 export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, formation } = useGameStore();
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus } = useGameStore();
   const { stats, skillPoints } = player;
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;

@@ -47,7 +47,6 @@ export default function GameCanvas() {
     isAutoBattle,
     triggerRandomEvent,
     player,
-    getFormationCompanions,
     getAreaDropBonus,
     addAreaReputation,
     addCompanionStarExp,

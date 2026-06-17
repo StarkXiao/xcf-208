@@ -14,7 +14,6 @@ export default function CompanionsPanel() {
     getCompanionEffectiveAttack,
     getCompanionEffectiveDefense,
     getBondBonus,
-    addCompanionStarExp,
   } = useGameStore();
 
   const isOwned = (companionId: string) => {
@@ -212,7 +211,6 @@ export default function CompanionsPanel() {
         <h4>🔗 羁绊图鉴</h4>
         <div className="bonds-overview-list">
           {BONDS.map((bond) => {
-            const owned = bond.memberIds.filter((id) => isOwned(id));
             const allOwned = bond.memberIds.every((id) => isOwned(id));
             const inFormation = allOwned && formation.activeBondIds.includes(bond.id);
             return (
