@@ -86,6 +86,59 @@ export interface MapArea {
   unlocked: boolean;
 }
 
+export type StarConditionType = 'totalKills' | 'killEfficiency' | 'damageTaken' | 'eventChoices' | 'resourceDrop' | 'survivalTime' | 'comboKills';
+
+export interface StarCondition {
+  type: StarConditionType;
+  threshold: number;
+  description: string;
+  icon: string;
+}
+
+export interface StarReward {
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation';
+  value: number;
+}
+
+export interface LevelStarConfig {
+  stars: number;
+  conditions: StarCondition[];
+  rewards: StarReward[];
+  title: string;
+}
+
+export interface LevelProgress {
+  areaId: string;
+  currentStars: number;
+  bestStars: number;
+  firstCleared: boolean;
+  firstClearTime: number | null;
+  bestStats: LevelStats;
+  claimedStarRewards: number[];
+}
+
+export interface LevelStats {
+  totalKills: number;
+  totalDamageDealt: number;
+  totalDamageTaken: number;
+  timesHit: number;
+  eventsTriggered: number;
+  goodEventChoices: number;
+  goldEarned: number;
+  expEarned: number;
+  soulOrbsEarned: number;
+  survivalTime: number;
+  maxComboKills: number;
+  currentComboKills: number;
+  startTime: number;
+}
+
+export interface FirstClearReward {
+  areaId: string;
+  rewards: StarReward[];
+  title: string;
+}
+
 export interface Monster {
   id: string;
   name: string;

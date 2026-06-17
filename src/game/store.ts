@@ -25,6 +25,12 @@ import type {
   PowerComponent,
   Talent,
   TalentEffect,
+  LevelProgress,
+  LevelStats,
+  StarReward,
+  LevelStarConfig,
+  FirstClearReward,
+  StarCondition,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from './types';
 import {
@@ -44,6 +50,8 @@ import {
   MONSTER_PHASES,
   TALENTS,
   TALENT_SYNERGIES,
+  LEVEL_STAR_CONFIGS,
+  FIRST_CLEAR_REWARDS,
 } from './data';
 
 interface GameState {
@@ -134,6 +142,8 @@ interface GameState {
   companionAffinities: CompanionAffinityRecord[];
   mapAreaModifiers: MapAreaModifier[];
   eventWeightModifiers: EventWeightMod[];
+  levelProgresses: LevelProgress[];
+  currentLevelStats: LevelStats | null;
 
   addConsequenceTag: (tag: string) => void;
   hasConsequenceTag: (tag: string) => boolean;
@@ -178,6 +188,23 @@ interface GameState {
   getTotalTalentBonus: (type: TalentEffect['type']) => { percent: number; flat: number };
   resetTalents: () => boolean;
   getPowerBreakdown: () => PowerBreakdown;
+
+  initLevelStats: () => void;
+  getLevelProgress: (areaId: string) => LevelProgress;
+  getCurrentLevelStars: () => number;
+  checkStarCondition: (condition: StarCondition) => boolean;
+  checkAllStarConditions: (areaId: string) => { stars: number; completedConditions: boolean[] }[];
+  updateLevelStatsOnKill: (damageDealt: number, goldReward: number, expReward: number) => void;
+  updateLevelStatsOnDamage: (damageTaken: number) => void;
+  updateLevelStatsOnEvent: (isGoodChoice: boolean) => void;
+  updateSurvivalTime: () => void;
+  claimStarReward: (areaId: string, stars: number) => boolean;
+  claimFirstClearReward: (areaId: string) => boolean;
+  canClaimStarReward: (areaId: string, stars: number) => boolean;
+  canClaimFirstClearReward: (areaId: string) => boolean;
+  getStarConfig: (areaId: string) => LevelStarConfig[];
+  getFirstClearConfig: (areaId: string) => FirstClearReward | null;
+  applyStarReward: (rewards: StarReward[], areaId: string) => void;
 }
 
 let logIdCounter = 0;
@@ -201,6 +228,36 @@ function initAreaReputations(): AreaReputation[] {
     areaId: area.id,
     points: 0,
     level: 0,
+  }));
+}
+
+function createEmptyLevelStats(): LevelStats {
+  return {
+    totalKills: 0,
+    totalDamageDealt: 0,
+    totalDamageTaken: 0,
+    timesHit: 0,
+    eventsTriggered: 0,
+    goodEventChoices: 0,
+    goldEarned: 0,
+    expEarned: 0,
+    soulOrbsEarned: 0,
+    survivalTime: 0,
+    maxComboKills: 0,
+    currentComboKills: 0,
+    startTime: Date.now(),
+  };
+}
+
+function initLevelProgresses(): LevelProgress[] {
+  return MAP_AREAS.map((area) => ({
+    areaId: area.id,
+    currentStars: 0,
+    bestStars: 0,
+    firstCleared: false,
+    firstClearTime: null,
+    bestStats: createEmptyLevelStats(),
+    claimedStarRewards: [],
   }));
 }
 
@@ -264,6 +321,8 @@ export const useGameStore = create<GameState>()(
       companionAffinities: [],
       mapAreaModifiers: [],
       eventWeightModifiers: [],
+      levelProgresses: initLevelProgresses(),
+      currentLevelStats: null,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -467,7 +526,11 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const area = state.mapAreas.find((a) => a.id === areaId);
         if (area && area.unlocked) {
-          set({ currentAreaId: areaId, currentMonster: null });
+          set({ 
+            currentAreaId: areaId, 
+            currentMonster: null,
+            currentLevelStats: createEmptyLevelStats(),
+          });
           get().addBattleLog(`来到了 ${area.name}`, 'system');
         }
       },
@@ -860,6 +923,36 @@ export const useGameStore = create<GameState>()(
             });
           }
         }
+
+        let isGoodChoice = false;
+        let totalValue = 0;
+        choice.effects.forEach((effect) => {
+          switch (effect.type) {
+            case 'gold':
+            case 'exp':
+            case 'soulOrbs':
+            case 'attack':
+            case 'defense':
+            case 'speed':
+            case 'luck':
+            case 'reputation':
+            case 'hp':
+            case 'mp':
+              totalValue += effect.value;
+              break;
+          }
+        });
+        if (choice.consequences?.mapModifiers) {
+          choice.consequences.mapModifiers.forEach((mod) => {
+            if (mod.type === 'blessing' || mod.type === 'hiddenPath') {
+              totalValue += 50;
+            } else if (mod.type === 'hazard' || mod.type === 'cursed') {
+              totalValue -= 50;
+            }
+          });
+        }
+        isGoodChoice = totalValue > 0;
+        get().updateLevelStatsOnEvent(isGoodChoice);
 
         set({ currentEvent: null });
       },
@@ -2146,10 +2239,294 @@ export const useGameStore = create<GameState>()(
           bondDetails,
         };
       },
+
+      initLevelStats: () => {
+        set({ currentLevelStats: createEmptyLevelStats() });
+      },
+
+      getLevelProgress: (areaId) => {
+        const state = get();
+        const progress = state.levelProgresses.find((p) => p.areaId === areaId);
+        if (progress) return progress;
+        return {
+          areaId,
+          currentStars: 0,
+          bestStars: 0,
+          firstCleared: false,
+          firstClearTime: null,
+          bestStats: createEmptyLevelStats(),
+          claimedStarRewards: [],
+        };
+      },
+
+      getCurrentLevelStars: () => {
+        const state = get();
+        if (!state.currentLevelStats) return 0;
+        const starConfigs = LEVEL_STAR_CONFIGS[state.currentAreaId] || [];
+        let maxStars = 0;
+        for (const config of starConfigs) {
+          const allMet = config.conditions.every((cond) =>
+            get().checkStarCondition(cond)
+          );
+          if (allMet) {
+            maxStars = Math.max(maxStars, config.stars);
+          }
+        }
+        return maxStars;
+      },
+
+      checkStarCondition: (condition) => {
+        const state = get();
+        const stats = state.currentLevelStats;
+        if (!stats) return false;
+
+        const survivalSeconds = (Date.now() - stats.startTime) / 1000;
+        const killEfficiency = survivalSeconds > 0 ? stats.totalKills / survivalSeconds : 0;
+
+        switch (condition.type) {
+          case 'totalKills':
+            return stats.totalKills >= condition.threshold;
+          case 'killEfficiency':
+            return killEfficiency >= condition.threshold;
+          case 'damageTaken':
+            return stats.timesHit <= condition.threshold;
+          case 'eventChoices':
+            return stats.goodEventChoices >= condition.threshold;
+          case 'resourceDrop':
+            return stats.goldEarned >= condition.threshold;
+          case 'survivalTime':
+            return survivalSeconds >= condition.threshold;
+          case 'comboKills':
+            return stats.maxComboKills >= condition.threshold;
+          default:
+            return false;
+        }
+      },
+
+      checkAllStarConditions: (areaId) => {
+        const starConfigs = LEVEL_STAR_CONFIGS[areaId] || [];
+        return starConfigs.map((config) => ({
+          stars: config.stars,
+          completedConditions: config.conditions.map((cond) =>
+            get().checkStarCondition(cond)
+          ),
+        }));
+      },
+
+      updateLevelStatsOnKill: (damageDealt, goldReward, expReward) => {
+        set((state) => {
+          if (!state.currentLevelStats) return state;
+          const newStats = { ...state.currentLevelStats };
+          newStats.totalKills += 1;
+          newStats.totalDamageDealt += damageDealt;
+          newStats.goldEarned += goldReward;
+          newStats.expEarned += expReward;
+          newStats.currentComboKills += 1;
+          newStats.maxComboKills = Math.max(newStats.maxComboKills, newStats.currentComboKills);
+
+          const newProgresses = state.levelProgresses.map((p) => {
+            if (p.areaId !== state.currentAreaId) return p;
+            const survivalSeconds = (Date.now() - newStats.startTime) / 1000;
+            const killEfficiency = survivalSeconds > 0 ? newStats.totalKills / survivalSeconds : 0;
+            
+            let currentStars = 0;
+            const starConfigs = LEVEL_STAR_CONFIGS[state.currentAreaId] || [];
+            for (const config of starConfigs) {
+              let allMet = true;
+              for (const cond of config.conditions) {
+                switch (cond.type) {
+                  case 'totalKills':
+                    allMet = allMet && newStats.totalKills >= cond.threshold;
+                    break;
+                  case 'killEfficiency':
+                    allMet = allMet && killEfficiency >= cond.threshold;
+                    break;
+                  case 'damageTaken':
+                    allMet = allMet && newStats.timesHit <= cond.threshold;
+                    break;
+                  case 'eventChoices':
+                    allMet = allMet && newStats.goodEventChoices >= cond.threshold;
+                    break;
+                  case 'resourceDrop':
+                    allMet = allMet && newStats.goldEarned >= cond.threshold;
+                    break;
+                  case 'survivalTime':
+                    allMet = allMet && survivalSeconds >= cond.threshold;
+                    break;
+                  case 'comboKills':
+                    allMet = allMet && newStats.maxComboKills >= cond.threshold;
+                    break;
+                }
+              }
+              if (allMet) {
+                currentStars = Math.max(currentStars, config.stars);
+              }
+            }
+
+            const newBestStars = Math.max(p.bestStars, currentStars);
+            const isBetter = 
+              newStats.totalKills > p.bestStats.totalKills ||
+              newStats.maxComboKills > p.bestStats.maxComboKills ||
+              currentStars > p.bestStars;
+
+            return {
+              ...p,
+              currentStars,
+              bestStars: newBestStars,
+              bestStats: isBetter ? { ...newStats } : p.bestStats,
+            };
+          });
+
+          return {
+            currentLevelStats: newStats,
+            levelProgresses: newProgresses,
+          };
+        });
+      },
+
+      updateLevelStatsOnDamage: (damageTaken) => {
+        set((state) => {
+          if (!state.currentLevelStats) return state;
+          const newStats = { ...state.currentLevelStats };
+          newStats.totalDamageTaken += damageTaken;
+          newStats.timesHit += 1;
+          newStats.currentComboKills = 0;
+          return { currentLevelStats: newStats };
+        });
+      },
+
+      updateLevelStatsOnEvent: (isGoodChoice) => {
+        set((state) => {
+          if (!state.currentLevelStats) return state;
+          const newStats = { ...state.currentLevelStats };
+          newStats.eventsTriggered += 1;
+          if (isGoodChoice) {
+            newStats.goodEventChoices += 1;
+          }
+          return { currentLevelStats: newStats };
+        });
+      },
+
+      updateSurvivalTime: () => {
+      },
+
+      getStarConfig: (areaId) => {
+        return LEVEL_STAR_CONFIGS[areaId] || [];
+      },
+
+      getFirstClearConfig: (areaId) => {
+        return FIRST_CLEAR_REWARDS[areaId] || null;
+      },
+
+      canClaimStarReward: (areaId, stars) => {
+        const progress = get().getLevelProgress(areaId);
+        if (progress.claimedStarRewards.includes(stars)) return false;
+        if (progress.bestStars < stars) return false;
+        return true;
+      },
+
+      canClaimFirstClearReward: (areaId) => {
+        const progress = get().getLevelProgress(areaId);
+        return progress.firstCleared === false && progress.bestStars >= 1;
+      },
+
+      claimStarReward: (areaId, stars) => {
+        if (!get().canClaimStarReward(areaId, stars)) return false;
+
+        const starConfigs = LEVEL_STAR_CONFIGS[areaId] || [];
+        const config = starConfigs.find((c) => c.stars === stars);
+        if (!config) return false;
+
+        get().applyStarReward(config.rewards, areaId);
+
+        set((state) => ({
+          levelProgresses: state.levelProgresses.map((p) =>
+            p.areaId === areaId
+              ? { ...p, claimedStarRewards: [...p.claimedStarRewards, stars] }
+              : p
+          ),
+        }));
+
+        get().addBattleLog(`⭐ 领取了 ${stars} 星奖励！`, 'levelup');
+        return true;
+      },
+
+      claimFirstClearReward: (areaId) => {
+        if (!get().canClaimFirstClearReward(areaId)) return false;
+
+        const reward = FIRST_CLEAR_REWARDS[areaId];
+        if (!reward) return false;
+
+        get().applyStarReward(reward.rewards, areaId);
+
+        set((state) => ({
+          levelProgresses: state.levelProgresses.map((p) =>
+            p.areaId === areaId
+              ? { ...p, firstCleared: true, firstClearTime: Date.now() }
+              : p
+          ),
+        }));
+
+        get().addBattleLog(`🎉 首通奖励已领取！`, 'levelup');
+        return true;
+      },
+
+      applyStarReward: (rewards, areaId) => {
+        rewards.forEach((reward) => {
+          switch (reward.type) {
+            case 'gold':
+              get().addGold(reward.value);
+              break;
+            case 'exp':
+              get().addExp(reward.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(reward.value);
+              break;
+            case 'attack':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    attack: state.player.stats.attack + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'defense':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    defense: state.player.stats.defense + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'hp':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    maxHp: state.player.stats.maxHp + reward.value,
+                    hp: state.player.stats.hp + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'reputation':
+              get().addAreaReputation(areaId, reward.value);
+              break;
+          }
+        });
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 5,
+      version: 6,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -2184,6 +2561,10 @@ export const useGameStore = create<GameState>()(
             talentPoints: 0,
             inheritedTalents: [],
           };
+        }
+        if (version < 6) {
+          state.levelProgresses = initLevelProgresses();
+          state.currentLevelStats = null;
         }
         return state as unknown as GameState;
       },

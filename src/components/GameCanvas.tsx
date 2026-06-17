@@ -66,6 +66,8 @@ export default function GameCanvas() {
     useMp,
     updateMonsterPhase,
     getMonsterPhases,
+    updateLevelStatsOnKill,
+    updateLevelStatsOnDamage,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -215,6 +217,7 @@ export default function GameCanvas() {
       addGold(goldReward);
       const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
       addAreaReputation(currentAreaId, repGain);
+      updateLevelStatsOnKill(actualDamage, goldReward, expReward);
       addBattleLog(`⚔️ 击杀了 ${currentMonster.name}！获得 ${expReward} 经验, ${goldReward} 金币, ${repGain} 声望`, 'exp');
 
       const fc = useGameStore.getState().getFormationCompanions();
@@ -259,6 +262,7 @@ export default function GameCanvas() {
     addDamageNumber(playerX + (Math.random() - 0.5) * 20, playerY - 30, actualDamage, true);
     
     takeDamage(actualDamage);
+    updateLevelStatsOnDamage(actualDamage);
     
     if (player.stats.hp - actualDamage <= 0) {
       addBattleLog('💀 你被击败了！正在恢复...', 'damage');

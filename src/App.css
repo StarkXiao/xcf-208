@@ -4182,3 +4182,316 @@
   border: 1px solid rgba(251, 191, 36, 0.3);
   font-weight: 500;
 }
+
+.level-stars-section {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stars-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.stars-title {
+  color: #fbbf24;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stars-display {
+  display: flex;
+  gap: 4px;
+}
+
+.big-star {
+  font-size: 24px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.big-star.earned {
+  animation: starGlow 2s ease-in-out infinite;
+}
+
+.big-star.locked {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+@keyframes starGlow {
+  0%, 100% {
+    filter: drop-shadow(0 2px 4px rgba(251, 191, 36, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 2px 8px rgba(251, 191, 36, 0.8));
+  }
+}
+
+.first-clear-reward {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(249, 115, 22, 0.2));
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.first-clear-info {
+  flex: 1;
+}
+
+.first-clear-title {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.first-clear-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reward-tag {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fbbf24;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.claim-reward-btn {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+
+.claim-reward-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+}
+
+.star-conditions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.star-condition-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  transition: all 0.3s;
+}
+
+.star-condition-card.earned {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.star-condition-card.claimed {
+  opacity: 0.7;
+}
+
+.star-condition-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.star-condition-title {
+  color: #e5e7eb;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.earned .star-condition-title {
+  color: #22c55e;
+}
+
+.claimed-badge {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.star-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.condition-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+}
+
+.condition-item.met {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.condition-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.condition-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.condition-text {
+  color: #9ca3af;
+  font-size: 12px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.met .condition-text {
+  color: #22c55e;
+  font-weight: 500;
+}
+
+.condition-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.condition-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.met .condition-progress-fill {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.condition-progress-text {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+  min-width: 60px;
+  text-align: right;
+}
+
+.met .condition-progress-text {
+  color: #22c55e;
+}
+
+.star-rewards {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rewards-label {
+  color: #6b7280;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.reward-mini {
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(251, 191, 36, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.claim-star-reward-btn {
+  width: 100%;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.claim-star-reward-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.map-stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.star-icon {
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.star-icon.earned {
+  color: #fbbf24;
+  filter: drop-shadow(0 1px 2px rgba(251, 191, 36, 0.5));
+}
+
+.star-icon.locked {
+  opacity: 0.3;
+  color: #6b7280;
+}
+
+.first-clear-badge {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 4px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

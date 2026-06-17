@@ -28,6 +28,15 @@ export default function MapPanel() {
     getDiscountedCost,
     getMapAreaModifiers,
     getMapModifierTotalBonus,
+    getLevelProgress,
+    getStarConfig,
+    getFirstClearConfig,
+    canClaimStarReward,
+    canClaimFirstClearReward,
+    claimStarReward,
+    claimFirstClearReward,
+    currentLevelStats,
+    checkStarCondition,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -83,6 +92,8 @@ export default function MapPanel() {
               const rep = getAreaReputation(area.id);
               const repData = REPUTATION_LEVELS.find((rl) => rl.level === rep.level) || REPUTATION_LEVELS[0];
               const areaMods = getMapAreaModifiers(area.id);
+              const progress = getLevelProgress(area.id);
+              const canClaimFirst = canClaimFirstClearReward(area.id);
               return (
                 <button
                   key={area.id}
@@ -107,9 +118,24 @@ export default function MapPanel() {
                       {area.unlocked ? '✅ 已解锁' : `🔒 需要等级 ${area.minLevel}`}
                     </p>
                     {area.unlocked && (
-                      <p className="map-rep-badge" style={{ color: repData.color }}>
-                        🏛️ {repData.name} ({rep.points})
-                      </p>
+                      <>
+                        <p className="map-rep-badge" style={{ color: repData.color }}>
+                          🏛️ {repData.name} ({rep.points})
+                        </p>
+                        <div className="map-stars">
+                          {[1, 2, 3].map((star) => (
+                            <span
+                              key={star}
+                              className={`star-icon ${progress.bestStars >= star ? 'earned' : 'locked'}`}
+                            >
+                              {progress.bestStars >= star ? '⭐' : '☆'}
+                            </span>
+                          ))}
+                          {canClaimFirst && (
+                            <span className="first-clear-badge">🎉 首通奖励</span>
+                          )}
+                        </div>
+                      </>
                     )}
                     {areaMods.length > 0 && (
                       <div className="map-modifiers-inline">
@@ -167,6 +193,172 @@ export default function MapPanel() {
           )}
         </div>
       )}
+
+      <div className="level-stars-section">
+        <div className="stars-header">
+          <h4 className="stars-title">⭐ 关卡星级</h4>
+          <div className="stars-display">
+            {[1, 2, 3].map((star) => (
+              <span
+                key={star}
+                className={`big-star ${getLevelProgress(currentAreaId).bestStars >= star ? 'earned' : 'locked'}`}
+              >
+                {getLevelProgress(currentAreaId).bestStars >= star ? '⭐' : '☆'}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {canClaimFirstClearReward(currentAreaId) && (
+          <div className="first-clear-reward">
+            <div className="first-clear-info">
+              <span className="first-clear-title">🎉 {getFirstClearConfig(currentAreaId)?.title}</span>
+              <div className="first-clear-rewards">
+                {getFirstClearConfig(currentAreaId)?.rewards.map((reward, i) => {
+                  let icon = '💰';
+                  let label = reward.value.toString();
+                  switch (reward.type) {
+                    case 'gold': icon = '💰'; label = `${reward.value} 金币`; break;
+                    case 'exp': icon = '⭐'; label = `${reward.value} 经验`; break;
+                    case 'soulOrbs': icon = '💎'; label = `${reward.value} 魂珠`; break;
+                    case 'attack': icon = '⚔️'; label = `+${reward.value} 攻击`; break;
+                    case 'defense': icon = '🛡️'; label = `+${reward.value} 防御`; break;
+                    case 'hp': icon = '❤️'; label = `+${reward.value} 生命`; break;
+                    case 'reputation': icon = '🏛️'; label = `+${reward.value} 声望`; break;
+                  }
+                  return (
+                    <span key={i} className="reward-tag">
+                      {icon} {label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <button
+              className="claim-reward-btn"
+              onClick={() => claimFirstClearReward(currentAreaId)}
+            >
+              领取首通奖励
+            </button>
+          </div>
+        )}
+
+        <div className="star-conditions-list">
+          {getStarConfig(currentAreaId).map((config) => {
+            const canClaim = canClaimStarReward(currentAreaId, config.stars);
+            const progress = getLevelProgress(currentAreaId);
+            const isClaimed = progress.claimedStarRewards.includes(config.stars);
+            const isEarned = progress.bestStars >= config.stars;
+
+            return (
+              <div
+                key={config.stars}
+                className={`star-condition-card ${isEarned ? 'earned' : ''} ${isClaimed ? 'claimed' : ''}`}
+              >
+                <div className="star-condition-header">
+                  <span className="star-condition-title">
+                    {'⭐'.repeat(config.stars)} {config.title}
+                  </span>
+                  {isClaimed && <span className="claimed-badge">已领取</span>}
+                </div>
+
+                <div className="star-conditions">
+                  {config.conditions.map((cond, i) => {
+                    const isMet = checkStarCondition(cond);
+                    let progressText = '';
+                    let progressPercent = 0;
+
+                    if (currentLevelStats) {
+                      const survivalSeconds = (Date.now() - currentLevelStats.startTime) / 1000;
+                      const killEfficiency = survivalSeconds > 0 ? currentLevelStats.totalKills / survivalSeconds : 0;
+
+                      switch (cond.type) {
+                        case 'totalKills':
+                          progressText = `${currentLevelStats.totalKills} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, (currentLevelStats.totalKills / cond.threshold) * 100);
+                          break;
+                        case 'killEfficiency':
+                          progressText = `${killEfficiency.toFixed(2)} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, (killEfficiency / cond.threshold) * 100);
+                          break;
+                        case 'damageTaken':
+                          progressText = `${currentLevelStats.timesHit} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, ((cond.threshold - currentLevelStats.timesHit + cond.threshold) / (cond.threshold * 2)) * 100);
+                          break;
+                        case 'eventChoices':
+                          progressText = `${currentLevelStats.goodEventChoices} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, (currentLevelStats.goodEventChoices / cond.threshold) * 100);
+                          break;
+                        case 'resourceDrop':
+                          progressText = `${currentLevelStats.goldEarned} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, (currentLevelStats.goldEarned / cond.threshold) * 100);
+                          break;
+                        case 'survivalTime':
+                          progressText = `${Math.floor(survivalSeconds)} / ${cond.threshold}秒`;
+                          progressPercent = Math.min(100, (survivalSeconds / cond.threshold) * 100);
+                          break;
+                        case 'comboKills':
+                          progressText = `${currentLevelStats.maxComboKills} / ${cond.threshold}`;
+                          progressPercent = Math.min(100, (currentLevelStats.maxComboKills / cond.threshold) * 100);
+                          break;
+                      }
+                    }
+
+                    return (
+                      <div key={i} className={`condition-item ${isMet ? 'met' : ''}`}>
+                        <span className="condition-icon">{cond.icon}</span>
+                        <div className="condition-info">
+                          <span className="condition-text">{cond.description}</span>
+                          {currentLevelStats && (
+                            <div className="condition-progress-bar">
+                              <div
+                                className="condition-progress-fill"
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <span className="condition-progress-text">{progressText}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="star-rewards">
+                  <span className="rewards-label">奖励:</span>
+                  {config.rewards.map((reward, i) => {
+                    let icon = '💰';
+                    let label = reward.value.toString();
+                    switch (reward.type) {
+                      case 'gold': icon = '💰'; label = `${reward.value}`; break;
+                      case 'exp': icon = '⭐'; label = `${reward.value}`; break;
+                      case 'soulOrbs': icon = '💎'; label = `${reward.value}`; break;
+                      case 'attack': icon = '⚔️'; label = `+${reward.value}`; break;
+                      case 'defense': icon = '🛡️'; label = `+${reward.value}`; break;
+                      case 'hp': icon = '❤️'; label = `+${reward.value}`; break;
+                      case 'reputation': icon = '🏛️'; label = `+${reward.value}`; break;
+                    }
+                    return (
+                      <span key={i} className="reward-mini">
+                        {icon} {label}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {canClaim && (
+                  <button
+                    className="claim-star-reward-btn"
+                    onClick={() => claimStarReward(currentAreaId, config.stars)}
+                  >
+                    领取奖励
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="reputation-section">
         <div className="rep-header">

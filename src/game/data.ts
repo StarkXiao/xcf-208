@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -161,6 +161,245 @@ export const MAP_AREAS: MapArea[] = [
     ],
   },
 ];
+
+export const LEVEL_STAR_CONFIGS: Record<string, LevelStarConfig[]> = {
+  forest: [
+    {
+      stars: 1,
+      title: '初出茅庐',
+      conditions: [
+        { type: 'totalKills', threshold: 10, description: '击杀 10 只怪物', icon: '⚔️' },
+        { type: 'survivalTime', threshold: 60, description: '存活 60 秒', icon: '⏱️' },
+      ],
+      rewards: [
+        { type: 'gold', value: 200 },
+        { type: 'exp', value: 150 },
+        { type: 'reputation', value: 50 },
+      ],
+    },
+    {
+      stars: 2,
+      title: '崭露头角',
+      conditions: [
+        { type: 'killEfficiency', threshold: 0.5, description: '平均每秒击杀 0.5 只怪物', icon: '⚡' },
+        { type: 'resourceDrop', threshold: 300, description: '累计获得 300 金币', icon: '💰' },
+        { type: 'eventChoices', threshold: 1, description: '做出 1 次明智的事件选择', icon: '✨' },
+      ],
+      rewards: [
+        { type: 'gold', value: 500 },
+        { type: 'exp', value: 300 },
+        { type: 'soulOrbs', value: 1 },
+        { type: 'reputation', value: 100 },
+      ],
+    },
+    {
+      stars: 3,
+      title: '森林守护者',
+      conditions: [
+        { type: 'damageTaken', threshold: 5, description: '受到伤害不超过 5 次', icon: '🛡️' },
+        { type: 'killEfficiency', threshold: 1.0, description: '平均每秒击杀 1 只怪物', icon: '⚡' },
+        { type: 'eventChoices', threshold: 3, description: '做出 3 次明智的事件选择', icon: '✨' },
+        { type: 'comboKills', threshold: 5, description: '最高连击击杀 5 只', icon: '🔥' },
+      ],
+      rewards: [
+        { type: 'gold', value: 1000 },
+        { type: 'exp', value: 600 },
+        { type: 'soulOrbs', value: 3 },
+        { type: 'attack', value: 3 },
+        { type: 'reputation', value: 200 },
+      ],
+    },
+  ],
+  cave: [
+    {
+      stars: 1,
+      title: '初探洞穴',
+      conditions: [
+        { type: 'totalKills', threshold: 15, description: '击杀 15 只怪物', icon: '⚔️' },
+        { type: 'survivalTime', threshold: 90, description: '存活 90 秒', icon: '⏱️' },
+      ],
+      rewards: [
+        { type: 'gold', value: 500 },
+        { type: 'exp', value: 400 },
+        { type: 'reputation', value: 80 },
+      ],
+    },
+    {
+      stars: 2,
+      title: '洞穴探险家',
+      conditions: [
+        { type: 'killEfficiency', threshold: 0.6, description: '平均每秒击杀 0.6 只怪物', icon: '⚡' },
+        { type: 'resourceDrop', threshold: 800, description: '累计获得 800 金币', icon: '💰' },
+        { type: 'eventChoices', threshold: 2, description: '做出 2 次明智的事件选择', icon: '✨' },
+      ],
+      rewards: [
+        { type: 'gold', value: 1200 },
+        { type: 'exp', value: 800 },
+        { type: 'soulOrbs', value: 2 },
+        { type: 'reputation', value: 150 },
+      ],
+    },
+    {
+      stars: 3,
+      title: '暗影猎手',
+      conditions: [
+        { type: 'damageTaken', threshold: 8, description: '受到伤害不超过 8 次', icon: '🛡️' },
+        { type: 'killEfficiency', threshold: 1.2, description: '平均每秒击杀 1.2 只怪物', icon: '⚡' },
+        { type: 'eventChoices', threshold: 4, description: '做出 4 次明智的事件选择', icon: '✨' },
+        { type: 'comboKills', threshold: 8, description: '最高连击击杀 8 只', icon: '🔥' },
+      ],
+      rewards: [
+        { type: 'gold', value: 2500 },
+        { type: 'exp', value: 1500 },
+        { type: 'soulOrbs', value: 5 },
+        { type: 'defense', value: 3 },
+        { type: 'reputation', value: 300 },
+      ],
+    },
+  ],
+  ruins: [
+    {
+      stars: 1,
+      title: '遗迹探索者',
+      conditions: [
+        { type: 'totalKills', threshold: 20, description: '击杀 20 只怪物', icon: '⚔️' },
+        { type: 'survivalTime', threshold: 120, description: '存活 120 秒', icon: '⏱️' },
+      ],
+      rewards: [
+        { type: 'gold', value: 1000 },
+        { type: 'exp', value: 1000 },
+        { type: 'reputation', value: 120 },
+      ],
+    },
+    {
+      stars: 2,
+      title: '古文研究者',
+      conditions: [
+        { type: 'killEfficiency', threshold: 0.7, description: '平均每秒击杀 0.7 只怪物', icon: '⚡' },
+        { type: 'resourceDrop', threshold: 2000, description: '累计获得 2000 金币', icon: '💰' },
+        { type: 'eventChoices', threshold: 3, description: '做出 3 次明智的事件选择', icon: '✨' },
+      ],
+      rewards: [
+        { type: 'gold', value: 3000 },
+        { type: 'exp', value: 2000 },
+        { type: 'soulOrbs', value: 4 },
+        { type: 'reputation', value: 250 },
+      ],
+    },
+    {
+      stars: 3,
+      title: '遗迹征服者',
+      conditions: [
+        { type: 'damageTaken', threshold: 10, description: '受到伤害不超过 10 次', icon: '🛡️' },
+        { type: 'killEfficiency', threshold: 1.5, description: '平均每秒击杀 1.5 只怪物', icon: '⚡' },
+        { type: 'eventChoices', threshold: 5, description: '做出 5 次明智的事件选择', icon: '✨' },
+        { type: 'comboKills', threshold: 10, description: '最高连击击杀 10 只', icon: '🔥' },
+      ],
+      rewards: [
+        { type: 'gold', value: 6000 },
+        { type: 'exp', value: 4000 },
+        { type: 'soulOrbs', value: 8 },
+        { type: 'hp', value: 50 },
+        { type: 'reputation', value: 500 },
+      ],
+    },
+  ],
+  volcano: [
+    {
+      stars: 1,
+      title: '熔岩试炼',
+      conditions: [
+        { type: 'totalKills', threshold: 25, description: '击杀 25 只怪物', icon: '⚔️' },
+        { type: 'survivalTime', threshold: 150, description: '存活 150 秒', icon: '⏱️' },
+      ],
+      rewards: [
+        { type: 'gold', value: 2000 },
+        { type: 'exp', value: 2500 },
+        { type: 'reputation', value: 200 },
+      ],
+    },
+    {
+      stars: 2,
+      title: '火焰行者',
+      conditions: [
+        { type: 'killEfficiency', threshold: 0.8, description: '平均每秒击杀 0.8 只怪物', icon: '⚡' },
+        { type: 'resourceDrop', threshold: 5000, description: '累计获得 5000 金币', icon: '💰' },
+        { type: 'eventChoices', threshold: 4, description: '做出 4 次明智的事件选择', icon: '✨' },
+      ],
+      rewards: [
+        { type: 'gold', value: 8000 },
+        { type: 'exp', value: 5000 },
+        { type: 'soulOrbs', value: 6 },
+        { type: 'reputation', value: 400 },
+      ],
+    },
+    {
+      stars: 3,
+      title: '火山霸主',
+      conditions: [
+        { type: 'damageTaken', threshold: 12, description: '受到伤害不超过 12 次', icon: '🛡️' },
+        { type: 'killEfficiency', threshold: 1.8, description: '平均每秒击杀 1.8 只怪物', icon: '⚡' },
+        { type: 'eventChoices', threshold: 6, description: '做出 6 次明智的事件选择', icon: '✨' },
+        { type: 'comboKills', threshold: 15, description: '最高连击击杀 15 只', icon: '🔥' },
+      ],
+      rewards: [
+        { type: 'gold', value: 15000 },
+        { type: 'exp', value: 10000 },
+        { type: 'soulOrbs', value: 15 },
+        { type: 'attack', value: 5 },
+        { type: 'defense', value: 5 },
+        { type: 'reputation', value: 800 },
+      ],
+    },
+  ],
+};
+
+export const FIRST_CLEAR_REWARDS: Record<string, FirstClearReward> = {
+  forest: {
+    areaId: 'forest',
+    title: '森林首通奖励',
+    rewards: [
+      { type: 'gold', value: 500 },
+      { type: 'exp', value: 300 },
+      { type: 'soulOrbs', value: 2 },
+      { type: 'reputation', value: 100 },
+    ],
+  },
+  cave: {
+    areaId: 'cave',
+    title: '洞穴首通奖励',
+    rewards: [
+      { type: 'gold', value: 1500 },
+      { type: 'exp', value: 1000 },
+      { type: 'soulOrbs', value: 5 },
+      { type: 'attack', value: 2 },
+      { type: 'reputation', value: 200 },
+    ],
+  },
+  ruins: {
+    areaId: 'ruins',
+    title: '遗迹首通奖励',
+    rewards: [
+      { type: 'gold', value: 4000 },
+      { type: 'exp', value: 3000 },
+      { type: 'soulOrbs', value: 10 },
+      { type: 'defense', value: 3 },
+      { type: 'reputation', value: 400 },
+    ],
+  },
+  volcano: {
+    areaId: 'volcano',
+    title: '火山首通奖励',
+    rewards: [
+      { type: 'gold', value: 10000 },
+      { type: 'exp', value: 8000 },
+      { type: 'soulOrbs', value: 20 },
+      { type: 'hp', value: 100 },
+      { type: 'attack', value: 5 },
+      { type: 'reputation', value: 800 },
+    ],
+  },
+};
 
 export const COMPANIONS: Companion[] = [
   {
