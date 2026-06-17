@@ -1,19 +1,18 @@
 import { useGameStore } from '../game/store';
-import { COMPANIONS, RARITY_COLORS, RARITY_NAMES } from '../game/data';
+import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, REPUTATION_LEVELS } from '../game/data';
 
 export default function CompanionsPanel() {
-  const { ownedCompanions, buyCompanion, player } = useGameStore();
+  const {
+    ownedCompanions,
+    buyCompanion,
+    player,
+    getDiscountedCompanionCost,
+    canRecruitCompanion,
+    mapAreas,
+  } = useGameStore();
 
   const isOwned = (companionId: string) => {
     return ownedCompanions.some((c) => c.id === companionId);
-  };
-
-  const canAfford = (cost: number) => {
-    return player.stats.gold >= cost;
-  };
-
-  const handleBuy = (companionId: string) => {
-    buyCompanion(companionId);
   };
 
   const totalAttack = ownedCompanions.reduce((sum, c) => sum + c.attack * c.level, 0);
@@ -35,12 +34,12 @@ export default function CompanionsPanel() {
           </div>
           <div className="owned-companions-list">
             {ownedCompanions.map((companion) => (
-              <div 
-                key={companion.id} 
+              <div
+                key={companion.id}
                 className="companion-card owned"
                 style={{ borderColor: RARITY_COLORS[companion.rarity] }}
               >
-                <div 
+                <div
                   className="companion-avatar"
                   style={{ backgroundColor: RARITY_COLORS[companion.rarity] + '30' }}
                 >
@@ -70,15 +69,25 @@ export default function CompanionsPanel() {
         <div className="recruit-list">
           {COMPANIONS.map((companion) => {
             const owned = isOwned(companion.id);
-            const affordable = canAfford(companion.cost);
-            
+            const canRecruit = canRecruitCompanion(companion);
+            const discountedCost = getDiscountedCompanionCost(companion);
+            const affordable = player.stats.gold >= discountedCost;
+            const hasDiscount = discountedCost < companion.cost;
+            const repLocked = !canRecruit;
+            const areaName = companion.areaId
+              ? mapAreas.find((a) => a.id === companion.areaId)?.name
+              : null;
+            const requiredRepName = companion.minReputationLevel
+              ? REPUTATION_LEVELS.find((rl) => rl.level === companion.minReputationLevel)?.name
+              : null;
+
             return (
-              <div 
-                key={companion.id} 
-                className={`companion-card recruit ${owned ? 'owned' : ''} ${!affordable && !owned ? 'unaffordable' : ''}`}
+              <div
+                key={companion.id}
+                className={`companion-card recruit ${owned ? 'owned' : ''} ${!affordable && !owned ? 'unaffordable' : ''} ${repLocked ? 'rep-locked' : ''}`}
                 style={{ borderColor: RARITY_COLORS[companion.rarity] }}
               >
-                <div 
+                <div
                   className="companion-avatar"
                   style={{ backgroundColor: RARITY_COLORS[companion.rarity] + '30' }}
                 >
@@ -92,10 +101,28 @@ export default function CompanionsPanel() {
                     {RARITY_NAMES[companion.rarity]} · {companion.race} {companion.class}
                   </p>
                   <p className="companion-desc">{companion.description}</p>
+                  {areaName && (
+                    <p className="companion-area">📍 {areaName}</p>
+                  )}
+                  {repLocked && requiredRepName && areaName && (
+                    <p className="companion-rep-requirement">
+                      🔒 需要声望: {areaName} - {requiredRepName}
+                    </p>
+                  )}
+                  {!repLocked && companion.minReputationLevel && companion.minReputationLevel > 0 && areaName && (
+                    <p className="companion-rep-unlocked">
+                      ✅ {areaName}声望已达标
+                    </p>
+                  )}
                   <div className="companion-stats">
                     <span>⚔️ {companion.attack}</span>
                     <span>🛡️ {companion.defense}</span>
                   </div>
+                  {hasDiscount && !owned && (
+                    <p className="companion-discount">
+                      💰 折扣价: {discountedCost.toLocaleString()} <s>{companion.cost.toLocaleString()}</s>
+                    </p>
+                  )}
                 </div>
                 <div className="companion-action">
                   {owned ? (
@@ -104,11 +131,11 @@ export default function CompanionsPanel() {
                     </button>
                   ) : (
                     <button
-                      className={`buy-btn ${affordable ? '' : 'disabled'}`}
-                      onClick={() => handleBuy(companion.id)}
-                      disabled={!affordable}
+                      className={`buy-btn ${!affordable || repLocked ? 'disabled' : ''}`}
+                      onClick={() => buyCompanion(companion.id)}
+                      disabled={!affordable || repLocked}
                     >
-                      💰 {companion.cost.toLocaleString()}
+                      💰 {hasDiscount ? discountedCost.toLocaleString() : companion.cost.toLocaleString()}
                     </button>
                   )}
                 </div>

@@ -5,7 +5,7 @@ import MapPanel from './MapPanel';
 import CompanionsPanel from './CompanionsPanel';
 import EventModal from './EventModal';
 import OfflineRewardsModal from './OfflineRewardsModal';
-import { REBIRTH_OPTIONS } from '../game/data';
+import { REBIRTH_OPTIONS, REPUTATION_LEVELS } from '../game/data';
 
 export default function GameScreen() {
   const {
@@ -14,6 +14,8 @@ export default function GameScreen() {
     player,
     rebirthBonuses,
     updateLastOnlineTime,
+    areaReputations,
+    mapAreas,
   } = useGameStore();
 
   const [showRebirthModal, setShowRebirthModal] = useState(false);
@@ -140,6 +142,30 @@ export default function GameScreen() {
               </div>
             </div>
 
+            {areaReputations.some((r) => r.points > 0) && (
+              <div className="rebirth-rep-card">
+                <h4>🏛️ 当前区域声望</h4>
+                <div className="rebirth-rep-list">
+                  {areaReputations.map((rep) => {
+                    if (rep.points <= 0) return null;
+                    const area = mapAreas.find((a) => a.id === rep.areaId);
+                    const repData = REPUTATION_LEVELS.find((rl) => rl.level === rep.level) || REPUTATION_LEVELS[0];
+                    return (
+                      <div key={rep.areaId} className="rebirth-rep-item">
+                        <span>{area?.name}</span>
+                        <span style={{ color: repData.color }}>{repData.name} ({rep.points})</span>
+                      </div>
+                    );
+                  })}
+                  {(rebirthBonuses['reputation_preserve'] || 0) > 0 ? (
+                    <p className="rebirth-rep-preserve">🏛️ 声望传承：保留 {((rebirthBonuses['reputation_preserve'] || 0) * 100).toFixed(0)}% 声望</p>
+                  ) : (
+                    <p className="rebirth-rep-reset">⚠️ 转生将重置所有区域声望为0</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {!canRebirth && (
               <div className="rebirth-requirement">
                 <p>⚠️ 需要达到 30 级才能转生</p>
@@ -257,6 +283,11 @@ export default function GameScreen() {
               <p>获得魂珠：💎 +{soulOrbsGained}</p>
               <p>选择的加成：{selectedRebirthBonuses.length} 个</p>
               <p>消耗魂珠：💎 {totalSelectedCost}</p>
+              {(rebirthBonuses['reputation_preserve'] || 0) > 0 ? (
+                <p className="confirm-rep-preserve">🏛️ 声望传承：保留 {((rebirthBonuses['reputation_preserve'] || 0) * 100).toFixed(0)}% 声望</p>
+              ) : (
+                <p className="confirm-rep-reset">⚠️ 所有区域声望将重置为0</p>
+              )}
             </div>
             <div className="confirm-actions">
               <button 

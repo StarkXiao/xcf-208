@@ -9,6 +9,7 @@ import type {
   GameEvent,
   GameScreen,
   GameTab,
+  AreaReputation,
 } from './types';
 import {
   INITIAL_STATS,
@@ -16,6 +17,8 @@ import {
   COMPANIONS,
   RANDOM_EVENTS,
   REBIRTH_OPTIONS,
+  REPUTATION_LEVELS,
+  SHOP_ITEMS,
 } from './data';
 
 interface GameState {
@@ -31,6 +34,8 @@ interface GameState {
   totalPlayTime: number;
   rebirthBonuses: Record<string, number>;
   isAutoBattle: boolean;
+  areaReputations: AreaReputation[];
+  purchasedShopItems: string[];
   currentMonster: {
     id: string;
     name: string;
@@ -72,9 +77,42 @@ interface GameState {
   updateLastOnlineTime: () => void;
   getTotalAttack: () => number;
   getTotalDefense: () => number;
+  addAreaReputation: (areaId: string, points: number) => void;
+  getAreaReputation: (areaId: string) => AreaReputation;
+  getAreaReputationLevel: (areaId: string) => number;
+  getAreaDropBonus: (areaId: string) => number;
+  getAreaShopDiscount: (areaId: string) => number;
+  getAreaRecruitDiscount: (areaId: string) => number;
+  getAreaEventBonus: (areaId: string) => number;
+  buyShopItem: (itemId: string) => boolean;
+  getDiscountedCost: (baseCost: number, areaId: string) => number;
+  getDiscountedCompanionCost: (companion: Companion) => number;
+  canRecruitCompanion: (companion: Companion) => boolean;
 }
 
 let logIdCounter = 0;
+
+function calculateReputationLevel(points: number): number {
+  let level = 0;
+  for (const rl of REPUTATION_LEVELS) {
+    if (points >= rl.minPoints) {
+      level = rl.level;
+    }
+  }
+  return level;
+}
+
+function getReputationLevelData(level: number) {
+  return REPUTATION_LEVELS.find((rl) => rl.level === level) || REPUTATION_LEVELS[0];
+}
+
+function initAreaReputations(): AreaReputation[] {
+  return MAP_AREAS.map((area) => ({
+    areaId: area.id,
+    points: 0,
+    level: 0,
+  }));
+}
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -99,6 +137,8 @@ export const useGameStore = create<GameState>()(
       totalPlayTime: 0,
       rebirthBonuses: {},
       isAutoBattle: false,
+      areaReputations: initAreaReputations(),
+      purchasedShopItems: [],
       currentMonster: null,
 
       setScreen: (screen) => set({ screen }),
@@ -107,7 +147,7 @@ export const useGameStore = create<GameState>()(
       initializePlayer: (name, race, playerClass) => {
         const state = get();
         const rebirthBonus = state.player.totalRebirthBonus;
-        
+
         const baseStats = { ...INITIAL_STATS };
         const attackBonus = state.rebirthBonuses['attack_boost'] || 0;
         const defenseBonus = state.rebirthBonuses['defense_boost'] || 0;
@@ -140,7 +180,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const expBonus = get().calculateExpBonus();
         const actualExp = Math.floor(amount * expBonus);
-        
+
         let { exp, expToNext, level } = state.player.stats;
         let skillPoints = state.player.skillPoints;
         exp += actualExp;
@@ -151,7 +191,7 @@ export const useGameStore = create<GameState>()(
           skillPoints += 3;
           expToNext = Math.floor(expToNext * 1.15);
           get().addBattleLog(`🎉 升级了！当前等级：${level}`, 'levelup');
-          
+
           const area = state.mapAreas.find((a) => a.id === state.currentAreaId);
           if (area) {
             state.mapAreas.forEach((a) => {
@@ -290,15 +330,18 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const companion = COMPANIONS.find((c) => c.id === companionId);
         if (!companion) return false;
-        if (state.player.stats.gold < companion.cost) return false;
         if (state.ownedCompanions.find((c) => c.id === companionId)) return false;
+        if (!get().canRecruitCompanion(companion)) return false;
+
+        const discountedCost = get().getDiscountedCompanionCost(companion);
+        if (state.player.stats.gold < discountedCost) return false;
 
         set((state) => ({
           player: {
             ...state.player,
             stats: {
               ...state.player.stats,
-              gold: state.player.stats.gold - companion.cost,
+              gold: state.player.stats.gold - discountedCost,
             },
           },
           ownedCompanions: [...state.ownedCompanions, { ...companion }],
@@ -322,8 +365,30 @@ export const useGameStore = create<GameState>()(
       },
 
       triggerRandomEvent: () => {
-        const events = RANDOM_EVENTS;
-        const randomEvent = events[Math.floor(Math.random() * events.length)];
+        const state = get();
+        const currentAreaId = state.currentAreaId;
+        const repLevel = get().getAreaReputationLevel(currentAreaId);
+
+        const areaSpecificEvents = RANDOM_EVENTS.filter(
+          (e) => e.areaId === currentAreaId && (e.minReputationLevel || 0) <= repLevel
+        );
+        const genericEvents = RANDOM_EVENTS.filter((e) => !e.areaId);
+
+        const eventBonus = get().getAreaEventBonus(currentAreaId);
+        const areaWeight = 0.3 + eventBonus;
+
+        let availableEvents: GameEvent[];
+        if (areaSpecificEvents.length > 0 && Math.random() < areaWeight) {
+          availableEvents = areaSpecificEvents;
+        } else {
+          availableEvents = genericEvents;
+        }
+
+        if (availableEvents.length === 0) {
+          availableEvents = RANDOM_EVENTS.filter((e) => !e.areaId);
+        }
+
+        const randomEvent = availableEvents[Math.floor(Math.random() * availableEvents.length)];
         set({ currentEvent: { ...randomEvent } });
         get().addBattleLog(`✨ 触发了随机事件：${randomEvent.title}`, 'event');
       },
@@ -334,6 +399,8 @@ export const useGameStore = create<GameState>()(
 
         const choice = state.currentEvent.choices.find((c) => c.id === choiceId);
         if (!choice) return;
+
+        const currentAreaId = state.currentAreaId;
 
         choice.effects.forEach((effect) => {
           switch (effect.type) {
@@ -402,6 +469,11 @@ export const useGameStore = create<GameState>()(
             case 'soulOrbs':
               get().addSoulOrbs(effect.value);
               break;
+            case 'reputation':
+              if (currentAreaId) {
+                get().addAreaReputation(currentAreaId, effect.value);
+              }
+              break;
           }
         });
 
@@ -427,6 +499,17 @@ export const useGameStore = create<GameState>()(
           }
         });
 
+        const preserveRatio = newBonuses['reputation_preserve'] || 0;
+        const newReputations = state.areaReputations.map((rep) => {
+          const preservedPoints = Math.floor(rep.points * preserveRatio);
+          const newLevel = calculateReputationLevel(preservedPoints);
+          return {
+            areaId: rep.areaId,
+            points: preservedPoints,
+            level: newLevel,
+          };
+        });
+
         set({
           screen: 'rebirth',
           player: {
@@ -445,6 +528,8 @@ export const useGameStore = create<GameState>()(
           currentEvent: null,
           rebirthBonuses: newBonuses,
           currentMonster: null,
+          areaReputations: newReputations,
+          purchasedShopItems: [],
         });
 
         return true;
@@ -503,6 +588,141 @@ export const useGameStore = create<GameState>()(
         return playerDefense + companionDefense;
       },
 
+      addAreaReputation: (areaId, points) => {
+        set((state) => {
+          const newReps = state.areaReputations.map((rep) => {
+            if (rep.areaId !== areaId) return rep;
+            const newPoints = Math.max(0, rep.points + points);
+            const newLevel = calculateReputationLevel(newPoints);
+            return { ...rep, points: newPoints, level: newLevel };
+          });
+          return { areaReputations: newReps };
+        });
+
+        if (points > 0) {
+          const rep = get().getAreaReputation(areaId);
+          const area = get().mapAreas.find((a) => a.id === areaId);
+          if (area) {
+            get().addBattleLog(`🏛️ ${area.name}声望 +${points}（${getReputationLevelData(rep.level).name}）`, 'reputation');
+          }
+        }
+      },
+
+      getAreaReputation: (areaId) => {
+        const state = get();
+        return state.areaReputations.find((r) => r.areaId === areaId) || { areaId, points: 0, level: 0 };
+      },
+
+      getAreaReputationLevel: (areaId) => {
+        return get().getAreaReputation(areaId).level;
+      },
+
+      getAreaDropBonus: (areaId) => {
+        const repLevel = get().getAreaReputationLevel(areaId);
+        return getReputationLevelData(repLevel).dropBonus;
+      },
+
+      getAreaShopDiscount: (areaId) => {
+        const repLevel = get().getAreaReputationLevel(areaId);
+        return getReputationLevelData(repLevel).shopDiscount;
+      },
+
+      getAreaRecruitDiscount: (areaId) => {
+        const repLevel = get().getAreaReputationLevel(areaId);
+        return getReputationLevelData(repLevel).recruitDiscount;
+      },
+
+      getAreaEventBonus: (areaId) => {
+        const repLevel = get().getAreaReputationLevel(areaId);
+        return getReputationLevelData(repLevel).eventBonus;
+      },
+
+      getDiscountedCost: (baseCost, areaId) => {
+        const discount = get().getAreaShopDiscount(areaId);
+        return Math.max(1, Math.floor(baseCost * (1 - discount)));
+      },
+
+      getDiscountedCompanionCost: (companion) => {
+        if (!companion.areaId) return companion.cost;
+        const discount = get().getAreaRecruitDiscount(companion.areaId);
+        return Math.max(1, Math.floor(companion.cost * (1 - discount)));
+      },
+
+      canRecruitCompanion: (companion) => {
+        if (companion.areaId && companion.minReputationLevel) {
+          const repLevel = get().getAreaReputationLevel(companion.areaId);
+          if (repLevel < companion.minReputationLevel) return false;
+        }
+        return true;
+      },
+
+      buyShopItem: (itemId) => {
+        const state = get();
+        const item = SHOP_ITEMS.find((i) => i.id === itemId);
+        if (!item) return false;
+
+        const repLevel = get().getAreaReputationLevel(item.areaId);
+        if (repLevel < item.minReputationLevel) return false;
+
+        const discountedCost = get().getDiscountedCost(item.baseCost, item.areaId);
+
+        if (item.currency === 'gold' && state.player.stats.gold < discountedCost) return false;
+        if (item.currency === 'soulOrbs' && state.player.stats.soulOrbs < discountedCost) return false;
+
+        set((state) => {
+          const newStats = { ...state.player.stats };
+          if (item.currency === 'gold') {
+            newStats.gold -= discountedCost;
+          } else {
+            newStats.soulOrbs -= discountedCost;
+          }
+
+          switch (item.effect.type) {
+            case 'hp':
+              newStats.hp = Math.min(newStats.maxHp, newStats.hp + item.effect.value);
+              break;
+            case 'mp':
+              newStats.mp = Math.min(newStats.maxMp, newStats.mp + item.effect.value);
+              break;
+            case 'attack':
+              newStats.attack += item.effect.value;
+              break;
+            case 'defense':
+              newStats.defense += item.effect.value;
+              break;
+            case 'speed':
+              newStats.speed += item.effect.value;
+              break;
+            case 'luck':
+              newStats.luck += item.effect.value;
+              break;
+            case 'exp':
+              break;
+            case 'gold':
+              newStats.gold += item.effect.value;
+              break;
+            case 'soulOrbs':
+              newStats.soulOrbs += item.effect.value;
+              break;
+          }
+
+          return {
+            player: { ...state.player, stats: newStats },
+            purchasedShopItems: [...state.purchasedShopItems, itemId],
+          };
+        });
+
+        if (item.effect.type === 'exp') {
+          get().addExp(item.effect.value);
+        } else if (item.effect.type === 'gold') {
+          // already handled in set
+        }
+
+        get().addBattleLog(`🛒 购买了 ${item.name}！`, 'event');
+        get().addAreaReputation(item.areaId, 5);
+        return true;
+      },
+
       calculateOfflineRewards: () => {
         const state = get();
         const now = Date.now();
@@ -517,12 +737,13 @@ export const useGameStore = create<GameState>()(
         const killsPerSecond = 0.3;
         const totalKills = Math.floor(offlineSeconds * killsPerSecond);
         const avgMonster = currentArea.monsters[0];
+        const dropBonus = get().getAreaDropBonus(state.currentAreaId);
 
         const expReward = Math.floor(
-          totalKills * avgMonster.expReward * 0.5 * state.calculateExpBonus()
+          totalKills * avgMonster.expReward * 0.5 * state.calculateExpBonus() * (1 + dropBonus)
         );
         const goldReward = Math.floor(
-          totalKills * avgMonster.goldReward * 0.5 * state.calculateGoldBonus()
+          totalKills * avgMonster.goldReward * 0.5 * state.calculateGoldBonus() * (1 + dropBonus)
         );
 
         return { exp: expReward, gold: goldReward };
@@ -547,7 +768,15 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'isekai-idle-game',
-      version: 1,
+      version: 2,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Record<string, unknown>;
+        if (version < 2) {
+          state.areaReputations = initAreaReputations();
+          state.purchasedShopItems = [];
+        }
+        return state as unknown as GameState;
+      },
     }
   )
 );

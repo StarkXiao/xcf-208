@@ -1,10 +1,15 @@
 import { useGameStore } from '../game/store';
+import { REPUTATION_LEVELS } from '../game/data';
 import type { EventEffect } from '../game/types';
 
 export default function EventModal() {
-  const { currentEvent, handleEventChoice, closeEvent, player } = useGameStore();
+  const { currentEvent, handleEventChoice, closeEvent, player, currentAreaId, getAreaEventBonus } = useGameStore();
 
   if (!currentEvent) return null;
+
+  const isAreaEvent = !!currentEvent.areaId;
+  const repLevel = useGameStore.getState().getAreaReputationLevel(currentAreaId);
+  const repData = REPUTATION_LEVELS.find((rl) => rl.level === repLevel) || REPUTATION_LEVELS[0];
 
   const getEffectText = (effect: EventEffect) => {
     const sign = effect.value >= 0 ? '+' : '';
@@ -23,6 +28,8 @@ export default function EventModal() {
         return `${sign}${effect.value} 🛡️防御`;
       case 'soulOrbs':
         return `${sign}${effect.value} 💎魂珠`;
+      case 'reputation':
+        return `${sign}${effect.value} 🏛️声望`;
       default:
         return '';
     }
@@ -55,10 +62,18 @@ export default function EventModal() {
         <div className="event-modal-header">
           <h3>✨ {currentEvent.title}</h3>
         </div>
-        
+
+        {isAreaEvent && (
+          <div className="event-rep-info" style={{ borderColor: repData.color }}>
+            <span>🏛️ 区域声望事件</span>
+            <span style={{ color: repData.color }}>{repData.name}</span>
+            <span>事件加成: +{(getAreaEventBonus(currentAreaId) * 100).toFixed(0)}%</span>
+          </div>
+        )}
+
         <div className="event-modal-body">
           <p className="event-description">{currentEvent.description}</p>
-          
+
           <div className="event-choices">
             {currentEvent.choices.map((choice) => {
               const affordable = canAffordChoice(choice.effects);
@@ -73,8 +88,8 @@ export default function EventModal() {
                   {choice.effects.length > 0 && (
                     <div className="choice-effects">
                       {choice.effects.map((effect, idx) => (
-                        <span 
-                          key={idx} 
+                        <span
+                          key={idx}
                           className={`effect-tag ${effect.value >= 0 ? 'positive' : 'negative'}`}
                         >
                           {getEffectText(effect)}

@@ -12,6 +12,7 @@ export default function BattleLog() {
       case 'levelup': return 'log-levelup';
       case 'event': return 'log-event';
       case 'system': return 'log-system';
+      case 'reputation': return 'log-reputation';
       default: return '';
     }
   };

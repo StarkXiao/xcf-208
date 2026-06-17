@@ -48,6 +48,8 @@ export default function GameCanvas() {
     triggerRandomEvent,
     player,
     ownedCompanions,
+    getAreaDropBonus,
+    addAreaReputation,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -235,9 +237,14 @@ export default function GameCanvas() {
           
           if (newHp <= 0) {
             addParticles(monsterX, monsterYRef.current - 20, currentMonster.color, 20);
-            addExp(currentMonster.expReward);
-            addGold(currentMonster.goldReward);
-            addBattleLog(`击杀了 ${currentMonster.name}！获得 ${currentMonster.expReward} 经验, ${currentMonster.goldReward} 金币`, 'exp');
+            const dropBonus = getAreaDropBonus(currentAreaId);
+            const expReward = Math.floor(currentMonster.expReward * (1 + dropBonus));
+            const goldReward = Math.floor(currentMonster.goldReward * (1 + dropBonus));
+            addExp(expReward);
+            addGold(goldReward);
+            const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
+            addAreaReputation(currentAreaId, repGain);
+            addBattleLog(`击杀了 ${currentMonster.name}！获得 ${expReward} 经验, ${goldReward} 金币, ${repGain} 声望`, 'exp');
             
             eventTriggerTimerRef.current += 1;
             if (eventTriggerTimerRef.current >= 5 && Math.random() < 0.3) {

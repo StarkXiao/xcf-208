@@ -35,6 +35,8 @@ export interface Companion {
   defense: number;
   cost: number;
   description: string;
+  areaId?: string;
+  minReputationLevel?: number;
 }
 
 export interface MapArea {
@@ -60,11 +62,47 @@ export interface Monster {
   color: string;
 }
 
+export interface AreaReputation {
+  areaId: string;
+  points: number;
+  level: number;
+}
+
+export interface ReputationLevel {
+  level: number;
+  name: string;
+  minPoints: number;
+  dropBonus: number;
+  eventBonus: number;
+  shopDiscount: number;
+  recruitDiscount: number;
+  color: string;
+}
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  baseCost: number;
+  currency: 'gold' | 'soulOrbs';
+  areaId: string;
+  minReputationLevel: number;
+  effect: ShopItemEffect;
+  icon: string;
+}
+
+export interface ShopItemEffect {
+  type: 'hp' | 'mp' | 'attack' | 'defense' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs';
+  value: number;
+}
+
 export interface GameEvent {
   id: string;
   title: string;
   description: string;
   choices: EventChoice[];
+  areaId?: string;
+  minReputationLevel?: number;
 }
 
 export interface EventChoice {
@@ -74,7 +112,7 @@ export interface EventChoice {
 }
 
 export interface EventEffect {
-  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs';
+  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation';
   value: number;
 }
 
@@ -90,7 +128,7 @@ export interface RebirthOption {
 export interface BattleLog {
   id: number;
   message: string;
-  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system';
+  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system' | 'reputation';
   timestamp: number;
 }
 

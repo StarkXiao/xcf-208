@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -18,6 +18,15 @@ export const INITIAL_STATS = {
   gold: 0,
   soulOrbs: 0,
 };
+
+export const REPUTATION_LEVELS: ReputationLevel[] = [
+  { level: 0, name: '陌生人', minPoints: 0, dropBonus: 0, eventBonus: 0, shopDiscount: 0, recruitDiscount: 0, color: '#9ca3af' },
+  { level: 1, name: '熟人', minPoints: 100, dropBonus: 0.1, eventBonus: 0.05, shopDiscount: 0.05, recruitDiscount: 0.05, color: '#6ee7b7' },
+  { level: 2, name: '友好', minPoints: 300, dropBonus: 0.2, eventBonus: 0.1, shopDiscount: 0.1, recruitDiscount: 0.1, color: '#34d399' },
+  { level: 3, name: '尊敬', minPoints: 700, dropBonus: 0.35, eventBonus: 0.2, shopDiscount: 0.15, recruitDiscount: 0.15, color: '#2dd4bf' },
+  { level: 4, name: '崇敬', minPoints: 1500, dropBonus: 0.5, eventBonus: 0.3, shopDiscount: 0.2, recruitDiscount: 0.2, color: '#22d3ee' },
+  { level: 5, name: '崇拜', minPoints: 3000, dropBonus: 0.75, eventBonus: 0.5, shopDiscount: 0.3, recruitDiscount: 0.25, color: '#fbbf24' },
+];
 
 export const MAP_AREAS: MapArea[] = [
   {
@@ -106,6 +115,8 @@ export const COMPANIONS: Companion[] = [
     defense: 3,
     cost: 500,
     description: '来自精灵森林的神射手，百发百中',
+    areaId: 'forest',
+    minReputationLevel: 2,
   },
   {
     id: 'dwarf_blacksmith',
@@ -118,6 +129,8 @@ export const COMPANIONS: Companion[] = [
     defense: 10,
     cost: 600,
     description: '精通锻造的矮人，防御力出众',
+    areaId: 'cave',
+    minReputationLevel: 2,
   },
   {
     id: 'dark_mage',
@@ -130,6 +143,8 @@ export const COMPANIONS: Companion[] = [
     defense: 5,
     cost: 2000,
     description: '掌握禁忌魔法的暗黑法师，攻击力惊人',
+    areaId: 'ruins',
+    minReputationLevel: 3,
   },
   {
     id: 'holy_priest',
@@ -142,6 +157,8 @@ export const COMPANIONS: Companion[] = [
     defense: 15,
     cost: 2500,
     description: '受到神祝福的祭司，能提供强大的防护',
+    areaId: 'ruins',
+    minReputationLevel: 4,
   },
   {
     id: 'dragon_knight',
@@ -154,7 +171,78 @@ export const COMPANIONS: Companion[] = [
     defense: 30,
     cost: 10000,
     description: '与龙族签订契约的传说骑士，实力深不可测',
+    areaId: 'volcano',
+    minReputationLevel: 4,
   },
+  {
+    id: 'forest_ranger',
+    name: '森林游侠',
+    race: '精灵',
+    class: '弓箭手',
+    rarity: 'common',
+    level: 1,
+    attack: 10,
+    defense: 4,
+    cost: 150,
+    description: '守护森林的游侠，对自然之力了如指掌',
+    areaId: 'forest',
+    minReputationLevel: 1,
+  },
+  {
+    id: 'cave_explorer',
+    name: '洞穴探险家',
+    race: '矮人',
+    class: '盗贼',
+    rarity: 'common',
+    level: 1,
+    attack: 9,
+    defense: 6,
+    cost: 180,
+    description: '常年穿梭于地下洞穴的探险老手',
+    areaId: 'cave',
+    minReputationLevel: 1,
+  },
+  {
+    id: 'ruins_scholar',
+    name: '遗迹学者',
+    race: '人类',
+    class: '法师',
+    rarity: 'rare',
+    level: 1,
+    attack: 18,
+    defense: 7,
+    cost: 800,
+    description: '钻研古代文明的知识渊博的学者',
+    areaId: 'ruins',
+    minReputationLevel: 2,
+  },
+  {
+    id: 'volcano_warrior',
+    name: '火山狂战士',
+    race: '兽人',
+    class: '战士',
+    rarity: 'epic',
+    level: 1,
+    attack: 30,
+    defense: 12,
+    cost: 3000,
+    description: '在火山中修炼的狂战士，力量惊人',
+    areaId: 'volcano',
+    minReputationLevel: 3,
+  },
+];
+
+export const SHOP_ITEMS: ShopItem[] = [
+  { id: 'forest_herb', name: '森林草药', description: '恢复 50 点生命', baseCost: 50, currency: 'gold', areaId: 'forest', minReputationLevel: 0, effect: { type: 'hp', value: 50 }, icon: '🌿' },
+  { id: 'forest_lucky_charm', name: '幸运护符', description: '永久增加 1 点幸运', baseCost: 200, currency: 'gold', areaId: 'forest', minReputationLevel: 2, effect: { type: 'luck', value: 1 }, icon: '🍀' },
+  { id: 'cave_potion', name: '洞穴灵药', description: '恢复 80 点魔力', baseCost: 80, currency: 'gold', areaId: 'cave', minReputationLevel: 0, effect: { type: 'mp', value: 80 }, icon: '🧪' },
+  { id: 'cave_pickaxe', name: '矿工镐', description: '永久增加 2 点防御', baseCost: 500, currency: 'gold', areaId: 'cave', minReputationLevel: 2, effect: { type: 'defense', value: 2 }, icon: '⛏️' },
+  { id: 'ruins_scroll', name: '古代卷轴', description: '获得 200 经验', baseCost: 300, currency: 'gold', areaId: 'ruins', minReputationLevel: 0, effect: { type: 'exp', value: 200 }, icon: '📜' },
+  { id: 'ruins_blade', name: '遗迹之刃', description: '永久增加 5 点攻击', baseCost: 2000, currency: 'gold', areaId: 'ruins', minReputationLevel: 3, effect: { type: 'attack', value: 5 }, icon: '🗡️' },
+  { id: 'volcano_essence', name: '火焰精华', description: '获得 1 魂珠', baseCost: 3, currency: 'soulOrbs', areaId: 'volcano', minReputationLevel: 1, effect: { type: 'soulOrbs', value: 1 }, icon: '🔥' },
+  { id: 'volcano_armor', name: '熔岩铠甲', description: '永久增加 8 点防御', baseCost: 5000, currency: 'gold', areaId: 'volcano', minReputationLevel: 4, effect: { type: 'defense', value: 8 }, icon: '🛡️' },
+  { id: 'forest_speed_boots', name: '疾风之靴', description: '永久增加 2 点速度', baseCost: 800, currency: 'gold', areaId: 'forest', minReputationLevel: 3, effect: { type: 'speed', value: 2 }, icon: '👟' },
+  { id: 'cave_gem', name: '暗影宝石', description: '获得 500 金币', baseCost: 2, currency: 'soulOrbs', areaId: 'cave', minReputationLevel: 1, effect: { type: 'gold', value: 500 }, icon: '💎' },
 ];
 
 export const RANDOM_EVENTS: GameEvent[] = [
@@ -207,6 +295,54 @@ export const RANDOM_EVENTS: GameEvent[] = [
       { id: 'leave', text: '太危险了，离开', effects: [] },
     ],
   },
+  {
+    id: 'forest_spirit',
+    title: '森林精灵',
+    description: '森林深处传来美妙的歌声，一位精灵向你招手...',
+    areaId: 'forest',
+    minReputationLevel: 1,
+    choices: [
+      { id: 'follow', text: '跟随精灵', effects: [{ type: 'exp', value: 120 }, { type: 'reputation', value: 30 }] },
+      { id: 'gift', text: '赠送金币', effects: [{ type: 'gold', value: -50 }, { type: 'reputation', value: 50 }] },
+      { id: 'decline', text: '婉言谢绝', effects: [{ type: 'exp', value: 30 }] },
+    ],
+  },
+  {
+    id: 'cave_dwarf_clan',
+    title: '矮人氏族',
+    description: '你遇到了一支友善的矮人氏族，他们似乎对你的到来感到高兴...',
+    areaId: 'cave',
+    minReputationLevel: 2,
+    choices: [
+      { id: 'trade', text: '交换物资', effects: [{ type: 'gold', value: 150 }, { type: 'reputation', value: 40 }] },
+      { id: 'forge', text: '请求锻造', effects: [{ type: 'attack', value: 3 }, { type: 'defense', value: 3 }, { type: 'reputation', value: 20 }] },
+      { id: 'feast', text: '参加宴会', effects: [{ type: 'hp', value: 100 }, { type: 'reputation', value: 35 }] },
+    ],
+  },
+  {
+    id: 'ruins_guardian',
+    title: '遗迹守护者',
+    description: '一个古老的守护者苏醒了，它在审视你的灵魂...',
+    areaId: 'ruins',
+    minReputationLevel: 3,
+    choices: [
+      { id: 'challenge', text: '发起挑战', effects: [{ type: 'exp', value: 300 }, { type: 'hp', value: -80 }, { type: 'reputation', value: 60 }] },
+      { id: 'pray', text: '虔诚祈祷', effects: [{ type: 'soulOrbs', value: 2 }, { type: 'reputation', value: 40 }] },
+      { id: 'study', text: '学习古文', effects: [{ type: 'attack', value: 5 }, { type: 'reputation', value: 30 }] },
+    ],
+  },
+  {
+    id: 'volcano_dragon',
+    title: '火龙试炼',
+    description: '一条年迈的火龙向你发起试炼邀请，通过将获得极大力量...',
+    areaId: 'volcano',
+    minReputationLevel: 4,
+    choices: [
+      { id: 'accept', text: '接受试炼', effects: [{ type: 'attack', value: 8 }, { type: 'hp', value: -120 }, { type: 'reputation', value: 80 }] },
+      { id: 'offer', text: '献上贡品', effects: [{ type: 'gold', value: -500 }, { type: 'soulOrbs', value: 3 }, { type: 'reputation', value: 50 }] },
+      { id: 'flee', text: '选择离开', effects: [{ type: 'reputation', value: -20 }] },
+    ],
+  },
 ];
 
 export const REBIRTH_OPTIONS: RebirthOption[] = [
@@ -257,6 +393,14 @@ export const REBIRTH_OPTIONS: RebirthOption[] = [
     bonus: 0.05,
     cost: 2,
     icon: '👟',
+  },
+  {
+    id: 'reputation_preserve',
+    name: '声望传承',
+    description: '转生时保留 30% 区域声望（默认重置为0）',
+    bonus: 0.3,
+    cost: 2,
+    icon: '🏛️',
   },
 ];
 

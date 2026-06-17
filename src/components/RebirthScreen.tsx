@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import { RACES, CLASSES, REBIRTH_OPTIONS } from '../game/data';
+import { RACES, CLASSES, REBIRTH_OPTIONS, REPUTATION_LEVELS } from '../game/data';
 
 export default function RebirthScreen() {
   const [name, setName] = useState('');
@@ -11,9 +11,12 @@ export default function RebirthScreen() {
     player,
     rebirthBonuses,
     initializePlayer,
+    areaReputations,
+    mapAreas,
   } = useGameStore();
 
   const isRebirth = player.rebirthCount > 0;
+  const preserveRatio = rebirthBonuses['reputation_preserve'] || 0;
 
   const handleStart = () => {
     if (!name.trim()) return;
@@ -44,6 +47,28 @@ export default function RebirthScreen() {
                     </p>
                   );
                 })}
+              </div>
+            )}
+            {areaReputations.some((r) => r.points > 0) && (
+              <div className="rebirth-rep-summary">
+                <p className="bonus-summary-title">🏛️ 声望状态</p>
+                {areaReputations.map((rep) => {
+                  if (rep.points <= 0) return null;
+                  const area = mapAreas.find((a) => a.id === rep.areaId);
+                  const repData = REPUTATION_LEVELS.find((rl) => rl.level === rep.level) || REPUTATION_LEVELS[0];
+                  const preserved = Math.floor(rep.points * preserveRatio);
+                  return (
+                    <p key={rep.areaId} className="bonus-summary-item">
+                      {area?.name}: {repData.name} ({rep.points})
+                      {preserveRatio > 0 && (
+                        <span className="rep-preserve-info"> → 保留 {preserved}</span>
+                      )}
+                    </p>
+                  );
+                })}
+                {preserveRatio === 0 && (
+                  <p className="rep-reset-warning">⚠️ 未选择声望传承，声望将重置为0</p>
+                )}
               </div>
             )}
           </div>
