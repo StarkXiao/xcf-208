@@ -2372,6 +2372,18 @@ export function getShardConfig(rarity: Companion['rarity']): ShardRecruitConfig 
   return SHARD_RECRUIT_CONFIGS.find((c) => c.rarity === rarity) || SHARD_RECRUIT_CONFIGS[0];
 }
 
+export const RESOURCE_EXCHANGE_RATES = {
+  goldToSoulOrbs: 1000,
+  companionShardsToSoulOrbs: 10,
+};
+
+export const COMPANION_DISMISS_SOUL_ORBS: Record<string, number> = {
+  common: 1,
+  rare: 3,
+  epic: 8,
+  legendary: 20,
+};
+
 import type { ClassPassive } from './types';
 
 export const CLASS_PASSIVES: ClassPassive[] = [
