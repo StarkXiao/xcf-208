@@ -133,4 +133,68 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition';
+
+export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
+
+export interface ExpeditionMission {
+  id: string;
+  name: string;
+  description: string;
+  difficulty: ExpeditionDifficulty;
+  areaId: string;
+  minLevel: number;
+  durationSeconds: number;
+  stages: number;
+  baseExp: number;
+  baseGold: number;
+  soulOrbChance: number;
+  icon: string;
+  bgColor: string;
+}
+
+export interface ExpeditionEvent {
+  id: string;
+  name: string;
+  description: string;
+  type: 'combat' | 'treasure' | 'trap' | 'shrine' | 'ambush' | 'merchant' | 'boss';
+  difficulty: number;
+  rewards: ExpeditionEventReward[];
+  icon: string;
+}
+
+export interface ExpeditionEventReward {
+  type: 'gold' | 'exp' | 'hp' | 'soulOrbs';
+  min: number;
+  max: number;
+}
+
+export interface ExpeditionCasualty {
+  companionId: string;
+  companionName: string;
+  status: 'healthy' | 'injured' | 'critical';
+  hpLost: number;
+}
+
+export interface ExpeditionLoot {
+  gold: number;
+  exp: number;
+  soulOrbs: number;
+  reputation: number;
+}
+
+export type ExpeditionPhase = 'idle' | 'formation' | 'progress' | 'event' | 'settlement';
+
+export interface ActiveExpedition {
+  missionId: string;
+  selectedCompanionIds: string[];
+  startTime: number;
+  currentStage: number;
+  totalStages: number;
+  phase: ExpeditionPhase;
+  currentEvent: ExpeditionEvent | null;
+  accumulatedLoot: ExpeditionLoot;
+  casualties: ExpeditionCasualty[];
+  eventLog: string[];
+  completed: boolean;
+}

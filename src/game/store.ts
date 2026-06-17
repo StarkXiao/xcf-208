@@ -10,6 +10,11 @@ import type {
   GameScreen,
   GameTab,
   AreaReputation,
+  ActiveExpedition,
+  ExpeditionEvent,
+  ExpeditionCasualty,
+  ExpeditionLoot,
+  ExpeditionPhase,
 } from './types';
 import {
   INITIAL_STATS,
@@ -19,6 +24,8 @@ import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
   SHOP_ITEMS,
+  EXPEDITION_MISSIONS,
+  EXPEDITION_EVENTS,
 } from './data';
 
 interface GameState {
@@ -88,6 +95,16 @@ interface GameState {
   getDiscountedCost: (baseCost: number, areaId: string) => number;
   getDiscountedCompanionCost: (companion: Companion) => number;
   canRecruitCompanion: (companion: Companion) => boolean;
+
+  activeExpedition: ActiveExpedition | null;
+  startExpedition: (missionId: string, companionIds: string[]) => void;
+  advanceExpeditionStage: () => void;
+  resolveExpeditionEvent: (eventId: string) => void;
+  skipExpeditionEvent: () => void;
+  completeExpedition: () => ExpeditionLoot;
+  cancelExpedition: () => void;
+  setExpeditionPhase: (phase: ExpeditionPhase) => void;
+  getExpeditionPower: (companionIds: string[]) => number;
 }
 
 let logIdCounter = 0;
@@ -140,6 +157,7 @@ export const useGameStore = create<GameState>()(
       areaReputations: initAreaReputations(),
       purchasedShopItems: [],
       currentMonster: null,
+      activeExpedition: null,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -764,6 +782,243 @@ export const useGameStore = create<GameState>()(
 
       updateLastOnlineTime: () => {
         set({ lastOnlineTime: Date.now() });
+      },
+
+      getExpeditionPower: (companionIds) => {
+        const state = get();
+        const playerPower = state.player.stats.attack + state.player.stats.defense;
+        const companionPower = state.ownedCompanions
+          .filter((c) => companionIds.includes(c.id))
+          .reduce((sum, c) => sum + (c.attack + c.defense) * c.level, 0);
+        return playerPower + companionPower;
+      },
+
+      startExpedition: (missionId, companionIds) => {
+        const mission = EXPEDITION_MISSIONS.find((m) => m.id === missionId);
+        if (!mission) return;
+        const state = get();
+        if (state.player.stats.level < mission.minLevel) return;
+        const validIds = companionIds.filter((id) =>
+          state.ownedCompanions.some((c) => c.id === id)
+        );
+
+        const expedition: ActiveExpedition = {
+          missionId,
+          selectedCompanionIds: validIds,
+          startTime: Date.now(),
+          currentStage: 0,
+          totalStages: mission.stages,
+          phase: 'progress',
+          currentEvent: null,
+          accumulatedLoot: { gold: 0, exp: 0, soulOrbs: 0, reputation: 0 },
+          casualties: [],
+          eventLog: ['🏔️ 远征队出发了！'],
+          completed: false,
+        };
+        set({ activeExpedition: expedition });
+        get().addBattleLog(`🏔️ 开始远征：${mission.name}`, 'system');
+      },
+
+      advanceExpeditionStage: () => {
+        const state = get();
+        if (!state.activeExpedition || state.activeExpedition.completed) return;
+        const expedition = { ...state.activeExpedition };
+        const mission = EXPEDITION_MISSIONS.find((m) => m.id === expedition.missionId);
+        if (!mission) return;
+
+        expedition.currentStage += 1;
+        expedition.eventLog = [...expedition.eventLog, `📍 到达第 ${expedition.currentStage}/${expedition.totalStages} 阶段`];
+
+        if (expedition.currentStage >= expedition.totalStages) {
+          expedition.phase = 'settlement';
+          expedition.completed = true;
+          expedition.eventLog = [...expedition.eventLog, '🏁 远征完成！正在结算...'];
+          set({ activeExpedition: expedition });
+          return;
+        }
+
+        const eventChance = 0.6 + mission.stages * 0.05;
+        if (Math.random() < eventChance) {
+          const possibleEvents = EXPEDITION_EVENTS.filter((e) => {
+            if (mission.difficulty === 'easy') return e.difficulty <= 1;
+            if (mission.difficulty === 'normal') return e.difficulty <= 2;
+            if (mission.difficulty === 'hard') return e.difficulty <= 2.5;
+            return true;
+          });
+          if (possibleEvents.length > 0) {
+            const event = possibleEvents[Math.floor(Math.random() * possibleEvents.length)];
+            expedition.currentEvent = { ...event };
+            expedition.phase = 'event';
+            expedition.eventLog = [...expedition.eventLog, `${event.icon} 触发事件：${event.name}`];
+          }
+        }
+
+        const baseExp = Math.floor(mission.baseExp / mission.stages);
+        const baseGold = Math.floor(mission.baseGold / mission.stages);
+        expedition.accumulatedLoot = {
+          ...expedition.accumulatedLoot,
+          gold: expedition.accumulatedLoot.gold + baseGold,
+          exp: expedition.accumulatedLoot.exp + baseExp,
+          reputation: expedition.accumulatedLoot.reputation + Math.floor(mission.baseExp / 20),
+        };
+
+        set({ activeExpedition: expedition });
+      },
+
+      resolveExpeditionEvent: (eventId) => {
+        const state = get();
+        if (!state.activeExpedition || !state.activeExpedition.currentEvent) return;
+        const expedition = { ...state.activeExpedition };
+        const event = expedition.currentEvent;
+        if (!event || event.id !== eventId) return;
+
+        const power = get().getExpeditionPower(expedition.selectedCompanionIds);
+        const mission = EXPEDITION_MISSIONS.find((m) => m.id === expedition.missionId);
+        const difficultyMultiplier = mission ? { easy: 0.6, normal: 1, hard: 1.5, nightmare: 2.2 }[mission.difficulty] : 1;
+        const successThreshold = event.difficulty * 20 * difficultyMultiplier;
+        const success = power >= successThreshold || Math.random() < 0.3 + (power / (successThreshold + power)) * 0.5;
+
+        if (success) {
+          event.rewards.forEach((reward) => {
+            const value = Math.floor(reward.min + Math.random() * (reward.max - reward.min));
+            if (value === 0) return;
+            switch (reward.type) {
+              case 'gold':
+                expedition.accumulatedLoot.gold += value;
+                break;
+              case 'exp':
+                expedition.accumulatedLoot.exp += value;
+                break;
+              case 'soulOrbs':
+                expedition.accumulatedLoot.soulOrbs += value;
+                break;
+              case 'hp':
+                if (value < 0) {
+                  const companionIds = expedition.selectedCompanionIds;
+                  if (companionIds.length > 0 && Math.random() < 0.4) {
+                    const victimId = companionIds[Math.floor(Math.random() * companionIds.length)];
+                    const companion = state.ownedCompanions.find((c) => c.id === victimId);
+                    if (companion) {
+                      const existing = expedition.casualties.find((c) => c.companionId === victimId);
+                      const hpLost = Math.abs(value);
+                      if (existing) {
+                        existing.hpLost += hpLost;
+                        existing.status = existing.hpLost > 50 ? 'critical' : 'injured';
+                      } else {
+                        expedition.casualties.push({
+                          companionId: victimId,
+                          companionName: companion.name,
+                          status: hpLost > 50 ? 'critical' : 'injured',
+                          hpLost,
+                        });
+                      }
+                      expedition.eventLog = [...expedition.eventLog, `💔 ${companion.name} 受到了 ${hpLost} 点伤害`];
+                    }
+                  } else {
+                    get().takeDamage(Math.abs(value));
+                    expedition.eventLog = [...expedition.eventLog, `💔 你受到了 ${Math.abs(value)} 点伤害`];
+                  }
+                } else {
+                  get().healHp(value);
+                  expedition.eventLog = [...expedition.eventLog, `💚 恢复了 ${value} 点生命`];
+                }
+                break;
+            }
+          });
+          expedition.eventLog = [...expedition.eventLog, `✅ 事件成功解决！`];
+        } else {
+          const penaltyGold = Math.floor(event.difficulty * 15 * difficultyMultiplier);
+          expedition.accumulatedLoot.gold = Math.max(0, expedition.accumulatedLoot.gold - penaltyGold);
+
+          const companionIds = expedition.selectedCompanionIds;
+          if (companionIds.length > 0 && Math.random() < 0.5 * difficultyMultiplier) {
+            const victimId = companionIds[Math.floor(Math.random() * companionIds.length)];
+            const companion = state.ownedCompanions.find((c) => c.id === victimId);
+            if (companion) {
+              const hpLost = Math.floor(event.difficulty * 20 * difficultyMultiplier);
+              const existing = expedition.casualties.find((c) => c.companionId === victimId);
+              if (existing) {
+                existing.hpLost += hpLost;
+                existing.status = existing.hpLost > 80 ? 'critical' : 'injured';
+              } else {
+                expedition.casualties.push({
+                  companionId: victimId,
+                  companionName: companion.name,
+                  status: hpLost > 80 ? 'critical' : 'injured',
+                  hpLost,
+                });
+              }
+              expedition.eventLog = [...expedition.eventLog, `💔 ${companion.name} 受到了 ${hpLost} 点伤害`];
+            }
+          }
+          get().takeDamage(Math.floor(event.difficulty * 10 * difficultyMultiplier));
+          expedition.eventLog = [...expedition.eventLog, `❌ 事件处理失败，损失 ${penaltyGold} 金币`];
+        }
+
+        expedition.currentEvent = null;
+        expedition.phase = 'progress';
+        set({ activeExpedition: expedition });
+      },
+
+      skipExpeditionEvent: () => {
+        const state = get();
+        if (!state.activeExpedition || !state.activeExpedition.currentEvent) return;
+        const expedition = { ...state.activeExpedition };
+        expedition.eventLog = [...expedition.eventLog, `⏭️ 选择了绕过事件`];
+        expedition.currentEvent = null;
+        expedition.phase = 'progress';
+        set({ activeExpedition: expedition });
+      },
+
+      completeExpedition: () => {
+        const state = get();
+        if (!state.activeExpedition) return { gold: 0, exp: 0, soulOrbs: 0, reputation: 0 };
+        const expedition = state.activeExpedition;
+        const mission = EXPEDITION_MISSIONS.find((m) => m.id === expedition.missionId);
+        const loot = { ...expedition.accumulatedLoot };
+
+        if (mission && Math.random() < mission.soulOrbChance) {
+          loot.soulOrbs += 1;
+        }
+
+        const expBonus = get().calculateExpBonus();
+        const goldBonus = get().calculateGoldBonus();
+        loot.exp = Math.floor(loot.exp * expBonus);
+        loot.gold = Math.floor(loot.gold * goldBonus);
+
+        if (loot.exp > 0) get().addExp(loot.exp);
+        if (loot.gold > 0) get().addGold(loot.gold);
+        if (loot.soulOrbs > 0) get().addSoulOrbs(loot.soulOrbs);
+        if (loot.reputation > 0 && mission) {
+          get().addAreaReputation(mission.areaId, loot.reputation);
+        }
+
+        get().addBattleLog(
+          `🏁 远征完成！获得 ${loot.exp} 经验, ${loot.gold} 金币${loot.soulOrbs > 0 ? `, ${loot.soulOrbs} 魂珠` : ''}`,
+          'system'
+        );
+
+        if (expedition.casualties.length > 0) {
+          expedition.casualties.forEach((c) => {
+            get().addBattleLog(`🏥 ${c.companionName} ${c.status === 'critical' ? '重伤' : '轻伤'}归来`, 'event');
+          });
+        }
+
+        set({ activeExpedition: null });
+        return loot;
+      },
+
+      cancelExpedition: () => {
+        const state = get();
+        if (!state.activeExpedition) return;
+        get().addBattleLog('🚫 远征已取消', 'system');
+        set({ activeExpedition: null });
+      },
+
+      setExpeditionPhase: (phase) => {
+        const state = get();
+        if (!state.activeExpedition) return;
+        set({ activeExpedition: { ...state.activeExpedition, phase } });
       },
     }),
     {

@@ -5,6 +5,7 @@ import MapPanel from './MapPanel';
 import CompanionsPanel from './CompanionsPanel';
 import EventModal from './EventModal';
 import OfflineRewardsModal from './OfflineRewardsModal';
+import ExpeditionPanel from './ExpeditionPanel';
 import { REBIRTH_OPTIONS, REPUTATION_LEVELS } from '../game/data';
 
 export default function GameScreen() {
@@ -43,6 +44,7 @@ export default function GameScreen() {
     { id: 'map' as const, label: '🗺️ 地图', icon: '🗺️' },
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
+    { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -113,6 +115,8 @@ export default function GameScreen() {
         return <StatsPanel />;
       case 'companions':
         return <CompanionsPanel />;
+      case 'expedition':
+        return <ExpeditionPanel />;
       case 'events':
         return (
           <div className="rebirth-panel">
