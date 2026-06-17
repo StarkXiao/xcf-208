@@ -471,6 +471,39 @@ export interface PowerComponent {
   total: number;
 }
 
+export interface CompanionShard {
+  companionId: string;
+  count: number;
+}
+
+export interface CompanionCodexEntry {
+  companionId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+}
+
+export interface ShardRecruitConfig {
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  shardsNeeded: number;
+  recruitCost: number;
+  dropWeight: number;
+  shardsPerDrop: { min: number; max: number };
+  duplicateToShards: number;
+}
+
+export type RecruitPoolType = 'basic' | 'advanced' | 'legendary';
+
+export interface RecruitPool {
+  type: RecruitPoolType;
+  name: string;
+  description: string;
+  singleCost: number;
+  tenCost: number;
+  icon: string;
+  rarityWeights: Record<string, number>;
+  guaranteedRarity?: { rarity: 'rare' | 'epic' | 'legendary'; pullCount: number };
+}
+
 export interface PowerBreakdown {
   attack: PowerComponent;
   defense: PowerComponent;

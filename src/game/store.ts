@@ -31,6 +31,9 @@ import type {
   LevelStarConfig,
   FirstClearReward,
   StarCondition,
+  CompanionShard,
+  CompanionCodexEntry,
+  RecruitPoolType,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from './types';
 import {
@@ -52,6 +55,8 @@ import {
   TALENT_SYNERGIES,
   LEVEL_STAR_CONFIGS,
   FIRST_CLEAR_REWARDS,
+  RECRUIT_POOLS,
+  getShardConfig,
 } from './data';
 
 interface GameState {
@@ -205,6 +210,23 @@ interface GameState {
   getStarConfig: (areaId: string) => LevelStarConfig[];
   getFirstClearConfig: (areaId: string) => FirstClearReward | null;
   applyStarReward: (rewards: StarReward[], areaId: string) => void;
+
+  companionShards: CompanionShard[];
+  companionCodex: CompanionCodexEntry[];
+  recruitPullCounters: Record<RecruitPoolType, number>;
+  lastRecruitResults: { companionId: string; shards: number; isNew: boolean }[] | null;
+
+  getShardCount: (companionId: string) => number;
+  addShards: (companionId: string, count: number) => void;
+  canSynthesizeCompanion: (companionId: string) => boolean;
+  synthesizeCompanion: (companionId: string) => boolean;
+  getCodexEntry: (companionId: string) => CompanionCodexEntry;
+  getCodexProgress: () => { total: number; unlocked: number; percentage: number };
+  unlockCodexEntry: (companionId: string) => void;
+  recruitFromPool: (poolType: RecruitPoolType, count: number) => boolean;
+  getDiscountedRecruitCost: (baseCost: number) => number;
+  convertDuplicateToShards: (companionId: string) => number;
+  clearLastRecruitResults: () => void;
 }
 
 let logIdCounter = 0;
@@ -259,6 +281,22 @@ function initLevelProgresses(): LevelProgress[] {
     bestStats: createEmptyLevelStats(),
     claimedStarRewards: [],
   }));
+}
+
+function initCompanionCodex(): CompanionCodexEntry[] {
+  return COMPANIONS.map((c) => ({
+    companionId: c.id,
+    unlocked: false,
+    unlockedAt: null,
+  }));
+}
+
+function initRecruitCounters(): Record<RecruitPoolType, number> {
+  return {
+    basic: 0,
+    advanced: 0,
+    legendary: 0,
+  };
 }
 
 function initFormation(playerLevel: number): Formation {
@@ -323,6 +361,10 @@ export const useGameStore = create<GameState>()(
       eventWeightModifiers: [],
       levelProgresses: initLevelProgresses(),
       currentLevelStats: null,
+      companionShards: [],
+      companionCodex: initCompanionCodex(),
+      recruitPullCounters: initRecruitCounters(),
+      lastRecruitResults: null,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1017,6 +1059,10 @@ export const useGameStore = create<GameState>()(
           companionAffinities: [],
           mapAreaModifiers: [],
           eventWeightModifiers: [],
+          companionShards: [],
+          companionCodex: initCompanionCodex(),
+          recruitPullCounters: initRecruitCounters(),
+          lastRecruitResults: null,
         });
 
         return true;
@@ -2524,10 +2570,254 @@ export const useGameStore = create<GameState>()(
           }
         });
       },
+
+      getShardCount: (companionId) => {
+        const shard = get().companionShards.find((s) => s.companionId === companionId);
+        return shard?.count || 0;
+      },
+
+      addShards: (companionId, count) => {
+        if (count <= 0) return;
+        set((state) => {
+          const existing = state.companionShards.find((s) => s.companionId === companionId);
+          if (existing) {
+            return {
+              companionShards: state.companionShards.map((s) =>
+                s.companionId === companionId ? { ...s, count: s.count + count } : s
+              ),
+            };
+          }
+          return {
+            companionShards: [...state.companionShards, { companionId, count }],
+          };
+        });
+        const companion = COMPANIONS.find((c) => c.id === companionId);
+        if (companion) {
+          get().addBattleLog(`💎 获得 ${companion.name} 碎片 ×${count}`, 'event');
+        }
+      },
+
+      canSynthesizeCompanion: (companionId) => {
+        const state = get();
+        if (state.ownedCompanions.some((c) => c.id === companionId)) return false;
+        const companion = COMPANIONS.find((c) => c.id === companionId);
+        if (!companion) return false;
+        if (!get().canRecruitCompanion(companion)) return false;
+        const shardConfig = getShardConfig(companion.rarity);
+        const shardCount = get().getShardCount(companionId);
+        const cost = get().getDiscountedRecruitCost(shardConfig.recruitCost);
+        return shardCount >= shardConfig.shardsNeeded && state.player.stats.gold >= cost;
+      },
+
+      synthesizeCompanion: (companionId) => {
+        if (!get().canSynthesizeCompanion(companionId)) return false;
+
+        const companion = COMPANIONS.find((c) => c.id === companionId);
+        if (!companion) return false;
+
+        const shardConfig = getShardConfig(companion.rarity);
+        const cost = get().getDiscountedRecruitCost(shardConfig.recruitCost);
+
+        set((state) => ({
+          companionShards: state.companionShards.map((s) =>
+            s.companionId === companionId
+              ? { ...s, count: s.count - shardConfig.shardsNeeded }
+              : s
+          ),
+          player: {
+            ...state.player,
+            stats: {
+              ...state.player.stats,
+              gold: state.player.stats.gold - cost,
+            },
+          },
+        }));
+
+        const config = getStarUpConfig(companion.rarity);
+        const newCompanion: Companion = {
+          ...companion,
+          stars: 1,
+          starExp: 0,
+          starExpToNext: config.starExpToNext[0],
+        };
+
+        set((state) => {
+          const newFormation = { ...state.formation };
+          const emptySlot = newFormation.slots.find((s) => s.unlocked && s.companionId === null);
+          if (emptySlot) {
+            newFormation.slots = newFormation.slots.map((s) =>
+              s.index === emptySlot.index ? { ...s, companionId: companionId } : s
+            );
+          }
+
+          return {
+            ownedCompanions: [...state.ownedCompanions, newCompanion],
+            formation: newFormation,
+          };
+        });
+
+        get().unlockCodexEntry(companionId);
+        get().addBattleLog(`✨ 合成了新伙伴：${companion.name}！`, 'event');
+        return true;
+      },
+
+      getCodexEntry: (companionId) => {
+        const entry = get().companionCodex.find((e) => e.companionId === companionId);
+        if (entry) return entry;
+        return { companionId, unlocked: false, unlockedAt: null };
+      },
+
+      getCodexProgress: () => {
+        const codex = get().companionCodex;
+        const total = codex.length;
+        const unlocked = codex.filter((e) => e.unlocked).length;
+        const percentage = total > 0 ? (unlocked / total) * 100 : 0;
+        return { total, unlocked, percentage };
+      },
+
+      unlockCodexEntry: (companionId) => {
+        set((state) => ({
+          companionCodex: state.companionCodex.map((e) =>
+            e.companionId === companionId && !e.unlocked
+              ? { ...e, unlocked: true, unlockedAt: Date.now() }
+              : e
+          ),
+        }));
+      },
+
+      getDiscountedRecruitCost: (baseCost) => {
+        const currentAreaId = get().currentAreaId;
+        if (!currentAreaId) return baseCost;
+        const discount = get().getAreaRecruitDiscount(currentAreaId);
+        return Math.max(1, Math.floor(baseCost * (1 - discount)));
+      },
+
+      convertDuplicateToShards: (companionId) => {
+        const companion = COMPANIONS.find((c) => c.id === companionId);
+        if (!companion) return 0;
+        const shardConfig = getShardConfig(companion.rarity);
+        return shardConfig.duplicateToShards;
+      },
+
+      clearLastRecruitResults: () => {
+        set({ lastRecruitResults: null });
+      },
+
+      recruitFromPool: (poolType, count) => {
+        const state = get();
+        const pool = RECRUIT_POOLS.find((p) => p.type === poolType);
+        if (!pool) return false;
+
+        const totalCost = count === 10 ? pool.tenCost : pool.singleCost * count;
+        const discountedCost = get().getDiscountedRecruitCost(totalCost);
+
+        if (state.player.stats.gold < discountedCost) return false;
+
+        const results: { companionId: string; shards: number; isNew: boolean }[] = [];
+        let currentCounter = state.recruitPullCounters[poolType] || 0;
+
+        for (let i = 0; i < count; i++) {
+          currentCounter += 1;
+
+          let selectedRarity: 'common' | 'rare' | 'epic' | 'legendary' = 'common';
+          const weights = pool.rarityWeights;
+          const totalWeight = Object.values(weights).reduce((s, w) => s + w, 0);
+
+          let useGuarantee = false;
+          if (pool.guaranteedRarity && currentCounter % pool.guaranteedRarity.pullCount === 0) {
+            useGuarantee = true;
+          }
+
+          if (useGuarantee && pool.guaranteedRarity) {
+            const guaranteeRarity = pool.guaranteedRarity.rarity;
+            const eligibleRarities: ('common' | 'rare' | 'epic' | 'legendary')[] = [];
+            if (guaranteeRarity === 'rare') eligibleRarities.push('rare', 'epic', 'legendary');
+            else if (guaranteeRarity === 'epic') eligibleRarities.push('epic', 'legendary');
+            else if (guaranteeRarity === 'legendary') eligibleRarities.push('legendary');
+
+            const filteredWeights = eligibleRarities.reduce((sum, r) => sum + (weights[r] || 0), 0);
+            if (filteredWeights > 0) {
+              let roll = Math.random() * filteredWeights;
+              for (const rarity of eligibleRarities) {
+                roll -= weights[rarity] || 0;
+                if (roll <= 0) {
+                  selectedRarity = rarity;
+                  break;
+                }
+              }
+            } else {
+              selectedRarity = guaranteeRarity;
+            }
+          } else {
+            let roll = Math.random() * totalWeight;
+            for (const [rarity, weight] of Object.entries(weights)) {
+              roll -= weight;
+              if (roll <= 0) {
+                selectedRarity = rarity as 'common' | 'rare' | 'epic' | 'legendary';
+                break;
+              }
+            }
+          }
+
+          const eligibleCompanions = COMPANIONS.filter((c) => c.rarity === selectedRarity);
+          if (eligibleCompanions.length === 0) continue;
+
+          const dropBonus = get().getAreaDropBonus(state.currentAreaId);
+          const shardConfig = getShardConfig(selectedRarity);
+          const baseMin = shardConfig.shardsPerDrop.min;
+          const baseMax = shardConfig.shardsPerDrop.max;
+          const bonusMultiplier = 1 + dropBonus + get().getTotalTalentBonus('soulOrbs').percent;
+          const minShards = Math.max(1, Math.floor(baseMin * bonusMultiplier));
+          const maxShards = Math.max(minShards, Math.floor(baseMax * bonusMultiplier));
+          const shardCount = minShards + Math.floor(Math.random() * (maxShards - minShards + 1));
+
+          const selectedCompanion = eligibleCompanions[Math.floor(Math.random() * eligibleCompanions.length)];
+          const isOwned = state.ownedCompanions.some((c) => c.id === selectedCompanion.id);
+          const isNewToCodex = !get().getCodexEntry(selectedCompanion.id).unlocked;
+
+          let actualShards = shardCount;
+          if (isOwned) {
+            actualShards += get().convertDuplicateToShards(selectedCompanion.id);
+          }
+
+          results.push({
+            companionId: selectedCompanion.id,
+            shards: actualShards,
+            isNew: isNewToCodex,
+          });
+
+          get().addShards(selectedCompanion.id, actualShards);
+          if (isNewToCodex) {
+            get().unlockCodexEntry(selectedCompanion.id);
+            get().addBattleLog(`📖 图鉴解锁：${selectedCompanion.name}！`, 'event');
+          }
+        }
+
+        set((state) => ({
+          player: {
+            ...state.player,
+            stats: {
+              ...state.player.stats,
+              gold: state.player.stats.gold - discountedCost,
+            },
+          },
+          recruitPullCounters: {
+            ...state.recruitPullCounters,
+            [poolType]: currentCounter,
+          },
+          lastRecruitResults: results,
+        }));
+
+        get().addBattleLog(
+          `🎲 ${pool.name} ${count}连抽完成！`,
+          'event'
+        );
+        return true;
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 6,
+      version: 7,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -2570,6 +2860,21 @@ export const useGameStore = create<GameState>()(
           } else {
             state.currentLevelStats = null;
           }
+        }
+        if (version < 7) {
+          state.companionShards = [];
+          state.companionCodex = initCompanionCodex();
+          state.recruitPullCounters = initRecruitCounters();
+          state.lastRecruitResults = null;
+
+          const ownedCompanions = (state.ownedCompanions as Companion[]) || [];
+          ownedCompanions.forEach((c) => {
+            state.companionCodex = (state.companionCodex as CompanionCodexEntry[]).map((entry) =>
+              entry.companionId === c.id
+                ? { ...entry, unlocked: true, unlockedAt: Date.now() }
+                : entry
+            );
+          });
         }
         return state as unknown as GameState;
       },

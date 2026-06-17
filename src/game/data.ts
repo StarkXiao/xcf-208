@@ -2146,3 +2146,77 @@ export const TALENT_RARITY_NAMES: Record<string, string> = {
   epic: '史诗',
   legendary: '传说',
 };
+
+import type { ShardRecruitConfig, RecruitPool } from './types';
+
+export const SHARD_RECRUIT_CONFIGS: ShardRecruitConfig[] = [
+  {
+    rarity: 'common',
+    shardsNeeded: 30,
+    recruitCost: 500,
+    dropWeight: 60,
+    shardsPerDrop: { min: 3, max: 8 },
+    duplicateToShards: 15,
+  },
+  {
+    rarity: 'rare',
+    shardsNeeded: 60,
+    recruitCost: 2000,
+    dropWeight: 25,
+    shardsPerDrop: { min: 2, max: 5 },
+    duplicateToShards: 30,
+  },
+  {
+    rarity: 'epic',
+    shardsNeeded: 120,
+    recruitCost: 8000,
+    dropWeight: 12,
+    shardsPerDrop: { min: 1, max: 3 },
+    duplicateToShards: 60,
+  },
+  {
+    rarity: 'legendary',
+    shardsNeeded: 250,
+    recruitCost: 30000,
+    dropWeight: 3,
+    shardsPerDrop: { min: 1, max: 2 },
+    duplicateToShards: 125,
+  },
+];
+
+export const RECRUIT_POOLS: RecruitPool[] = [
+  {
+    type: 'basic',
+    name: '基础招募',
+    description: '适合新手的招募池，主要产出普通和稀有伙伴碎片',
+    singleCost: 300,
+    tenCost: 2700,
+    icon: '📦',
+    rarityWeights: { common: 70, rare: 25, epic: 5, legendary: 0 },
+    guaranteedRarity: { rarity: 'rare', pullCount: 10 },
+  },
+  {
+    type: 'advanced',
+    name: '高级招募',
+    description: '更高概率获得史诗伙伴碎片，十连必出稀有以上',
+    singleCost: 1000,
+    tenCost: 9000,
+    icon: '💎',
+    rarityWeights: { common: 40, rare: 40, epic: 18, legendary: 2 },
+    guaranteedRarity: { rarity: 'epic', pullCount: 30 },
+  },
+  {
+    type: 'legendary',
+    name: '传说招募',
+    description: '珍稀招募池，有机会获得传说伙伴碎片',
+    singleCost: 3000,
+    tenCost: 27000,
+    icon: '👑',
+    rarityWeights: { common: 15, rare: 35, epic: 40, legendary: 10 },
+    guaranteedRarity: { rarity: 'legendary', pullCount: 80 },
+  },
+];
+
+export function getShardConfig(rarity: Companion['rarity']): ShardRecruitConfig {
+  return SHARD_RECRUIT_CONFIGS.find((c) => c.rarity === rarity) || SHARD_RECRUIT_CONFIGS[0];
+}
