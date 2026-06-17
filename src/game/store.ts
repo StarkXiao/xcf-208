@@ -369,6 +369,7 @@ export const useGameStore = create<GameState>()(
             class: playerClass,
             stats: newStats,
           },
+          currentLevelStats: createEmptyLevelStats(),
           lastOnlineTime: Date.now(),
         });
 
@@ -2564,9 +2565,18 @@ export const useGameStore = create<GameState>()(
         }
         if (version < 6) {
           state.levelProgresses = initLevelProgresses();
-          state.currentLevelStats = null;
+          if (state.screen === 'game') {
+            state.currentLevelStats = createEmptyLevelStats();
+          } else {
+            state.currentLevelStats = null;
+          }
         }
         return state as unknown as GameState;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state && state.screen === 'game' && !state.currentLevelStats) {
+          state.currentLevelStats = createEmptyLevelStats();
+        }
       },
     }
   )
