@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
 import { EQUIPMENT_SLOT_CONFIG, EQUIPMENT_RARITY_NAMES, EQUIPMENT_RARITY_COLORS, EQUIPMENT_SLOT_NAMES, FORGE_RECIPES, getEquipmentRarityConfig } from '../game/data';
-import type { Equipment, EquipmentSlotType, EquipmentRarity } from '../game/types';
+import type { Equipment, EquipmentRarity } from '../game/types';
 
 const AFFIX_STAT_NAMES: Record<string, string> = {
   attack: '⚔️攻击',
@@ -41,7 +41,6 @@ export default function EquipmentPanel() {
 
   const unequippedItems = equipmentInventory.filter((e) => !e.equippedBy);
   const selectedCompanion = ownedCompanions.find((c) => c.id === selectedCompanionId);
-  const selectedEquip = equipmentInventory.find((e) => e.uid === selectedEquipUid);
 
   const renderStatLine = (stat: string, value: number, isPercent: boolean) => {
     const name = AFFIX_STAT_NAMES[stat] || stat;
@@ -189,7 +188,6 @@ export default function EquipmentPanel() {
             <h5>装备加成总计</h5>
             {(['attack', 'defense', 'hp', 'speed', 'luck', 'critRate', 'dodge', 'goldBonus', 'expBonus'] as const).map((stat) => {
               const bonus = getEquipmentStatBonus(companionId, stat);
-              const total = bonus.flat + (bonus.percent > 0 ? bonus.flat * bonus.percent / 100 : 0);
               if (bonus.flat === 0 && bonus.percent === 0) return null;
               return (
                 <span key={stat} className="eq-bonus-tag">
@@ -260,11 +258,6 @@ export default function EquipmentPanel() {
         ? `💰 ${recipe.cost}`
         : `💎 ${recipe.cost}`
       : '';
-    const hasEnoughCurrency = recipe
-      ? recipe.currency === 'gold'
-        ? player.stats.gold >= recipe.cost
-        : player.stats.soulOrbs >= recipe.cost
-      : false;
 
     return (
       <div className="eq-forge-section">

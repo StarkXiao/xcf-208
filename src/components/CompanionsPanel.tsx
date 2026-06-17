@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG, RECRUIT_POOLS, getShardConfig, EQUIPMENT_RARITY_COLORS, EQUIPMENT_RARITY_NAMES, EQUIPMENT_SLOT_NAMES } from '../game/data';
+import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG, RECRUIT_POOLS, getShardConfig, EQUIPMENT_RARITY_COLORS } from '../game/data';
 import { AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from '../game/types';
 import type { RecruitPoolType } from '../game/types';
 
@@ -28,8 +28,6 @@ export default function CompanionsPanel() {
     getDiscountedRecruitCost,
     clearLastRecruitResults,
     getEquippedItems,
-    companionEquipments,
-    equipmentInventory,
   } = useGameStore();
 
   const [activeSubTab, setActiveSubTab] = useState<'formation' | 'owned' | 'bonds' | 'recruit' | 'codex'>('recruit');
