@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -17,6 +17,77 @@ export const INITIAL_STATS = {
   luck: 5,
   gold: 0,
   soulOrbs: 0,
+};
+
+export const SKILLS: Record<string, Skill[]> = {
+  warrior: [
+    { id: 'slash', name: '猛力斩击', description: '造成150%攻击力的伤害', mpCost: 10, damageMultiplier: 1.5, cooldown: 3000, type: 'attack', icon: '⚔️' },
+    { id: 'whirlwind', name: '旋风斩', description: '造成200%攻击力的伤害', mpCost: 25, damageMultiplier: 2.0, cooldown: 6000, type: 'attack', icon: '🌀' },
+  ],
+  mage: [
+    { id: 'fireball', name: '火球术', description: '造成180%攻击力的魔法伤害', mpCost: 15, damageMultiplier: 1.8, cooldown: 4000, type: 'attack', icon: '🔥' },
+    { id: 'meteor', name: '陨石术', description: '造成250%攻击力的魔法伤害', mpCost: 35, damageMultiplier: 2.5, cooldown: 8000, type: 'attack', icon: '☄️' },
+  ],
+  rogue: [
+    { id: 'backstab', name: '背刺', description: '造成160%攻击力的伤害', mpCost: 12, damageMultiplier: 1.6, cooldown: 3500, type: 'attack', icon: '🗡️' },
+    { id: 'shadowstrike', name: '暗影突袭', description: '造成220%攻击力的伤害', mpCost: 30, damageMultiplier: 2.2, cooldown: 7000, type: 'attack', icon: '🌑' },
+  ],
+  priest: [
+    { id: 'smite', name: '神圣惩击', description: '造成140%攻击力的神圣伤害', mpCost: 10, damageMultiplier: 1.4, cooldown: 3000, type: 'attack', icon: '✨' },
+    { id: 'holylight', name: '圣光术', description: '恢复30%最大生命值', mpCost: 20, damageMultiplier: 0, cooldown: 5000, type: 'heal', icon: '💚' },
+  ],
+  archer: [
+    { id: 'powershot', name: '强力射击', description: '造成170%攻击力的远程伤害', mpCost: 12, damageMultiplier: 1.7, cooldown: 3500, type: 'attack', icon: '🏹' },
+    { id: 'arrowrain', name: '箭雨', description: '造成210%攻击力的范围伤害', mpCost: 28, damageMultiplier: 2.1, cooldown: 6500, type: 'attack', icon: '🌧️' },
+  ],
+  knight: [
+    { id: 'shieldslam', name: '盾击', description: '造成130%攻击力的伤害', mpCost: 8, damageMultiplier: 1.3, cooldown: 2500, type: 'attack', icon: '🛡️' },
+    { id: 'judgment', name: '审判之剑', description: '造成230%攻击力的神圣伤害', mpCost: 32, damageMultiplier: 2.3, cooldown: 7500, type: 'attack', icon: '⚜️' },
+  ],
+};
+
+export const MONSTER_PHASES: Record<string, MonsterPhase[]> = {
+  goblin: [
+    { name: '狂暴', hpThreshold: 0.5, attackMultiplier: 1.3, defenseMultiplier: 0.9, speedMultiplier: 1.2, color: '#ff6b35', description: '哥布林进入狂暴状态，攻击力提升！' },
+  ],
+  wolf: [
+    { name: '嗜血', hpThreshold: 0.6, attackMultiplier: 1.4, defenseMultiplier: 0.8, speedMultiplier: 1.3, color: '#dc2626', description: '野狼嗅到了血腥味，变得更加凶猛！' },
+  ],
+  orc: [
+    { name: '战斗意志', hpThreshold: 0.7, attackMultiplier: 1.2, defenseMultiplier: 1.2, speedMultiplier: 1.1, color: '#f59e0b', description: '兽人战士的战斗意志被点燃！' },
+    { name: '狂怒', hpThreshold: 0.3, attackMultiplier: 1.5, defenseMultiplier: 0.8, speedMultiplier: 1.4, color: '#ef4444', description: '兽人陷入狂怒，攻击力大幅提升！' },
+  ],
+  skeleton: [
+    { name: '骸骨强化', hpThreshold: 0.6, attackMultiplier: 1.1, defenseMultiplier: 1.4, speedMultiplier: 0.9, color: '#a3a3a3', description: '骷髅战士的骸骨变得更加坚硬！' },
+  ],
+  golem: [
+    { name: '岩石护甲', hpThreshold: 0.7, attackMultiplier: 0.9, defenseMultiplier: 1.5, speedMultiplier: 0.8, color: '#6b7280', description: '石像鬼激活了岩石护甲，防御力大增！' },
+    { name: '熔岩核心', hpThreshold: 0.3, attackMultiplier: 1.4, defenseMultiplier: 1.0, speedMultiplier: 1.2, color: '#f97316', description: '石像鬼的熔岩核心暴露，攻击力飙升！' },
+  ],
+  lich: [
+    { name: '暗影护盾', hpThreshold: 0.6, attackMultiplier: 1.1, defenseMultiplier: 1.3, speedMultiplier: 1.0, color: '#7c3aed', description: '巫妖召唤暗影护盾保护自己！' },
+    { name: '死亡凝视', hpThreshold: 0.3, attackMultiplier: 1.6, defenseMultiplier: 0.9, speedMultiplier: 1.3, color: '#581c87', description: '巫妖释放死亡凝视，攻击力大幅提升！' },
+  ],
+  dragonkin: [
+    { name: '龙鳞护体', hpThreshold: 0.7, attackMultiplier: 1.0, defenseMultiplier: 1.4, speedMultiplier: 1.0, color: '#dc2626', description: '龙人的龙鳞闪烁着光芒！' },
+    { name: '龙之怒', hpThreshold: 0.35, attackMultiplier: 1.5, defenseMultiplier: 1.0, speedMultiplier: 1.3, color: '#b91c1c', description: '龙人爆发龙之怒！' },
+  ],
+  phoenix: [
+    { name: '烈焰之翼', hpThreshold: 0.6, attackMultiplier: 1.2, defenseMultiplier: 1.0, speedMultiplier: 1.3, color: '#f97316', description: '凤凰展开烈焰之翼，速度大增！' },
+    { name: '涅槃之火', hpThreshold: 0.25, attackMultiplier: 1.8, defenseMultiplier: 0.8, speedMultiplier: 1.5, color: '#ef4444', description: '凤凰释放涅槃之火，进入终极状态！' },
+  ],
+  fireslime: [
+    { name: '沸腾', hpThreshold: 0.4, attackMultiplier: 1.3, defenseMultiplier: 0.9, speedMultiplier: 1.2, color: '#ff6b35', description: '火焰史莱姆开始沸腾！' },
+  ],
+  bat: [
+    { name: '超声波', hpThreshold: 0.5, attackMultiplier: 1.2, defenseMultiplier: 1.0, speedMultiplier: 1.4, color: '#6b7280', description: '蝙蝠发出超声波，速度大幅提升！' },
+  ],
+  spider: [
+    { name: '毒液喷射', hpThreshold: 0.5, attackMultiplier: 1.4, defenseMultiplier: 0.9, speedMultiplier: 1.1, color: '#7c3aed', description: '毒蜘蛛准备喷射毒液！' },
+  ],
+  slime: [
+    { name: '分裂', hpThreshold: 0.3, attackMultiplier: 1.2, defenseMultiplier: 1.1, speedMultiplier: 1.2, color: '#4ade80', description: '史莱姆开始分裂增殖！' },
+  ],
 };
 
 export const REPUTATION_LEVELS: ReputationLevel[] = [
@@ -39,9 +110,9 @@ export const MAP_AREAS: MapArea[] = [
     bgColor: '#2d5a27',
     unlocked: true,
     monsters: [
-      { id: 'slime', name: '史莱姆', hp: 30, attack: 5, defense: 2, expReward: 15, goldReward: 8, color: '#7dd87d' },
-      { id: 'goblin', name: '哥布林', hp: 50, attack: 8, defense: 3, expReward: 25, goldReward: 12, color: '#5a8f3c' },
-      { id: 'wolf', name: '野狼', hp: 45, attack: 12, defense: 2, expReward: 20, goldReward: 10, color: '#6b6b6b' },
+      { id: 'slime', name: '史莱姆', hp: 30, attack: 5, defense: 2, speed: 3, expReward: 15, goldReward: 8, color: '#7dd87d' },
+      { id: 'goblin', name: '哥布林', hp: 50, attack: 8, defense: 3, speed: 6, expReward: 25, goldReward: 12, color: '#5a8f3c' },
+      { id: 'wolf', name: '野狼', hp: 45, attack: 12, defense: 2, speed: 8, expReward: 20, goldReward: 10, color: '#6b6b6b' },
     ],
   },
   {
@@ -54,9 +125,9 @@ export const MAP_AREAS: MapArea[] = [
     bgColor: '#3d3d3d',
     unlocked: false,
     monsters: [
-      { id: 'bat', name: '巨型蝙蝠', hp: 60, attack: 15, defense: 4, expReward: 40, goldReward: 20, color: '#4a4a4a' },
-      { id: 'spider', name: '毒蜘蛛', hp: 80, attack: 20, defense: 5, expReward: 55, goldReward: 28, color: '#5c3d5c' },
-      { id: 'orc', name: '兽人战士', hp: 120, attack: 25, defense: 10, expReward: 70, goldReward: 35, color: '#8b6914' },
+      { id: 'bat', name: '巨型蝙蝠', hp: 60, attack: 15, defense: 4, speed: 10, expReward: 40, goldReward: 20, color: '#4a4a4a' },
+      { id: 'spider', name: '毒蜘蛛', hp: 80, attack: 20, defense: 5, speed: 7, expReward: 55, goldReward: 28, color: '#5c3d5c' },
+      { id: 'orc', name: '兽人战士', hp: 120, attack: 25, defense: 10, speed: 5, expReward: 70, goldReward: 35, color: '#8b6914' },
     ],
   },
   {
@@ -69,9 +140,9 @@ export const MAP_AREAS: MapArea[] = [
     bgColor: '#8b7355',
     unlocked: false,
     monsters: [
-      { id: 'skeleton', name: '骷髅战士', hp: 150, attack: 35, defense: 15, expReward: 100, goldReward: 50, color: '#e0e0e0' },
-      { id: 'golem', name: '石像鬼', hp: 250, attack: 45, defense: 25, expReward: 150, goldReward: 80, color: '#8b8b8b' },
-      { id: 'lich', name: '巫妖', hp: 180, attack: 60, defense: 12, expReward: 180, goldReward: 100, color: '#6b2d6b' },
+      { id: 'skeleton', name: '骷髅战士', hp: 150, attack: 35, defense: 15, speed: 6, expReward: 100, goldReward: 50, color: '#e0e0e0' },
+      { id: 'golem', name: '石像鬼', hp: 250, attack: 45, defense: 25, speed: 3, expReward: 150, goldReward: 80, color: '#8b8b8b' },
+      { id: 'lich', name: '巫妖', hp: 180, attack: 60, defense: 12, speed: 7, expReward: 180, goldReward: 100, color: '#6b2d6b' },
     ],
   },
   {
@@ -84,9 +155,9 @@ export const MAP_AREAS: MapArea[] = [
     bgColor: '#8b2500',
     unlocked: false,
     monsters: [
-      { id: 'fireslime', name: '火焰史莱姆', hp: 300, attack: 70, defense: 20, expReward: 250, goldReward: 120, color: '#ff6b35' },
-      { id: 'dragonkin', name: '龙人战士', hp: 500, attack: 90, defense: 35, expReward: 400, goldReward: 200, color: '#cc2936' },
-      { id: 'phoenix', name: '火焰凤凰', hp: 400, attack: 120, defense: 25, expReward: 500, goldReward: 300, color: '#ff9500' },
+      { id: 'fireslime', name: '火焰史莱姆', hp: 300, attack: 70, defense: 20, speed: 4, expReward: 250, goldReward: 120, color: '#ff6b35' },
+      { id: 'dragonkin', name: '龙人战士', hp: 500, attack: 90, defense: 35, speed: 6, expReward: 400, goldReward: 200, color: '#cc2936' },
+      { id: 'phoenix', name: '火焰凤凰', hp: 400, attack: 120, defense: 25, speed: 9, expReward: 500, goldReward: 300, color: '#ff9500' },
     ],
   },
 ];

@@ -1584,6 +1584,11 @@
 }
 
 .log-reputation .log-message { color: #2dd4bf; font-weight: 600; }
+.log-skill .log-message { color: #a855f7; font-weight: 500; }
+.log-phase .log-message { color: #f97316; font-weight: 600; }
+.log-mp .log-message { color: #3b82f6; }
+.log-dodge .log-message { color: #22d3ee; font-style: italic; }
+.log-critical .log-message { color: #ff6b35; font-weight: 700; }
 
 .reputation-section {
   background: rgba(255, 255, 255, 0.05);

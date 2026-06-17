@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../game/store';
+import type { Skill } from '../game/types';
 
 interface Particle {
   x: number;
@@ -20,6 +21,9 @@ interface DamageNumber {
   maxLife: number;
   color: string;
   isPlayer: boolean;
+  isCritical: boolean;
+  isHeal: boolean;
+  isMp: boolean;
 }
 
 export default function GameCanvas() {
@@ -29,8 +33,14 @@ export default function GameCanvas() {
   const damageNumbersRef = useRef<DamageNumber[]>([]);
   const playerYRef = useRef(200);
   const monsterYRef = useRef(200);
-  const lastAttackTimeRef = useRef(0);
+  const lastTimestampRef = useRef(0);
   const eventTriggerTimerRef = useRef(0);
+  
+  const playerAttackChargeRef = useRef(0);
+  const monsterAttackChargeRef = useRef(0);
+  const skillCooldownsRef = useRef<Record<string, number>>({});
+  const mpRegenTimerRef = useRef(0);
+  const monsterPhaseCheckedRef = useRef(false);
 
   const {
     currentAreaId,
@@ -41,15 +51,21 @@ export default function GameCanvas() {
     addGold,
     takeDamage,
     healHp,
+    healMp,
     addBattleLog,
     getTotalAttack,
     getTotalDefense,
+    getTotalSpeed,
     isAutoBattle,
     triggerRandomEvent,
     player,
     getAreaDropBonus,
     addAreaReputation,
     addCompanionStarExp,
+    getPlayerSkills,
+    useMp,
+    updateMonsterPhase,
+    getMonsterPhases,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -61,18 +77,32 @@ export default function GameCanvas() {
     const monster = monsters[Math.floor(Math.random() * monsters.length)];
     
     const levelBonus = 1 + (player.stats.level - 1) * 0.1;
+    const baseAttack = Math.floor(monster.attack * levelBonus);
+    const baseDefense = Math.floor(monster.defense * levelBonus);
+    const baseSpeed = Math.floor(monster.speed * levelBonus);
+    const maxHp = Math.floor(monster.hp * levelBonus);
     
     setCurrentMonster({
       id: monster.id,
       name: monster.name,
-      hp: Math.floor(monster.hp * levelBonus),
-      maxHp: Math.floor(monster.hp * levelBonus),
-      attack: Math.floor(monster.attack * levelBonus),
-      defense: Math.floor(monster.defense * levelBonus),
+      hp: maxHp,
+      maxHp: maxHp,
+      attack: baseAttack,
+      defense: baseDefense,
+      speed: baseSpeed,
       expReward: Math.floor(monster.expReward * levelBonus),
       goldReward: Math.floor(monster.goldReward * levelBonus),
       color: monster.color,
+      baseAttack: baseAttack,
+      baseDefense: baseDefense,
+      baseSpeed: baseSpeed,
+      currentPhase: -1,
     });
+    
+    playerAttackChargeRef.current = 0;
+    monsterAttackChargeRef.current = 0;
+    skillCooldownsRef.current = {};
+    monsterPhaseCheckedRef.current = false;
   };
 
   const addParticles = (x: number, y: number, color: string, count: number) => {
@@ -90,16 +120,174 @@ export default function GameCanvas() {
     }
   };
 
-  const addDamageNumber = (x: number, y: number, value: number, isPlayer: boolean) => {
+  const addDamageNumber = (x: number, y: number, value: number, isPlayer: boolean, isCritical = false, isHeal = false, isMp = false) => {
+    let color = isPlayer ? '#ef4444' : '#fbbf24';
+    if (isCritical) color = '#ff6b35';
+    if (isHeal) color = '#22c55e';
+    if (isMp) color = '#3b82f6';
+    
     damageNumbersRef.current.push({
       x,
       y,
       value,
       life: 60,
       maxLife: 60,
-      color: isPlayer ? '#ef4444' : '#fbbf24',
+      color,
       isPlayer,
+      isCritical,
+      isHeal,
+      isMp,
     });
+  };
+
+  const getAttackInterval = (speed: number) => {
+    return Math.max(400, 2000 - speed * 80);
+  };
+
+  const isCriticalHit = (luck: number) => {
+    const critChance = Math.min(0.5, 0.05 + luck * 0.02);
+    return Math.random() < critChance;
+  };
+
+  const isDodged = (attackerSpeed: number, defenderSpeed: number) => {
+    const dodgeChance = Math.max(0.05, Math.min(0.4, (defenderSpeed - attackerSpeed) * 0.03));
+    return Math.random() < dodgeChance;
+  };
+
+  const tryUseSkill = (skill: Skill): boolean => {
+    const cooldown = skillCooldownsRef.current[skill.id] || 0;
+    if (cooldown > 0) return false;
+    if (player.stats.mp < skill.mpCost) return false;
+    
+    return useMp(skill.mpCost);
+  };
+
+  const performPlayerAttack = (monsterX: number, monsterY: number) => {
+    if (!currentMonster) return;
+    
+    const skills = getPlayerSkills();
+    const totalAttack = getTotalAttack();
+    const luck = player.stats.luck;
+    const monsterDefense = currentMonster.defense;
+    
+    let damage = 0;
+    let isCrit = false;
+    let usedSkill: Skill | null = null;
+    
+    for (const skill of skills) {
+      if (skill.type === 'heal') continue;
+      if (tryUseSkill(skill)) {
+        damage = Math.max(1, Math.floor(totalAttack * skill.damageMultiplier - monsterDefense / 2));
+        usedSkill = skill;
+        skillCooldownsRef.current[skill.id] = skill.cooldown;
+        break;
+      }
+    }
+    
+    if (!usedSkill) {
+      damage = Math.max(1, totalAttack - monsterDefense / 2);
+    }
+    
+    isCrit = isCriticalHit(luck);
+    if (isCrit) {
+      damage = Math.floor(damage * 1.5);
+    }
+    
+    const actualDamage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+    
+    addParticles(monsterX, monsterY - 20, usedSkill ? '#a855f7' : '#fbbf24', usedSkill ? 15 : 8);
+    addDamageNumber(monsterX + (Math.random() - 0.5) * 30, monsterY - 30, actualDamage, false, isCrit);
+    
+    if (usedSkill) {
+      addBattleLog(`${usedSkill.icon} 使用了 ${usedSkill.name}，造成 ${actualDamage} 点伤害！`, 'skill');
+    } else if (isCrit) {
+      addBattleLog(`💥 暴击！对 ${currentMonster.name} 造成 ${actualDamage} 点伤害！`, 'critical');
+    }
+    
+    const newHp = currentMonster.hp - actualDamage;
+    
+    if (newHp <= 0) {
+      addParticles(monsterX, monsterY - 20, currentMonster.color, 20);
+      const dropBonus = getAreaDropBonus(currentAreaId);
+      const expReward = Math.floor(currentMonster.expReward * (1 + dropBonus));
+      const goldReward = Math.floor(currentMonster.goldReward * (1 + dropBonus));
+      addExp(expReward);
+      addGold(goldReward);
+      const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
+      addAreaReputation(currentAreaId, repGain);
+      addBattleLog(`⚔️ 击杀了 ${currentMonster.name}！获得 ${expReward} 经验, ${goldReward} 金币, ${repGain} 声望`, 'exp');
+
+      const fc = useGameStore.getState().getFormationCompanions();
+      fc.forEach((c) => {
+        const starExp = Math.max(1, Math.floor(expReward * 0.08));
+        addCompanionStarExp(c.id, starExp);
+      });
+
+      eventTriggerTimerRef.current += 1;
+      if (eventTriggerTimerRef.current >= 5 && Math.random() < 0.3) {
+        eventTriggerTimerRef.current = 0;
+        setTimeout(() => triggerRandomEvent(), 500);
+      }
+      
+      setTimeout(() => {
+        spawnMonster();
+        monsterYRef.current = 0;
+      }, 500);
+    } else {
+      setCurrentMonster({ ...currentMonster, hp: newHp });
+      updateMonsterPhase();
+    }
+  };
+
+  const performMonsterAttack = (playerX: number, playerY: number) => {
+    if (!currentMonster || player.stats.hp <= 0) return;
+    
+    const playerSpeed = getTotalSpeed();
+    const monsterSpeed = currentMonster.speed;
+    const totalDefense = getTotalDefense();
+    
+    if (isDodged(monsterSpeed, playerSpeed)) {
+      addBattleLog(`💨 你闪避了 ${currentMonster.name} 的攻击！`, 'dodge');
+      addDamageNumber(playerX, playerY - 30, 0, true, false, false, false);
+      return;
+    }
+    
+    const damage = Math.max(1, currentMonster.attack - totalDefense / 2);
+    const actualDamage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+    
+    addParticles(playerX, playerY - 20, '#ef4444', 6);
+    addDamageNumber(playerX + (Math.random() - 0.5) * 20, playerY - 30, actualDamage, true);
+    
+    takeDamage(actualDamage);
+    
+    if (player.stats.hp - actualDamage <= 0) {
+      addBattleLog('💀 你被击败了！正在恢复...', 'damage');
+      setTimeout(() => {
+        healHp(useGameStore.getState().player.stats.maxHp);
+        healMp(useGameStore.getState().player.stats.maxMp);
+        spawnMonster();
+      }, 1500);
+    }
+  };
+
+  const checkHealSkill = (playerX: number, playerY: number) => {
+    const skills = getPlayerSkills();
+    const healSkill = skills.find(s => s.type === 'heal');
+    
+    if (!healSkill) return;
+    
+    const hpPercent = player.stats.hp / player.stats.maxHp;
+    if (hpPercent > 0.5) return;
+    
+    if (tryUseSkill(healSkill)) {
+      const healAmount = Math.floor(player.stats.maxHp * 0.3);
+      healHp(healAmount);
+      skillCooldownsRef.current[healSkill.id] = healSkill.cooldown;
+      
+      addParticles(playerX, playerY - 20, '#22c55e', 12);
+      addDamageNumber(playerX, playerY - 40, healAmount, true, false, true);
+      addBattleLog(`${healSkill.icon} 使用了 ${healSkill.name}，恢复 ${healAmount} 点生命！`, 'skill');
+    }
   };
 
   useEffect(() => {
@@ -124,6 +312,9 @@ export default function GameCanvas() {
     }
 
     const gameLoop = (timestamp: number) => {
+      const deltaTime = lastTimestampRef.current ? timestamp - lastTimestampRef.current : 16;
+      lastTimestampRef.current = timestamp;
+      
       const rect = canvas.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
@@ -183,6 +374,14 @@ export default function GameCanvas() {
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(currentMonster.name, monsterX, monsterYRef.current - 80);
+        
+        const phases = getMonsterPhases();
+        if (phases.length > 0 && currentMonster.currentPhase >= 0) {
+          const phase = phases[currentMonster.currentPhase];
+          ctx.fillStyle = phase.color || '#fbbf24';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(`[${phase.name}]`, monsterX, monsterYRef.current - 92);
+        }
       }
 
       particlesRef.current = particlesRef.current.filter((p) => {
@@ -211,82 +410,69 @@ export default function GameCanvas() {
 
         ctx.globalAlpha = d.life / d.maxLife;
         ctx.fillStyle = d.color;
-        ctx.font = 'bold 18px sans-serif';
+        ctx.font = d.isCritical ? 'bold 22px sans-serif' : 'bold 18px sans-serif';
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText(`-${d.value}`, d.x, d.y);
-        ctx.fillText(`-${d.value}`, d.x, d.y);
+        
+        let text = '';
+        if (d.isHeal) {
+          text = `+${d.value}`;
+        } else if (d.isMp) {
+          text = `+${d.value} MP`;
+        } else if (d.value === 0) {
+          text = 'MISS';
+        } else {
+          text = `-${d.value}`;
+        }
+        
+        ctx.strokeText(text, d.x, d.y);
+        ctx.fillText(text, d.x, d.y);
         ctx.globalAlpha = 1;
 
         return true;
       });
 
       if (isAutoBattle && currentMonster && player.stats.hp > 0) {
-        const attackInterval = 800 - Math.min(player.stats.speed * 20, 500);
+        const playerSpeed = getTotalSpeed();
+        const monsterSpeed = currentMonster.speed;
         
-        if (timestamp - lastAttackTimeRef.current > attackInterval) {
-          lastAttackTimeRef.current = timestamp;
-
-          const playerDamage = Math.max(1, getTotalAttack() - currentMonster.defense / 2);
-          const actualDamage = Math.floor(playerDamage * (0.9 + Math.random() * 0.2));
-          
-          addParticles(monsterX, monsterYRef.current - 20, '#fbbf24', 8);
-          addDamageNumber(monsterX + (Math.random() - 0.5) * 30, monsterYRef.current - 30, actualDamage, false);
-
-          const newHp = currentMonster.hp - actualDamage;
-          
-          if (newHp <= 0) {
-            addParticles(monsterX, monsterYRef.current - 20, currentMonster.color, 20);
-            const dropBonus = getAreaDropBonus(currentAreaId);
-            const expReward = Math.floor(currentMonster.expReward * (1 + dropBonus));
-            const goldReward = Math.floor(currentMonster.goldReward * (1 + dropBonus));
-            addExp(expReward);
-            addGold(goldReward);
-            const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
-            addAreaReputation(currentAreaId, repGain);
-            addBattleLog(`击杀了 ${currentMonster.name}！获得 ${expReward} 经验, ${goldReward} 金币, ${repGain} 声望`, 'exp');
-
-            const fc = useGameStore.getState().getFormationCompanions();
-            fc.forEach((c) => {
-              const starExp = Math.max(1, Math.floor(expReward * 0.08));
-              addCompanionStarExp(c.id, starExp);
-            });
-
-            eventTriggerTimerRef.current += 1;
-            if (eventTriggerTimerRef.current >= 5 && Math.random() < 0.3) {
-              eventTriggerTimerRef.current = 0;
-              setTimeout(() => triggerRandomEvent(), 500);
+        const playerAttackInterval = getAttackInterval(playerSpeed);
+        const monsterAttackInterval = getAttackInterval(monsterSpeed);
+        
+        playerAttackChargeRef.current += deltaTime;
+        monsterAttackChargeRef.current += deltaTime;
+        
+        for (const skillId in skillCooldownsRef.current) {
+          if (skillCooldownsRef.current[skillId] > 0) {
+            skillCooldownsRef.current[skillId] -= deltaTime;
+            if (skillCooldownsRef.current[skillId] < 0) {
+              skillCooldownsRef.current[skillId] = 0;
             }
-            
-            setTimeout(() => {
-              spawnMonster();
-              monsterYRef.current = 0;
-            }, 500);
-          } else {
-            setCurrentMonster({ ...currentMonster, hp: newHp });
           }
-
+        }
+        
+        mpRegenTimerRef.current += deltaTime;
+        if (mpRegenTimerRef.current >= 2000) {
+          mpRegenTimerRef.current = 0;
+          const mpRegen = Math.max(1, Math.floor(player.stats.maxMp * 0.02));
+          if (player.stats.mp < player.stats.maxMp) {
+            healMp(mpRegen);
+          }
+        }
+        
+        checkHealSkill(playerX, playerYRef.current);
+        
+        if (playerAttackChargeRef.current >= playerAttackInterval) {
+          playerAttackChargeRef.current = 0;
+          performPlayerAttack(monsterX, monsterYRef.current);
+        }
+        
+        if (monsterAttackChargeRef.current >= monsterAttackInterval) {
+          monsterAttackChargeRef.current = 0;
           setTimeout(() => {
-            const storeState = useGameStore.getState();
-            if (!storeState.currentMonster) return;
-            
-            const monsterDamage = Math.max(1, storeState.currentMonster.attack - getTotalDefense() / 2);
-            const actualMonsterDamage = Math.floor(monsterDamage * (0.9 + Math.random() * 0.2));
-            
-            addParticles(playerX, playerYRef.current - 20, '#ef4444', 6);
-            addDamageNumber(playerX + (Math.random() - 0.5) * 20, playerYRef.current - 30, actualMonsterDamage, true);
-            
-            takeDamage(actualMonsterDamage);
-            
-            if (storeState.player.stats.hp - actualMonsterDamage <= 0) {
-              addBattleLog('💀 你被击败了！正在恢复...', 'damage');
-              setTimeout(() => {
-                healHp(useGameStore.getState().player.stats.maxHp);
-                spawnMonster();
-              }, 1500);
-            }
-          }, 300);
+            performMonsterAttack(playerX, playerYRef.current);
+          }, 200);
         }
       }
 

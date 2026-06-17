@@ -90,9 +90,40 @@ export interface Monster {
   hp: number;
   attack: number;
   defense: number;
+  speed: number;
   expReward: number;
   goldReward: number;
   color: string;
+  phases?: MonsterPhase[];
+}
+
+export interface MonsterPhase {
+  name: string;
+  hpThreshold: number;
+  attackMultiplier: number;
+  defenseMultiplier: number;
+  speedMultiplier: number;
+  color?: string;
+  description: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  mpCost: number;
+  damageMultiplier: number;
+  cooldown: number;
+  type: 'attack' | 'heal' | 'buff' | 'debuff';
+  icon: string;
+}
+
+export interface BattleState {
+  playerSkillCooldowns: Record<string, number>;
+  playerAttackCharge: number;
+  monsterAttackCharge: number;
+  currentPhaseIndex: number;
+  combatLog: string[];
 }
 
 export interface AreaReputation {
@@ -193,7 +224,7 @@ export interface RebirthOption {
 export interface BattleLog {
   id: number;
   message: string;
-  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system' | 'reputation';
+  type: 'damage' | 'heal' | 'exp' | 'gold' | 'levelup' | 'event' | 'system' | 'reputation' | 'skill' | 'phase' | 'mp' | 'dodge' | 'critical';
   timestamp: number;
 }
 

@@ -13,6 +13,11 @@ export default function BattleLog() {
       case 'event': return 'log-event';
       case 'system': return 'log-system';
       case 'reputation': return 'log-reputation';
+      case 'skill': return 'log-skill';
+      case 'phase': return 'log-phase';
+      case 'mp': return 'log-mp';
+      case 'dodge': return 'log-dodge';
+      case 'critical': return 'log-critical';
       default: return '';
     }
   };

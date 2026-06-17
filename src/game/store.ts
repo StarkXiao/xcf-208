@@ -18,6 +18,8 @@ import type {
   MapAreaModifier,
   CompanionAffinityRecord,
   EventWeightMod,
+  Skill,
+  MonsterPhase,
 } from './types';
 import { getAffinityLevel } from './types';
 import {
@@ -33,6 +35,8 @@ import {
   BONDS,
   STAR_UP_CONFIGS,
   FORMATION_SLOT_CONFIG,
+  SKILLS,
+  MONSTER_PHASES,
 } from './data';
 
 interface GameState {
@@ -58,9 +62,14 @@ interface GameState {
     maxHp: number;
     attack: number;
     defense: number;
+    speed: number;
     expReward: number;
     goldReward: number;
     color: string;
+    baseAttack: number;
+    baseDefense: number;
+    baseSpeed: number;
+    currentPhase: number;
   } | null;
 
   setScreen: (screen: GameScreen) => void;
@@ -141,6 +150,13 @@ interface GameState {
   cancelExpedition: () => void;
   setExpeditionPhase: (phase: ExpeditionPhase) => void;
   getExpeditionPower: (companionIds: string[]) => number;
+
+  getPlayerSkills: () => Skill[];
+  getTotalSpeed: () => number;
+  useMp: (amount: number) => boolean;
+  getMonsterPhaseMultipliers: () => { attack: number; defense: number; speed: number };
+  updateMonsterPhase: () => void;
+  getMonsterPhases: () => MonsterPhase[];
 }
 
 let logIdCounter = 0;
@@ -1008,7 +1024,6 @@ export const useGameStore = create<GameState>()(
       },
 
       getAffinityTotalBonus: (stat) => {
-        const state = get();
         const formationCompanions = get().getFormationCompanions();
         return formationCompanions.reduce((sum, c) => {
           const affinity = get().getCompanionAffinity(c.id);
@@ -1488,6 +1503,103 @@ export const useGameStore = create<GameState>()(
         const state = get();
         if (!state.activeExpedition) return;
         set({ activeExpedition: { ...state.activeExpedition, phase } });
+      },
+
+      getPlayerSkills: () => {
+        const state = get();
+        const playerClass = state.player.class;
+        const classMap: Record<string, string> = {
+          '战士': 'warrior',
+          '法师': 'mage',
+          '盗贼': 'rogue',
+          '牧师': 'priest',
+          '弓箭手': 'archer',
+          '骑士': 'knight',
+        };
+        const classKey = classMap[playerClass] || 'warrior';
+        return SKILLS[classKey] || [];
+      },
+
+      getTotalSpeed: () => {
+        const state = get();
+        const baseSpeed = state.player.stats.speed;
+        const bondBonus = get().getBondBonus();
+        const mapModifierBonus = get().getMapModifierTotalBonus('speed');
+        const rebirthBonus = state.rebirthBonuses['speed_boost'] || 0;
+        return Math.floor((baseSpeed + bondBonus.speed + mapModifierBonus) * (1 + rebirthBonus));
+      },
+
+      useMp: (amount) => {
+        const state = get();
+        if (state.player.stats.mp < amount) return false;
+        set((s) => ({
+          player: {
+            ...s.player,
+            stats: {
+              ...s.player.stats,
+              mp: s.player.stats.mp - amount,
+            },
+          },
+        }));
+        return true;
+      },
+
+      getMonsterPhases: () => {
+        const state = get();
+        if (!state.currentMonster) return [];
+        return MONSTER_PHASES[state.currentMonster.id] || [];
+      },
+
+      getMonsterPhaseMultipliers: () => {
+        const state = get();
+        if (!state.currentMonster) return { attack: 1, defense: 1, speed: 1 };
+        const phases = MONSTER_PHASES[state.currentMonster.id] || [];
+        const hpPercent = state.currentMonster.hp / state.currentMonster.maxHp;
+        
+        let attackMult = 1;
+        let defenseMult = 1;
+        let speedMult = 1;
+        
+        for (const phase of phases) {
+          if (hpPercent <= phase.hpThreshold) {
+            attackMult = phase.attackMultiplier;
+            defenseMult = phase.defenseMultiplier;
+            speedMult = phase.speedMultiplier;
+          }
+        }
+        
+        return { attack: attackMult, defense: defenseMult, speed: speedMult };
+      },
+
+      updateMonsterPhase: () => {
+        const state = get();
+        if (!state.currentMonster) return;
+        const phases = MONSTER_PHASES[state.currentMonster.id] || [];
+        if (phases.length === 0) return;
+        
+        const hpPercent = state.currentMonster.hp / state.currentMonster.maxHp;
+        let phaseIndex = -1;
+        
+        for (let i = phases.length - 1; i >= 0; i--) {
+          if (hpPercent <= phases[i].hpThreshold) {
+            phaseIndex = i;
+            break;
+          }
+        }
+        
+        if (phaseIndex !== state.currentMonster.currentPhase && phaseIndex >= 0) {
+          const phase = phases[phaseIndex];
+          const newMonster = {
+            ...state.currentMonster,
+            currentPhase: phaseIndex,
+            attack: Math.floor(state.currentMonster.baseAttack * phase.attackMultiplier),
+            defense: Math.floor(state.currentMonster.baseDefense * phase.defenseMultiplier),
+            speed: Math.floor(state.currentMonster.baseSpeed * phase.speedMultiplier),
+            color: phase.color || state.currentMonster.color,
+          };
+          set({ currentMonster: newMonster });
+          get().addBattleLog(`⚠️ ${state.currentMonster.name} 进入 ${phase.name} 阶段！${phase.description}`, 'phase');
+        }
       },
     }),
     {
