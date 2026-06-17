@@ -65,17 +65,13 @@ export default function CommissionPanel() {
     }
     const active = activeCommissions.find((c) => c.commissionId === commissionId);
     if (active) {
-      return COMMISSION_TEMPLATES.find((t) => t.title === active.commissionId || t.title === commissionId);
+      return COMMISSION_TEMPLATES.find((t) => t.title === active.title);
     }
     return null;
   };
 
   const getActiveCommissionTemplate = (ac: ActiveCommission) => {
-    const availCommission = availableCommissions.find((c) => c.id === ac.commissionId);
-    if (availCommission) {
-      return COMMISSION_TEMPLATES.find((t) => t.title === availCommission.title);
-    }
-    return COMMISSION_TEMPLATES.find((t) => t.title === ac.commissionId);
+    return COMMISSION_TEMPLATES.find((t) => t.title === ac.title);
   };
 
   const toggleCompanion = (id: string) => {
@@ -103,11 +99,10 @@ export default function CommissionPanel() {
   const handleCollectReward = useCallback((commissionId: string) => {
     const rewards = collectCommissionReward(commissionId);
     const ac = activeCommissions.find((c) => c.commissionId === commissionId);
-    const template = ac ? getActiveCommissionTemplate(ac) : null;
     
     if (rewards) {
       setSettlementRewards(rewards);
-      setSettlementTitle(template?.title || '委托完成');
+      setSettlementTitle(ac?.title || '委托完成');
       setShowSettlement(true);
     }
   }, [collectCommissionReward, activeCommissions]);
@@ -480,7 +475,7 @@ export default function CommissionPanel() {
         <div className="active-list">
           {activeCommissions.map((ac) => {
             const template = getActiveCommissionTemplate(ac);
-            const typeInfo = template ? COMMISSION_TYPES[template.type] : null;
+            const typeInfo = COMMISSION_TYPES[ac.type];
             const remainingTime = getRemainingTime(ac);
 
             if (ac.status === 'event' && ac.currentEvent) {
@@ -496,13 +491,11 @@ export default function CommissionPanel() {
                 <div className="active-card-header">
                   <div className="active-card-title">
                     <span className="active-icon">{template?.icon || '📜'}</span>
-                    <h4>{template?.title || ac.commissionId}</h4>
+                    <h4>{ac.title}</h4>
                   </div>
-                  {typeInfo && (
-                    <span className="type-tag" style={{ color: typeInfo.color }}>
-                      {typeInfo.name}
-                    </span>
-                  )}
+                  <span className="type-tag" style={{ color: typeInfo.color }}>
+                    {typeInfo.name}
+                  </span>
                 </div>
 
                 <div className="progress-section">

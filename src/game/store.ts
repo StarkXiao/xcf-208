@@ -2406,11 +2406,7 @@ export const useGameStore = create<GameState>()(
           const updatedCommissions = state.activeCommissions.map((ac) => {
             if (ac.status !== 'in_progress') return ac;
 
-            const template = COMMISSION_TEMPLATES.find((t) => {
-              const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
-              const commissionTitle = availCommission?.title || ac.commissionId;
-              return t.title === commissionTitle;
-            });
+            const template = COMMISSION_TEMPLATES.find((t) => t.title === ac.title);
 
             if (!template) return ac;
 
@@ -5863,6 +5859,8 @@ export const useGameStore = create<GameState>()(
         const now = Date.now();
         const activeCommission: ActiveCommission = {
           commissionId,
+          title: commission.title,
+          type: commission.type,
           companionIds,
           startTime: now,
           durationSeconds: commission.durationSeconds,
@@ -5892,17 +5890,7 @@ export const useGameStore = create<GameState>()(
         const updatedCommissions = state.activeCommissions.map((ac) => {
           if (ac.status !== 'in_progress') return ac;
 
-          const commission = COMMISSION_TEMPLATES.find(
-            (t) => t.title === state.availableCommissions.find((c) => c.id === ac.commissionId)?.title ||
-                    state.activeCommissions.find((a) => a.commissionId === ac.commissionId)?.commissionId
-          );
-
-          const template = COMMISSION_TEMPLATES.find((t) => {
-            const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
-            const activeCommission = state.activeCommissions.find((a) => a.commissionId === ac.commissionId);
-            const commissionTitle = availCommission?.title || activeCommission?.commissionId || '';
-            return t.title === commissionTitle;
-          });
+          const template = COMMISSION_TEMPLATES.find((t) => t.title === ac.title);
 
           if (!template) return ac;
 
@@ -6028,11 +6016,7 @@ export const useGameStore = create<GameState>()(
         const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
         if (!ac) return [];
 
-        const template = COMMISSION_TEMPLATES.find((t) => {
-          const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
-          const commissionTitle = availCommission?.title || ac.commissionId;
-          return t.title === commissionTitle;
-        });
+        const template = COMMISSION_TEMPLATES.find((t) => t.title === ac.title);
 
         if (!template) return [];
 
@@ -6085,8 +6069,10 @@ export const useGameStore = create<GameState>()(
 
         get().addBattleLog(`🎉 完成了委托：${template.title}`, 'event');
 
+        const expReward = results.find((r) => r.type === 'exp');
+        const companionExp = expReward ? Math.floor(expReward.amount * 0.1) : 10;
         ac.companionIds.forEach((cid) => {
-          get().addCompanionStarExp(cid, Math.floor(template.baseExp / 10));
+          get().addCompanionStarExp(cid, companionExp);
         });
 
         return results;
@@ -6097,11 +6083,7 @@ export const useGameStore = create<GameState>()(
         const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
         if (!ac) return;
 
-        const template = COMMISSION_TEMPLATES.find((t) => {
-          const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
-          const commissionTitle = availCommission?.title || ac.commissionId;
-          return t.title === commissionTitle;
-        });
+        const template = COMMISSION_TEMPLATES.find((t) => t.title === ac.title);
 
         set((state) => ({
           activeCommissions: state.activeCommissions.filter(
@@ -6109,7 +6091,7 @@ export const useGameStore = create<GameState>()(
           ),
         }));
 
-        get().addBattleLog(`💔 委托失败：${template?.title || commissionId}`, 'event');
+        get().addBattleLog(`💔 委托失败：${template?.title || ac.title}`, 'event');
       },
 
       cancelCommission: (commissionId) => {

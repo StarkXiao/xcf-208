@@ -4575,6 +4575,27 @@ export const COMMISSION_RARITY_NAMES: Record<CommissionRarity, string> = {
 
 export const COMMISSION_TEMPLATES: Omit<Commission, 'id' | 'generatedAt'>[] = [
   {
+    title: '村庄巡逻',
+    description: '村长希望有人能在村庄周围巡逻，驱赶靠近的小怪物，保障村民的安全。',
+    type: 'combat',
+    rarity: 'common',
+    areaId: 'forest',
+    minLevel: 1,
+    durationSeconds: 120,
+    minCompanions: 1,
+    maxCompanions: 2,
+    requiredPower: 20,
+    rewards: [
+      { type: 'gold', minAmount: 20, maxAmount: 50, chance: 1 },
+      { type: 'exp', minAmount: 15, maxAmount: 30, chance: 1 },
+      { type: 'material', materialId: 'herb_common', minAmount: 1, maxAmount: 3, chance: 0.5 },
+    ],
+    eventChance: 0.2,
+    failureChance: 0.02,
+    icon: '🗡️',
+    bgColor: '#1e3a1e',
+  },
+  {
     title: '森林草药采集',
     description: '村长需要一批草药来治疗村民，请前往森林采集足够的草药。',
     type: 'gather',

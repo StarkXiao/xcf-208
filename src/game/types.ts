@@ -1073,6 +1073,8 @@ export interface Commission {
 
 export interface ActiveCommission {
   commissionId: string;
+  title: string;
+  type: CommissionType;
   companionIds: string[];
   startTime: number;
   durationSeconds: number;
