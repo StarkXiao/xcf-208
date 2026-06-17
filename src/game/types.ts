@@ -96,7 +96,7 @@ export interface StarCondition {
 }
 
 export interface StarReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed';
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed' | 'guildExp' | 'guildContribution' | 'stamina';
   value: number;
 }
 
@@ -414,10 +414,9 @@ export interface EventChoice {
 }
 
 export interface EventEffect {
-  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation' | 'speed' | 'luck';
+  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation' | 'speed' | 'luck' | 'guildExp' | 'guildContribution' | 'stamina';
   value: number;
 }
-
 export interface RebirthOption {
   id: string;
   name: string;

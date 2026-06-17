@@ -335,6 +335,7 @@ interface GameState {
   isNodeAccessible: (chapterId: string, nodeId: string) => boolean;
   enterGuildNode: (chapterId: string, nodeId: string) => boolean;
   clearGuildNode: (chapterId: string, nodeId: string, stars: number) => void;
+  battleGuildNode: (chapterId: string, nodeId: string) => { won: boolean; stars: number; powerRatio: number };
   claimNodeReward: (chapterId: string, nodeId: string) => boolean;
   canClaimNodeReward: (chapterId: string, nodeId: string) => boolean;
   setCurrentGuildChapter: (chapterId: string) => void;
@@ -1044,11 +1045,19 @@ export const useGameStore = create<GameState>()(
         const currentAreaId = state.currentAreaId;
         const posMultiplier = get().getClassEventPositiveMultiplier();
         const negReduction = get().getClassEventNegativeReduction();
+        const guildGoldBonus = state.getGuildGoldBonus();
+        const guildExpBonus = state.getGuildExpBonus();
+        const areaEventBonus = get().getAreaEventBonus(currentAreaId || 'forest');
 
         choice.effects.forEach((effect) => {
           let adjustedValue = effect.value;
           if (adjustedValue > 0) {
             adjustedValue = Math.floor(adjustedValue * posMultiplier);
+            if (effect.type === 'gold') {
+              adjustedValue = Math.floor(adjustedValue * (1 + guildGoldBonus + areaEventBonus * 0.01));
+            } else if (effect.type === 'exp') {
+              adjustedValue = Math.floor(adjustedValue * (1 + guildExpBonus + areaEventBonus * 0.01));
+            }
           } else if (adjustedValue < 0) {
             adjustedValue = Math.ceil(adjustedValue * (1 - negReduction));
           }
@@ -1146,6 +1155,31 @@ export const useGameStore = create<GameState>()(
                 get().addAreaReputation(currentAreaId, adjustedValue);
               }
               break;
+            case 'guildExp':
+              if (adjustedValue > 0) {
+                get().addGuildExp(adjustedValue);
+                get().addBattleLog(`🏰 公会经验 +${adjustedValue}`, 'levelup');
+              }
+              break;
+            case 'guildContribution':
+              if (adjustedValue > 0) {
+                get().addGuildContribution(adjustedValue);
+                get().addBattleLog(`🎖️ 公会贡献 +${adjustedValue}`, 'drop');
+              }
+              break;
+            case 'stamina':
+              if (adjustedValue !== 0) {
+                const maxStamina = get().getGuildMaxStamina();
+                set((s) => ({
+                  currentStamina: Math.max(0, Math.min(maxStamina, s.currentStamina + adjustedValue)),
+                }));
+                if (adjustedValue > 0) {
+                  get().addBattleLog(`⚡ 体力 +${adjustedValue}`, 'drop');
+                } else {
+                  get().addBattleLog(`⚡ 体力 ${adjustedValue}`, 'event');
+                }
+              }
+              break;
           }
         });
 
@@ -1205,6 +1239,9 @@ export const useGameStore = create<GameState>()(
             case 'reputation':
             case 'hp':
             case 'mp':
+            case 'guildExp':
+            case 'guildContribution':
+            case 'stamina':
               totalValue += effect.value;
               break;
           }
@@ -4104,6 +4141,7 @@ export const useGameStore = create<GameState>()(
         
         if (nodeIndex >= 0) {
           const oldProgress = progress[nodeIndex];
+          const isFirstClear = !oldProgress.cleared;
           progress[nodeIndex] = {
             ...oldProgress,
             cleared: true,
@@ -4118,31 +4156,48 @@ export const useGameStore = create<GameState>()(
             },
           });
           
-          node.rewards.forEach(reward => {
-            switch (reward.type) {
-              case 'gold':
-                get().addGold(reward.value);
-                break;
-              case 'exp':
-                get().addExp(reward.value);
-                break;
-              case 'soulOrbs':
-                get().addSoulOrbs(reward.value);
-                break;
-              case 'attack':
-              case 'defense':
-              case 'hp':
-              case 'speed':
-              case 'reputation':
-                break;
-            }
-          });
-          
           const expGain = Math.floor((stars + 1) * 10);
           get().addGuildExp(expGain);
-          get().addGuildContribution(stars * 5);
+          get().addGuildContribution(stars * 5 + (isFirstClear ? 10 : 0));
           
-          get().addBattleLog(`🏰 公会据点 ${node.name} 通关！获得 ${stars} 星评价`, 'event');
+          get().addBattleLog(`🏰 公会据点 ${node.name} 通关！获得 ${stars} 星评价${isFirstClear ? '（首次通关！）' : ''}`, 'event');
+        }
+      },
+
+      battleGuildNode: (chapterId, nodeId) => {
+        const state = get();
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        const node = chapter?.nodes.find(n => n.id === nodeId);
+        if (!node) return { won: false, stars: 0, powerRatio: 0 };
+
+        const formationPower = state.getGuildFormationPower();
+        const basePower = (state.getTotalAttack() + state.getTotalDefense() + state.getTotalMaxHp() / 10) * 0.3;
+        const totalPower = formationPower > 0 ? formationPower : basePower;
+
+        const levelMultiplier = 1 + (node.minLevel - 1) * 0.15;
+        const typeMultiplier =
+          node.type === 'boss' ? 2.5 :
+          node.type === 'elite' ? 1.8 :
+          node.type === 'normal' ? 1.2 :
+          node.type === 'treasure' ? 0.8 :
+          node.type === 'shrine' ? 0.6 :
+          node.type === 'shop' ? 0.5 :
+          node.type === 'rest' ? 0.3 :
+          node.type === 'start' ? 0.1 : 1.0;
+        const nodePower = Math.floor(80 * levelMultiplier * typeMultiplier);
+
+        const powerRatio = totalPower / Math.max(1, nodePower);
+
+        if (powerRatio >= 3.0) {
+          return { won: true, stars: 3, powerRatio };
+        } else if (powerRatio >= 1.5) {
+          return { won: true, stars: 2, powerRatio };
+        } else if (powerRatio >= 0.8) {
+          return { won: true, stars: 1, powerRatio };
+        } else {
+          const winChance = powerRatio * 0.5;
+          const won = Math.random() < winChance;
+          return { won, stars: won ? 1 : 0, powerRatio };
         }
       },
 
@@ -4150,12 +4205,111 @@ export const useGameStore = create<GameState>()(
         const state = get();
         if (!state.canClaimNodeReward(chapterId, nodeId)) return false;
         
+        const chapter = GUILD_CHAPTERS.find(c => c.id === chapterId);
+        const node = chapter?.nodes.find(n => n.id === nodeId);
+        if (!node) return false;
+        
         const progress = [...state.guildChapterProgress[chapterId]];
         const nodeIndex = progress.findIndex(p => p.nodeId === nodeId);
         
         if (nodeIndex >= 0) {
+          const nodeProgress = progress[nodeIndex];
+          const stars = nodeProgress.bestStars;
+          const starMultiplier = 1 + (stars - 1) * 0.3;
+
+          node.rewards.forEach(reward => {
+            const finalValue = Math.floor(reward.value * starMultiplier);
+            switch (reward.type) {
+              case 'gold':
+                get().addGold(finalValue);
+                get().addBattleLog(`💰 获得金币 +${finalValue}`, 'drop');
+                break;
+              case 'exp':
+                get().addExp(finalValue);
+                get().addBattleLog(`⚡ 获得经验 +${finalValue}`, 'levelup');
+                break;
+              case 'soulOrbs':
+                get().addSoulOrbs(finalValue);
+                get().addBattleLog(`💎 获得魂珠 +${finalValue}`, 'drop');
+                break;
+              case 'attack':
+                set((s) => ({
+                  player: {
+                    ...s.player,
+                    stats: {
+                      ...s.player.stats,
+                      attack: s.player.stats.attack + finalValue,
+                    },
+                  },
+                }));
+                get().addBattleLog(`⚔️ 攻击力永久 +${finalValue}`, 'levelup');
+                break;
+              case 'defense':
+                set((s) => ({
+                  player: {
+                    ...s.player,
+                    stats: {
+                      ...s.player.stats,
+                      defense: s.player.stats.defense + finalValue,
+                    },
+                  },
+                }));
+                get().addBattleLog(`🛡️ 防御力永久 +${finalValue}`, 'levelup');
+                break;
+              case 'hp':
+                set((s) => ({
+                  player: {
+                    ...s.player,
+                    stats: {
+                      ...s.player.stats,
+                      maxHp: s.player.stats.maxHp + finalValue,
+                      hp: Math.min(s.player.stats.hp + finalValue, s.player.stats.maxHp + finalValue),
+                    },
+                  },
+                }));
+                get().addBattleLog(`❤️ 最大生命永久 +${finalValue}`, 'levelup');
+                break;
+              case 'speed':
+                set((s) => ({
+                  player: {
+                    ...s.player,
+                    stats: {
+                      ...s.player.stats,
+                      speed: s.player.stats.speed + finalValue,
+                    },
+                  },
+                }));
+                get().addBattleLog(`💨 速度永久 +${finalValue}`, 'levelup');
+                break;
+              case 'reputation':
+                if (chapter?.areaId) {
+                  get().addAreaReputation(chapter.areaId, finalValue);
+                  get().addBattleLog(`🏛️ 区域声望 +${finalValue}`, 'event');
+                }
+                break;
+              case 'guildExp':
+                get().addGuildExp(finalValue);
+                get().addBattleLog(`🏰 公会经验 +${finalValue}`, 'levelup');
+                break;
+              case 'guildContribution':
+                get().addGuildContribution(finalValue);
+                get().addBattleLog(`🎖️ 公会贡献 +${finalValue}`, 'drop');
+                break;
+              case 'stamina':
+                const maxStam = get().getGuildMaxStamina();
+                set((s) => ({
+                  currentStamina: Math.min(maxStam, s.currentStamina + finalValue),
+                }));
+                get().addBattleLog(`⚡ 体力 +${finalValue}`, 'drop');
+                break;
+            }
+          });
+
+          const extraContribution = Math.floor(stars * 15 * starMultiplier);
+          get().addGuildContribution(extraContribution);
+
           progress[nodeIndex] = {
-            ...progress[nodeIndex],
+            ...nodeProgress,
             claimed: true,
           };
           
@@ -4165,6 +4319,8 @@ export const useGameStore = create<GameState>()(
               [chapterId]: progress,
             },
           });
+
+          get().addBattleLog(`🎁 已领取据点「${node.name}」奖励，倍率 x${starMultiplier.toFixed(1)}`, 'drop');
           
           return true;
         }

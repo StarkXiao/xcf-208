@@ -1211,6 +1211,230 @@ export const RANDOM_EVENTS: GameEvent[] = [
       },
     ],
   },
+  {
+    id: 'guild_scout_report',
+    title: '斥候密报',
+    description: '一名公会斥候带回了前方据点的情报，以及一些意外收获...',
+    baseWeight: 0.8,
+    requiredTags: [],
+    choices: [
+      {
+        id: 'analyze',
+        text: '仔细分析情报',
+        effects: [{ type: 'guildExp', value: 25 }, { type: 'stamina', value: 10 }, { type: 'exp', value: 60 }],
+        consequences: {
+          tags: ['guild_smart'],
+          eventWeights: [
+            { eventId: 'guild_supply_drop', delta: 0.3, reason: '情报分析帮助发现了补给' },
+          ],
+        },
+      },
+      {
+        id: 'reward',
+        text: '重赏斥候',
+        effects: [{ type: 'gold', value: -80 }, { type: 'guildContribution', value: 15 }, { type: 'guildExp', value: 15 }],
+        consequences: {
+          tags: ['guild_generous'],
+          eventWeights: [
+            { eventId: 'guild_volunteer', delta: 0.4, reason: '慷慨的名声吸引了志愿者' },
+          ],
+        },
+      },
+      {
+        id: 'ignore',
+        text: '暂时搁置',
+        effects: [{ type: 'exp', value: 10 }],
+        consequences: {
+          tags: [],
+        },
+      },
+    ],
+  },
+  {
+    id: 'guild_supply_drop',
+    title: '补给马车',
+    description: '一辆驶往公会的补给马车在路上被你发现，车夫请求你的护送...',
+    baseWeight: 0.7,
+    choices: [
+      {
+        id: 'escort',
+        text: '亲自护送',
+        effects: [{ type: 'guildContribution', value: 25 }, { type: 'stamina', value: 15 }, { type: 'gold', value: 120 }],
+        consequences: {
+          tags: ['guild_loyal', 'trusted'],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '公会商路', description: '补给车顺利到达，开放了森林商路', effect: { stat: 'gold', value: 3 } },
+          ],
+          eventWeights: [
+            { eventId: 'guild_tech_breakthrough', delta: 0.25, reason: '补给中有珍贵的研究材料' },
+          ],
+        },
+      },
+      {
+        id: 'donate',
+        text: '捐赠物资',
+        effects: [{ type: 'gold', value: -150 }, { type: 'guildExp', value: 40 }, { type: 'guildContribution', value: 20 }],
+        consequences: {
+          tags: ['guild_donor'],
+        },
+      },
+      {
+        id: 'ignore',
+        text: '不参与',
+        effects: [{ type: 'reputation', value: -5 }],
+        consequences: {
+          tags: [],
+        },
+      },
+    ],
+  },
+  {
+    id: 'guild_volunteer',
+    title: '冒险者招募',
+    description: '一群新人冒险者希望加入你的公会远征队伍，他们需要一场试炼...',
+    baseWeight: 0.6,
+    choices: [
+      {
+        id: 'train',
+        text: '亲自训练他们',
+        effects: [{ type: 'guildExp', value: 35 }, { type: 'stamina', value: -5 }, { type: 'exp', value: 100 }],
+        consequences: {
+          tags: ['guild_mentor'],
+          eventWeights: [
+            { eventId: 'guild_victory_feast', delta: 0.3, reason: '训练有素的队伍带来了胜利' },
+          ],
+        },
+      },
+      {
+        id: 'test',
+        text: '布置试炼任务',
+        effects: [{ type: 'guildContribution', value: 20 }, { type: 'gold', value: 60 }],
+        consequences: {
+          tags: ['guild_shrewd'],
+        },
+      },
+      {
+        id: 'dismiss',
+        text: '婉言拒绝',
+        effects: [],
+        consequences: {
+          tags: [],
+        },
+      },
+    ],
+  },
+  {
+    id: 'guild_tech_breakthrough',
+    title: '科研突破',
+    description: '公会科技研究员在你的远征材料中发现了新的灵感，即将取得重大突破！',
+    baseWeight: 0.5,
+    requiredTags: ['guild_smart', 'guild_loyal'],
+    choices: [
+      {
+        id: 'support',
+        text: '全力支持研究',
+        effects: [{ type: 'guildContribution', value: -30 }, { type: 'attack', value: 3 }, { type: 'defense', value: 2 }, { type: 'guildExp', value: 50 }],
+        consequences: {
+          tags: ['guild_patron'],
+        },
+      },
+      {
+        id: 'moderate',
+        text: '适度拨款',
+        effects: [{ type: 'guildContribution', value: -10 }, { type: 'guildExp', value: 30 }, { type: 'stamina', value: 10 }],
+        consequences: {
+          tags: [],
+        },
+      },
+      {
+        id: 'postpone',
+        text: '延后研究',
+        effects: [{ type: 'guildContribution', value: 10 }],
+        consequences: {
+          tags: [],
+        },
+      },
+    ],
+  },
+  {
+    id: 'guild_victory_feast',
+    title: '胜利庆功宴',
+    description: '远征据点捷报频传，公会决定举办盛大的庆功宴，士气高涨！',
+    baseWeight: 0.55,
+    requiredTags: ['guild_mentor', 'guild_loyal'],
+    choices: [
+      {
+        id: 'grand',
+        text: '举办盛大宴会',
+        effects: [{ type: 'gold', value: -200 }, { type: 'guildExp', value: 60 }, { type: 'guildContribution', value: 30 }, { type: 'stamina', value: 30 }, { type: 'hp', value: 80 }],
+        consequences: {
+          tags: ['guild_loved'],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '高涨士气', description: '庆功宴后士气大振，所有人更努力了', effect: { stat: 'exp', value: 5 } },
+            { areaId: 'cave', type: 'blessing', name: '高涨士气', description: '庆功宴后士气大振，所有人更努力了', effect: { stat: 'exp', value: 5 } },
+          ],
+        },
+      },
+      {
+        id: 'simple',
+        text: '简单庆祝',
+        effects: [{ type: 'gold', value: -50 }, { type: 'guildExp', value: 25 }, { type: 'stamina', value: 10 }],
+        consequences: {
+          tags: [],
+        },
+      },
+      {
+        id: 'skip',
+        text: '专注远征',
+        effects: [{ type: 'guildExp', value: 15 }, { type: 'guildContribution', value: 10 }],
+        consequences: {
+          tags: ['guild_diligent'],
+        },
+      },
+    ],
+  },
+  {
+    id: 'guild_ancient_ruins',
+    title: '远古遗迹',
+    description: '斥候发现了一处远古遗迹，据传与公会的创始者有关，其中危险与机遇并存...',
+    baseWeight: 0.45,
+    minReputationLevel: 2,
+    choices: [
+      {
+        id: 'explore',
+        text: '组队深入探索',
+        effects: [{ type: 'stamina', value: -15 }, { type: 'soulOrbs', value: 5 }, { type: 'guildExp', value: 80 }, { type: 'guildContribution', value: 40 }],
+        consequences: {
+          tags: ['guild_explorer'],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'hiddenPath', name: '远古密道', description: '发现了直通遗迹深处的密道', effect: { stat: 'luck', value: 4 } },
+          ],
+          eventWeights: [
+            { eventId: 'guild_tech_breakthrough', delta: 0.4, reason: '远古知识带来了科技灵感' },
+          ],
+        },
+      },
+      {
+        id: 'surface',
+        text: '搜寻表层',
+        effects: [{ type: 'gold', value: 200 }, { type: 'guildExp', value: 40 }, { type: 'guildContribution', value: 20 }],
+        consequences: {
+          tags: [],
+        },
+      },
+      {
+        id: 'report',
+        text: '记录位置以后再来',
+        effects: [{ type: 'guildExp', value: 15 }, { type: 'reputation', value: 15 }],
+        consequences: {
+          tags: [],
+          eventWeights: [
+            { eventId: 'guild_ancient_ruins', delta: 0.2, reason: '你已标记了位置' },
+          ],
+        },
+      },
+    ],
+  },
 ];
 
 export const REBIRTH_OPTIONS: RebirthOption[] = [

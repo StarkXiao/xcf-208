@@ -21,6 +21,7 @@ export default function GuildPanel() {
     isNodeAccessible,
     enterGuildNode,
     clearGuildNode,
+    battleGuildNode,
     claimNodeReward,
     canClaimNodeReward,
     setCurrentGuildChapter,
@@ -49,7 +50,7 @@ export default function GuildPanel() {
 
   const [selectedNode, setSelectedNode] = useState<GuildMapNode | null>(null);
   const [showNodeDetail, setShowNodeDetail] = useState(false);
-  const [battleResult, setBattleResult] = useState<{ stars: number; won: boolean } | null>(null);
+  const [battleResult, setBattleResult] = useState<{ stars: number; won: boolean; powerRatio?: number } | null>(null);
 
   const maxStamina = getGuildMaxStamina();
   const levelConfig = getGuildLevelConfig();
@@ -83,15 +84,17 @@ export default function GuildPanel() {
   const handleEnterNode = () => {
     if (!selectedNode) return;
     const success = enterGuildNode(currentGuildChapterId, selectedNode.id);
-    if (success && selectedNode.type !== 'start' && selectedNode.type !== 'rest' && selectedNode.type !== 'shop' && selectedNode.type !== 'shrine' && selectedNode.type !== 'treasure') {
-      const stars = Math.floor(Math.random() * 3) + 1;
+    if (success) {
+      const isCombatNode = selectedNode.type === 'normal' || selectedNode.type === 'elite' || selectedNode.type === 'boss';
       setTimeout(() => {
-        clearGuildNode(currentGuildChapterId, selectedNode.id, stars);
-        setBattleResult({ stars, won: true });
-      }, 500);
-    } else if (success) {
-      clearGuildNode(currentGuildChapterId, selectedNode.id, 3);
-      setBattleResult({ stars: 3, won: true });
+        const result = battleGuildNode(currentGuildChapterId, selectedNode.id);
+        if (result.won) {
+          clearGuildNode(currentGuildChapterId, selectedNode.id, result.stars || (isCombatNode ? 1 : 3));
+          setBattleResult({ stars: result.stars || (isCombatNode ? 1 : 3), won: true, powerRatio: result.powerRatio });
+        } else {
+          setBattleResult({ stars: 0, won: false, powerRatio: result.powerRatio });
+        }
+      }, 800);
     }
   };
 
@@ -259,6 +262,12 @@ export default function GuildPanel() {
                   <span>体力消耗</span>
                   <span className="stamina-cost">⚡ {selectedNode.staminaCost}</span>
                 </div>
+                <div className="node-stat">
+                  <span>我方战力</span>
+                  <span className={`power-value ${formationPower >= 1 ? 'good' : 'bad'}`}>
+                    {formationPower || '（请先编队）'}
+                  </span>
+                </div>
               </div>
 
               <div className="node-rewards-section">
@@ -274,6 +283,9 @@ export default function GuildPanel() {
                       {reward.type === 'defense' && '🛡️'}
                       {reward.type === 'speed' && '💨'}
                       {reward.type === 'reputation' && '🏛️'}
+                      {reward.type === 'guildExp' && '🏰'}
+                      {reward.type === 'guildContribution' && '🎖️'}
+                      {reward.type === 'stamina' && '⚡'}
                       {' '}+{reward.value}
                     </div>
                   ))}
@@ -286,10 +298,24 @@ export default function GuildPanel() {
                   <div className="result-text">
                     {battleResult.won ? '战斗胜利！' : '战斗失败...'}
                   </div>
+                  {battleResult.powerRatio !== undefined && (
+                    <div className="power-ratio">
+                      战力比: {battleResult.powerRatio.toFixed(2)}x
+                      {battleResult.powerRatio >= 3 && ' （碾压）'}
+                      {battleResult.powerRatio >= 1.5 && battleResult.powerRatio < 3 && ' （优势）'}
+                      {battleResult.powerRatio >= 0.8 && battleResult.powerRatio < 1.5 && ' （均势）'}
+                      {battleResult.powerRatio < 0.8 && ' （劣势）'}
+                    </div>
+                  )}
                   {battleResult.won && (
                     <div className="result-stars">
                       {'★'.repeat(battleResult.stars)}
                       {'☆'.repeat(3 - battleResult.stars)}
+                    </div>
+                  )}
+                  {battleResult.won && (
+                    <div className="result-tip">
+                      奖励倍率: x{(1 + (battleResult.stars - 1) * 0.3).toFixed(1)}（星数越高奖励越丰厚）
                     </div>
                   )}
                 </div>

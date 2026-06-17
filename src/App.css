@@ -3613,6 +3613,37 @@
   letter-spacing: 2px;
 }
 
+.power-ratio {
+  color: #93c5fd;
+  font-size: 13px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.result-tip {
+  color: #a7f3d0;
+  font-size: 12px;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.power-value.good {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.power-value.bad {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.reward-tag.guildExp { color: #c084fc; }
+.reward-tag.guildContribution { color: #fbbf24; }
+.reward-tag.stamina { color: #22d3ee; }
+
 .enter-node-btn,
 .claim-reward-btn,
 .close-detail-btn {
