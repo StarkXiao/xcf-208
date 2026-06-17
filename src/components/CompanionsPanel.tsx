@@ -1,5 +1,7 @@
 import { useGameStore } from '../game/store';
 import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, REPUTATION_LEVELS, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG } from '../game/data';
+import { AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from '../game/types';
+import type { CompanionAffinityRecord } from '../game/types';
 
 export default function CompanionsPanel() {
   const {
@@ -14,7 +16,11 @@ export default function CompanionsPanel() {
     getCompanionEffectiveAttack,
     getCompanionEffectiveDefense,
     getBondBonus,
+    getCompanionAffinity,
+    getCompanionAffinityBonusMultiplier,
   } = useGameStore();
+
+  const affinityMultiplier = getCompanionAffinityBonusMultiplier();
 
   const isOwned = (companionId: string) => {
     return ownedCompanions.some((c) => c.id === companionId);
@@ -101,8 +107,8 @@ export default function CompanionsPanel() {
         </div>
 
         <div className="formation-stats-summary">
-          <span>⚔️ 编队攻击: {formationAttack + bondBonus.attack}{bondBonus.attack > 0 ? ` (+${bondBonus.attack}羁绊)` : ''}</span>
-          <span>🛡️ 编队防御: {formationDefense + bondBonus.defense}{bondBonus.defense > 0 ? ` (+${bondBonus.defense}羁绊)` : ''}</span>
+          <span>⚔️ 编队攻击: {formationAttack + bondBonus.attack}{bondBonus.attack > 0 ? ` (+${bondBonus.attack}羁绊)` : ''}{affinityMultiplier !== 1.0 ? ` ×${affinityMultiplier.toFixed(2)}好感` : ''}</span>
+          <span>🛡️ 编队防御: {formationDefense + bondBonus.defense}{bondBonus.defense > 0 ? ` (+${bondBonus.defense}羁绊)` : ''}{affinityMultiplier !== 1.0 ? ` ×${affinityMultiplier.toFixed(2)}好感` : ''}</span>
         </div>
 
         {activeBonds.length > 0 && (
@@ -194,6 +200,17 @@ export default function CompanionsPanel() {
                       <span>⚔️ {effectiveAtk}</span>
                       <span>🛡️ {effectiveDef}</span>
                     </div>
+                    {(() => {
+                      const affinity = getCompanionAffinity(companion.id);
+                      return (
+                        <div className="companion-affinity-info">
+                          <span className="affinity-label">💛 好感度:</span>
+                          <span className="affinity-value" style={{ color: AFFINITY_LEVEL_COLORS[affinity.level] }}>
+                            {AFFINITY_LEVEL_NAMES[affinity.level]} ({affinity.value})
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {bond && (
                       <div className="companion-bond-info">
                         <span className="bond-tag">{bond.icon} {bond.name}</span>
@@ -302,6 +319,34 @@ export default function CompanionsPanel() {
                     <span>⚔️ {companion.attack}</span>
                     <span>🛡️ {companion.defense}</span>
                   </div>
+                  {(() => {
+                    const affinity = getCompanionAffinity(companion.id);
+                    const affinityDiscount = affinity.value >= 60 ? 0.25 : affinity.value >= 30 ? 0.15 : affinity.value >= 10 ? 0.08 : affinity.value < -30 ? -0.1 : 0;
+                    const canBypassRep = companion.minReputationLevel && companion.minReputationLevel > 0 && affinity.value >= 30;
+                    const isHostile = affinity.value <= -50;
+                    return (
+                      <>
+                        <div className="companion-affinity-info">
+                          <span className="affinity-label">💛 好感度:</span>
+                          <span className="affinity-value" style={{ color: AFFINITY_LEVEL_COLORS[affinity.level] }}>
+                            {AFFINITY_LEVEL_NAMES[affinity.level]} ({affinity.value})
+                          </span>
+                        </div>
+                        {isHostile && (
+                          <p className="companion-hostile">💔 敌对状态，无法招募</p>
+                        )}
+                        {canBypassRep && !owned && (
+                          <p className="companion-affinity-bypass">💛 好感度达标，可跳过声望要求</p>
+                        )}
+                        {affinityDiscount > 0 && !owned && (
+                          <p className="companion-affinity-discount">💛 好感度折扣: -{(affinityDiscount * 100).toFixed(0)}%</p>
+                        )}
+                        {affinityDiscount < 0 && !owned && (
+                          <p className="companion-affinity-penalty">💔 好感度过低，价格 +{(-affinityDiscount * 100).toFixed(0)}%</p>
+                        )}
+                      </>
+                    );
+                  })()}
                   {bond && (
                     <p className="companion-bond-hint">{bond.icon} {bond.name}</p>
                   )}

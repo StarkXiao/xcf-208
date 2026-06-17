@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
 import { REPUTATION_LEVELS, SHOP_ITEMS } from '../game/data';
+import { MAP_MODIFIER_ICONS } from '../game/types';
 import GameCanvas from './GameCanvas';
 import BattleLog from './BattleLog';
 
@@ -22,10 +23,9 @@ export default function MapPanel() {
     buyShopItem,
     purchasedShopItems,
     getDiscountedCost,
+    getMapAreaModifiers,
+    getMapModifierTotalBonus,
   } = useGameStore();
-
-  const [showMapSelect, setShowMapSelect] = useState(false);
-  const [showShop, setShowShop] = useState(false);
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
   const currentRep = areaReputations.find((r) => r.areaId === currentAreaId) || { areaId: currentAreaId, points: 0, level: 0 };
@@ -39,6 +39,12 @@ export default function MapPanel() {
   const shopDiscount = getAreaShopDiscount(currentAreaId);
   const recruitDiscount = getAreaRecruitDiscount(currentAreaId);
   const eventBonus = getAreaEventBonus(currentAreaId);
+  const areaModifiers = getMapAreaModifiers(currentAreaId || '');
+  const areaAtkBonus = getMapModifierTotalBonus('attack');
+  const areaDefBonus = getMapModifierTotalBonus('defense');
+  const areaHpBonus = getMapModifierTotalBonus('maxHp');
+  const areaSpdBonus = getMapModifierTotalBonus('speed');
+  const areaLukBonus = getMapModifierTotalBonus('luck');
 
   const areaShopItems = SHOP_ITEMS.filter((item) => item.areaId === currentAreaId);
 
@@ -73,6 +79,7 @@ export default function MapPanel() {
             {mapAreas.map((area) => {
               const rep = getAreaReputation(area.id);
               const repData = REPUTATION_LEVELS.find((rl) => rl.level === rep.level) || REPUTATION_LEVELS[0];
+              const areaMods = getMapAreaModifiers(area.id);
               return (
                 <button
                   key={area.id}
@@ -101,11 +108,60 @@ export default function MapPanel() {
                         🏛️ {repData.name} ({rep.points})
                       </p>
                     )}
+                    {areaMods.length > 0 && (
+                      <div className="map-modifiers-inline">
+                        {areaMods.map((mod, i) => (
+                          <span key={i} className="map-modifier-tag">
+                            {MAP_MODIFIER_ICONS[mod.type] || '📌'} {mod.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </button>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {areaModifiers.length > 0 && (
+        <div className="map-area-modifiers-section">
+          <h4 className="modifiers-title">🗺️ 当前区域状态</h4>
+          <div className="map-modifiers-list">
+            {areaModifiers.map((mod, i) => {
+              const isNegative = mod.type === 'hazard' || mod.type === 'cursed';
+              return (
+                <div
+                  key={i}
+                  className={`map-modifier-card ${isNegative ? 'negative' : 'positive'}`}
+                >
+                  <span className="modifier-icon">
+                    {MAP_MODIFIER_ICONS[mod.type] || '📌'}
+                  </span>
+                  <div className="modifier-info">
+                    <h5>{mod.name}</h5>
+                    <p>{mod.description}</p>
+                    {mod.effect && (
+                      <p className={`modifier-effect ${mod.effect.value > 0 ? 'positive' : 'negative'}`}>
+                        {mod.effect.value > 0 ? '+' : ''}{mod.effect.value} {mod.effect.stat}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {(areaAtkBonus !== 0 || areaDefBonus !== 0 || areaHpBonus !== 0 || areaSpdBonus !== 0 || areaLukBonus !== 0) && (
+            <div className="modifier-total-bonus">
+              <span>区域状态总加成：</span>
+              {areaAtkBonus !== 0 && <span className={areaAtkBonus > 0 ? 'positive' : 'negative'}>⚔️ {areaAtkBonus > 0 ? '+' : ''}{areaAtkBonus} </span>}
+              {areaDefBonus !== 0 && <span className={areaDefBonus > 0 ? 'positive' : 'negative'}>🛡️ {areaDefBonus > 0 ? '+' : ''}{areaDefBonus} </span>}
+              {areaHpBonus !== 0 && <span className={areaHpBonus > 0 ? 'positive' : 'negative'}>❤️ {areaHpBonus > 0 ? '+' : ''}{areaHpBonus} </span>}
+              {areaSpdBonus !== 0 && <span className={areaSpdBonus > 0 ? 'positive' : 'negative'}>👟 {areaSpdBonus > 0 ? '+' : ''}{areaSpdBonus} </span>}
+              {areaLukBonus !== 0 && <span className={areaLukBonus > 0 ? 'positive' : 'negative'}>🍀 {areaLukBonus > 0 ? '+' : ''}{areaLukBonus} </span>}
+            </div>
+          )}
         </div>
       )}
 

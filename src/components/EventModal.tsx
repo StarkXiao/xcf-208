@@ -1,10 +1,7 @@
+import type { ReactNode } from 'react';
 import { useGameStore } from '../game/store';
 import { REPUTATION_LEVELS, COMPANIONS, MAP_AREAS } from '../game/data';
-import {
-  AFFINITY_LEVEL_NAMES,
-  AFFINITY_LEVEL_COLORS,
-  MAP_MODIFIER_ICONS,
-} from '../game/types';
+import { MAP_MODIFIER_ICONS } from '../game/types';
 import type { EventEffect, EventConsequence, MapAreaModifier } from '../game/types';
 
 export default function EventModal() {
@@ -84,7 +81,7 @@ export default function EventModal() {
   };
 
   const renderConsequencePreview = (csq: EventConsequence) => {
-    const parts: JSX.Element[] = [];
+    const parts: ReactNode[] = [];
 
     if (csq.tags && csq.tags.length > 0) {
       parts.push(

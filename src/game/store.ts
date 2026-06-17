@@ -129,6 +129,10 @@ interface GameState {
   getEventWeight: (eventId: string) => number;
   addEventWeightModifier: (mod: EventWeightMod) => void;
 
+  getMapModifierTotalBonus: (stat: keyof PlayerStats) => number;
+  getAffinityTotalBonus: (stat: keyof PlayerStats) => number;
+  getCompanionAffinityBonusMultiplier: () => number;
+
   startExpedition: (missionId: string, companionIds: string[]) => void;
   advanceExpeditionStage: () => void;
   resolveExpeditionEvent: (eventId: string) => void;
@@ -937,7 +941,9 @@ export const useGameStore = create<GameState>()(
           0
         );
         const bondBonus = get().getBondBonus();
-        return baseAttack + companionAttack + bondBonus.attack;
+        const mapModifierBonus = get().getMapModifierTotalBonus('attack');
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+        return Math.floor((baseAttack + companionAttack + bondBonus.attack + mapModifierBonus) * affinityMultiplier);
       },
 
       calculateDefense: () => {
@@ -949,17 +955,21 @@ export const useGameStore = create<GameState>()(
           0
         );
         const bondBonus = get().getBondBonus();
-        return baseDefense + companionDefense + bondBonus.defense;
+        const mapModifierBonus = get().getMapModifierTotalBonus('defense');
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+        return Math.floor((baseDefense + companionDefense + bondBonus.defense + mapModifierBonus) * affinityMultiplier);
       },
 
       calculateGoldBonus: () => {
         const state = get();
-        return 1 + (state.rebirthBonuses['gold_boost'] || 0);
+        const mapModifierBonus = get().getMapModifierTotalBonus('gold') * 0.01;
+        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus;
       },
 
       calculateExpBonus: () => {
         const state = get();
-        return 1 + (state.rebirthBonuses['exp_boost'] || 0);
+        const mapModifierBonus = get().getMapModifierTotalBonus('exp') * 0.01;
+        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus;
       },
 
       getTotalAttack: () => {
@@ -971,7 +981,9 @@ export const useGameStore = create<GameState>()(
           0
         );
         const bondBonus = get().getBondBonus();
-        return playerAttack + companionAttack + bondBonus.attack;
+        const mapModifierBonus = get().getMapModifierTotalBonus('attack');
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+        return Math.floor((playerAttack + companionAttack + bondBonus.attack + mapModifierBonus) * affinityMultiplier);
       },
 
       getTotalDefense: () => {
@@ -983,7 +995,44 @@ export const useGameStore = create<GameState>()(
           0
         );
         const bondBonus = get().getBondBonus();
-        return playerDefense + companionDefense + bondBonus.defense;
+        const mapModifierBonus = get().getMapModifierTotalBonus('defense');
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+        return Math.floor((playerDefense + companionDefense + bondBonus.defense + mapModifierBonus) * affinityMultiplier);
+      },
+
+      getMapModifierTotalBonus: (stat) => {
+        const state = get();
+        const currentAreaId = state.currentAreaId;
+        if (!currentAreaId) return 0;
+        return get().getMapAreaModifierBonus(currentAreaId, stat);
+      },
+
+      getAffinityTotalBonus: (stat) => {
+        const state = get();
+        const formationCompanions = get().getFormationCompanions();
+        return formationCompanions.reduce((sum, c) => {
+          const affinity = get().getCompanionAffinity(c.id);
+          if (affinity.value >= 60) return sum + (stat === 'attack' || stat === 'defense' ? 5 : 0);
+          if (affinity.value >= 30) return sum + (stat === 'attack' || stat === 'defense' ? 2 : 0);
+          if (affinity.value >= 10) return sum + (stat === 'attack' || stat === 'defense' ? 1 : 0);
+          if (affinity.value < -30) return sum + (stat === 'attack' || stat === 'defense' ? -2 : 0);
+          return sum;
+        }, 0);
+      },
+
+      getCompanionAffinityBonusMultiplier: () => {
+        const formationCompanions = get().getFormationCompanions();
+        if (formationCompanions.length === 0) return 1.0;
+        const totalAffinity = formationCompanions.reduce((sum, c) => {
+          const affinity = get().getCompanionAffinity(c.id);
+          return sum + affinity.value;
+        }, 0);
+        const avgAffinity = totalAffinity / formationCompanions.length;
+        if (avgAffinity >= 60) return 1.15;
+        if (avgAffinity >= 30) return 1.08;
+        if (avgAffinity >= 10) return 1.03;
+        if (avgAffinity < -30) return 0.92;
+        return 1.0;
       },
 
       addAreaReputation: (areaId, points) => {
@@ -1041,15 +1090,33 @@ export const useGameStore = create<GameState>()(
       },
 
       getDiscountedCompanionCost: (companion) => {
-        if (!companion.areaId) return companion.cost;
-        const discount = get().getAreaRecruitDiscount(companion.areaId);
-        return Math.max(1, Math.floor(companion.cost * (1 - discount)));
+        const affinity = get().getCompanionAffinity(companion.id);
+        let affinityDiscount = 0;
+        if (affinity.value >= 60) affinityDiscount = 0.25;
+        else if (affinity.value >= 30) affinityDiscount = 0.15;
+        else if (affinity.value >= 10) affinityDiscount = 0.08;
+        else if (affinity.value < -30) affinityDiscount = -0.1;
+
+        let baseDiscount = 0;
+        if (companion.areaId) {
+          baseDiscount = get().getAreaRecruitDiscount(companion.areaId);
+        }
+
+        const totalDiscount = Math.min(0.6, baseDiscount + affinityDiscount);
+        return Math.max(1, Math.floor(companion.cost * (1 - totalDiscount)));
       },
 
       canRecruitCompanion: (companion) => {
+        const affinity = get().getCompanionAffinity(companion.id);
+        if (affinity.value <= -50) return false;
+        if (companion.minReputationLevel && companion.minReputationLevel > 0) {
+          if (affinity.value >= 30) return true;
+        }
         if (companion.areaId && companion.minReputationLevel) {
           const repLevel = get().getAreaReputationLevel(companion.areaId);
-          if (repLevel < companion.minReputationLevel) return false;
+          if (repLevel < companion.minReputationLevel) {
+            if (affinity.value < 30) return false;
+          }
         }
         return true;
       },
