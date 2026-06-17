@@ -1801,6 +1801,9 @@ export const useGameStore = create<GameState>()(
         const baseExp = Math.floor(totalKills * baseExpPerKill);
         const baseGold = Math.floor(totalKills * baseGoldPerKill);
 
+        const expBonus = state.calculateExpBonus();
+        const goldBonus = state.calculateGoldBonus();
+
         const expReward = Math.floor(
           baseExp
           * efficiencyMultiplier
@@ -1808,7 +1811,7 @@ export const useGameStore = create<GameState>()(
           * (1 + totalCompanionBonus)
           * (1 + eventStatusBonus)
           * deathRiskMultiplier
-          * state.calculateExpBonus()
+          * expBonus
           * (1 + dropBonus)
         );
         const goldReward = Math.floor(
@@ -1818,9 +1821,163 @@ export const useGameStore = create<GameState>()(
           * (1 + totalCompanionBonus)
           * (1 + eventStatusBonus)
           * deathRiskMultiplier
-          * state.calculateGoldBonus()
+          * goldBonus
           * (1 + dropBonus)
         );
+
+        const deathLossRate = 0.10;
+        const expectedDeathLossExp = Math.floor(expReward * deathRiskPercent / 100 * deathLossRate);
+        const expectedDeathLossGold = Math.floor(goldReward * deathRiskPercent / 100 * deathLossRate);
+
+        const RECOVERY_COSTS: Record<string, { hpPerGold: number; mpPerGold: number }> = {
+          forest: { hpPerGold: 1.0, mpPerGold: 0.75 },
+          cave: { hpPerGold: 1.0, mpPerGold: 1.0 },
+          ruins: { hpPerGold: 0.75, mpPerGold: 0.75 },
+          volcano: { hpPerGold: 0.67, mpPerGold: 0.6 },
+        };
+        const recoveryCost = RECOVERY_COSTS[currentArea.id] || RECOVERY_COSTS.forest;
+        const avgHpLossPerDeath = state.player.stats.maxHp * 0.8;
+        const avgMpLossPerDeath = state.player.stats.maxMp * 0.6;
+        const expectedDeaths = deathRiskPercent / 100 * 2;
+        const recoveryHpCost = Math.floor((avgHpLossPerDeath / recoveryCost.hpPerGold) * expectedDeaths);
+        const recoveryMpCost = Math.floor((avgMpLossPerDeath / recoveryCost.mpPerGold) * expectedDeaths);
+        const totalRecoveryCost = recoveryHpCost + recoveryMpCost;
+
+        const netExpProfit = expReward - expectedDeathLossExp;
+        const netGoldProfit = goldReward - expectedDeathLossGold - totalRecoveryCost;
+
+        const baseExpContrib = Math.floor(baseExp * efficiencyMultiplier * expBonus * (1 + dropBonus));
+        const mapExpContrib = Math.floor(baseExp * efficiencyMultiplier * (mapDiff.multiplier - 1) * expBonus * (1 + dropBonus));
+        const companionExpContrib = Math.floor(baseExp * efficiencyMultiplier * mapDiff.multiplier * totalCompanionBonus * expBonus * (1 + dropBonus));
+        const eventExpContrib = Math.floor(baseExp * efficiencyMultiplier * mapDiff.multiplier * (1 + totalCompanionBonus) * eventStatusBonus * expBonus * (1 + dropBonus));
+        const riskExpContrib = expReward - baseExpContrib - mapExpContrib - companionExpContrib - eventExpContrib;
+
+        const baseGoldContrib = Math.floor(baseGold * efficiencyMultiplier * goldBonus * (1 + dropBonus));
+        const mapGoldContrib = Math.floor(baseGold * efficiencyMultiplier * (mapDiff.multiplier - 1) * goldBonus * (1 + dropBonus));
+        const companionGoldContrib = Math.floor(baseGold * efficiencyMultiplier * mapDiff.multiplier * totalCompanionBonus * goldBonus * (1 + dropBonus));
+        const eventGoldContrib = Math.floor(baseGold * efficiencyMultiplier * mapDiff.multiplier * (1 + totalCompanionBonus) * eventStatusBonus * goldBonus * (1 + dropBonus));
+        const riskGoldContrib = goldReward - baseGoldContrib - mapGoldContrib - companionGoldContrib - eventGoldContrib;
+
+        const rewardComposition = [
+          {
+            source: '基础收益',
+            expContribution: baseExpContrib,
+            goldContribution: baseGoldContrib,
+            expPercent: expReward > 0 ? baseExpContrib / expReward : 0,
+            goldPercent: goldReward > 0 ? baseGoldContrib / goldReward : 0,
+          },
+          {
+            source: '地图难度',
+            expContribution: mapExpContrib,
+            goldContribution: mapGoldContrib,
+            expPercent: expReward > 0 ? mapExpContrib / expReward : 0,
+            goldPercent: goldReward > 0 ? mapGoldContrib / goldReward : 0,
+          },
+          {
+            source: '伙伴加成',
+            expContribution: companionExpContrib,
+            goldContribution: companionGoldContrib,
+            expPercent: expReward > 0 ? companionExpContrib / expReward : 0,
+            goldPercent: goldReward > 0 ? companionGoldContrib / goldReward : 0,
+          },
+          {
+            source: '事件状态',
+            expContribution: eventExpContrib,
+            goldContribution: eventGoldContrib,
+            expPercent: expReward > 0 ? eventExpContrib / expReward : 0,
+            goldPercent: goldReward > 0 ? eventGoldContrib / goldReward : 0,
+          },
+          {
+            source: '风险溢价',
+            expContribution: riskExpContrib,
+            goldContribution: riskGoldContrib,
+            expPercent: expReward > 0 ? riskExpContrib / expReward : 0,
+            goldPercent: goldReward > 0 ? riskGoldContrib / goldReward : 0,
+          },
+        ];
+
+        const mapComparison = state.mapAreas
+          .filter((a) => a.unlocked)
+          .map((area) => {
+            const areaMapDiff = MAP_DIFFICULTY[area.id] || { multiplier: 1.0, name: '简单' };
+            const areaAvgMonster = area.monsters.reduce(
+              (acc, m) => ({
+                attack: acc.attack + m.attack,
+                defense: acc.defense + m.defense,
+                hp: acc.hp + m.hp,
+                expReward: acc.expReward + m.expReward,
+                goldReward: acc.goldReward + m.goldReward,
+              }),
+              { attack: 0, defense: 0, hp: 0, expReward: 0, goldReward: 0 }
+            );
+            const areaMonsterCount = area.monsters.length;
+            const areaAvgPower = (areaAvgMonster.attack + areaAvgMonster.defense + areaAvgMonster.hp / 10) / areaMonsterCount;
+            const areaPowerRatio = areaAvgPower > 0 ? playerTotalPower / areaAvgPower : 5;
+
+            let areaDeathRiskPercent: number;
+            let areaDeathRiskLevel: string;
+            let areaDeathRiskMultiplier: number;
+
+            if (areaPowerRatio >= 5) {
+              areaDeathRiskPercent = 5;
+              areaDeathRiskMultiplier = 1.0;
+              areaDeathRiskLevel = '安全';
+            } else if (areaPowerRatio >= 3) {
+              areaDeathRiskPercent = 15;
+              areaDeathRiskMultiplier = 1.1;
+              areaDeathRiskLevel = '低风险';
+            } else if (areaPowerRatio >= 1.5) {
+              areaDeathRiskPercent = 35;
+              areaDeathRiskMultiplier = 1.25;
+              areaDeathRiskLevel = '中风险';
+            } else if (areaPowerRatio >= 0.8) {
+              areaDeathRiskPercent = 60;
+              areaDeathRiskMultiplier = 1.5;
+              areaDeathRiskLevel = '高风险';
+            } else {
+              areaDeathRiskPercent = 85;
+              areaDeathRiskMultiplier = 2.0;
+              areaDeathRiskLevel = '极高风险';
+            }
+
+            const areaBaseExpPerKill = areaAvgMonster.expReward / areaMonsterCount;
+            const areaBaseGoldPerKill = areaAvgMonster.goldReward / areaMonsterCount;
+            const areaBaseExp = Math.floor(totalKills * areaBaseExpPerKill);
+            const areaBaseGold = Math.floor(totalKills * areaBaseGoldPerKill);
+
+            const areaExpReward = Math.floor(
+              areaBaseExp
+              * efficiencyMultiplier
+              * areaMapDiff.multiplier
+              * (1 + totalCompanionBonus)
+              * areaDeathRiskMultiplier
+              * expBonus
+              * (1 + dropBonus)
+            );
+            const areaGoldReward = Math.floor(
+              areaBaseGold
+              * efficiencyMultiplier
+              * areaMapDiff.multiplier
+              * (1 + totalCompanionBonus)
+              * areaDeathRiskMultiplier
+              * goldBonus
+              * (1 + dropBonus)
+            );
+
+            const riskRewardRatio = (areaExpReward + areaGoldReward * 2) / (areaDeathRiskPercent + 1);
+
+            return {
+              areaId: area.id,
+              areaName: area.name,
+              difficultyName: areaMapDiff.name,
+              expReward: areaExpReward,
+              goldReward: areaGoldReward,
+              deathRiskLevel: areaDeathRiskLevel,
+              deathRiskPercent: areaDeathRiskPercent,
+              riskRewardRatio,
+            };
+          })
+          .sort((a, b) => b.riskRewardRatio - a.riskRewardRatio);
 
         const breakdown: OfflineRewardBreakdown = {
           baseExp,
@@ -1838,6 +1995,16 @@ export const useGameStore = create<GameState>()(
           finalExp: expReward,
           finalGold: goldReward,
           offlineMinutes,
+          expectedDeathLossExp,
+          expectedDeathLossGold,
+          deathLossRate,
+          recoveryHpCost,
+          recoveryMpCost,
+          totalRecoveryCost,
+          netExpProfit,
+          netGoldProfit,
+          rewardComposition,
+          mapComparison,
         };
 
         return { exp: expReward, gold: goldReward, breakdown };

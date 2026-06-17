@@ -27,6 +27,14 @@ function getDifficultyColor(name: string): string {
   }
 }
 
+function getRiskRewardGrade(ratio: number): { grade: string; color: string } {
+  if (ratio >= 500) return { grade: 'S', color: '#fbbf24' };
+  if (ratio >= 300) return { grade: 'A', color: '#4ade80' };
+  if (ratio >= 150) return { grade: 'B', color: '#60a5fa' };
+  if (ratio >= 80) return { grade: 'C', color: '#a78bfa' };
+  return { grade: 'D', color: '#9ca3af' };
+}
+
 export default function OfflineRewardsModal() {
   const { calculateOfflineRewards, collectOfflineRewards, lastOnlineTime } = useGameStore();
   const [show, setShow] = useState(false);
@@ -171,6 +179,107 @@ export default function OfflineRewardsModal() {
                   <span className="highlight">+{breakdown.finalGold.toLocaleString()}</span>
                 </div>
               </div>
+
+              <div className="risk-warning-section">
+                <h4 className="risk-title">⚠️ 风险收益提示</h4>
+
+                <div className="risk-item">
+                  <span className="risk-label">💀 预期死亡损失</span>
+                  <div className="risk-values">
+                    <span className="risk-value negative">-{breakdown.expectedDeathLossExp.toLocaleString()} ⭐</span>
+                    <span className="risk-value negative">-{breakdown.expectedDeathLossGold.toLocaleString()} 💰</span>
+                  </div>
+                </div>
+
+                <div className="risk-item">
+                  <span className="risk-label">🧪 恢复消耗</span>
+                  <div className="risk-values">
+                    <span className="risk-value negative">-生命药水 {breakdown.recoveryHpCost.toLocaleString()} 💰</span>
+                    <span className="risk-value negative">-魔力药水 {breakdown.recoveryMpCost.toLocaleString()} 💰</span>
+                  </div>
+                </div>
+
+                <div className="risk-divider"></div>
+
+                <div className="risk-item net-profit">
+                  <span className="risk-label">📈 预计净收益</span>
+                  <div className="risk-values">
+                    <span className="risk-value positive">+{breakdown.netExpProfit.toLocaleString()} ⭐</span>
+                    <span className={`risk-value ${breakdown.netGoldProfit >= 0 ? 'positive' : 'negative'}`}>
+                      {breakdown.netGoldProfit >= 0 ? '+' : ''}{breakdown.netGoldProfit.toLocaleString()} 💰
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="composition-section">
+                <h4 className="composition-title">📊 收益构成</h4>
+                <div className="composition-bars">
+                  {breakdown.rewardComposition.map((item, idx) => (
+                    <div key={idx} className="composition-row">
+                      <span className="composition-label">{item.source}</span>
+                      <div className="composition-bar-container">
+                        <div
+                          className="composition-bar exp-bar"
+                          style={{ width: `${Math.max(item.expPercent * 100, 2)}%` }}
+                        >
+                          <span className="bar-label">⭐ {(item.expPercent * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      <div className="composition-bar-container">
+                        <div
+                          className="composition-bar gold-bar"
+                          style={{ width: `${Math.max(item.goldPercent * 100, 2)}%` }}
+                        >
+                          <span className="bar-label">💰 {(item.goldPercent * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {breakdown.mapComparison.length > 1 && (
+                <div className="map-comparison-section">
+                  <h4 className="comparison-title">🗺️ 地图差异对比</h4>
+                  <div className="comparison-list">
+                    {breakdown.mapComparison.map((map, idx) => {
+                      const grade = getRiskRewardGrade(map.riskRewardRatio);
+                      const isCurrent = map.areaId === useGameStore.getState().currentAreaId;
+                      return (
+                        <div key={map.areaId} className={`comparison-item ${isCurrent ? 'current' : ''}`}>
+                          <div className="comparison-header">
+                            <span className="comparison-name">
+                              {isCurrent && '📍 '}{map.areaName}
+                            </span>
+                            <span
+                              className="comparison-grade"
+                              style={{ color: grade.color, borderColor: grade.color }}
+                            >
+                              {grade.grade}
+                            </span>
+                          </div>
+                          <div className="comparison-details">
+                            <span className="comparison-difficulty" style={{ color: getDifficultyColor(map.difficultyName) }}>
+                              {map.difficultyName}
+                            </span>
+                            <span className="comparison-risk" style={{ color: getRiskColor(map.deathRiskLevel) }}>
+                              {map.deathRiskLevel} ({map.deathRiskPercent}%)
+                            </span>
+                          </div>
+                          <div className="comparison-rewards">
+                            <span className="comparison-reward">⭐ {map.expReward.toLocaleString()}</span>
+                            <span className="comparison-reward">💰 {map.goldReward.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="comparison-hint">
+                    💡 等级评价综合考虑收益与风险，S级为性价比最高
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

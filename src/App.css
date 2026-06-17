@@ -4078,6 +4078,233 @@
   margin: 6px 0;
 }
 
+.risk-warning-section {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.risk-title {
+  color: #f87171;
+  font-size: 13px;
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.risk-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+.risk-label {
+  color: #9ca3af;
+}
+
+.risk-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.risk-value {
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.risk-value.positive {
+  color: #4ade80;
+}
+
+.risk-value.negative {
+  color: #f87171;
+}
+
+.risk-divider {
+  height: 1px;
+  background: rgba(239, 68, 68, 0.2);
+  margin: 8px 0;
+}
+
+.risk-item.net-profit {
+  padding-top: 6px;
+}
+
+.risk-item.net-profit .risk-label {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.composition-section {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.composition-title {
+  color: #60a5fa;
+  font-size: 13px;
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.composition-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.composition-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+
+.composition-label {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.composition-bar-container {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  height: 18px;
+  overflow: hidden;
+  position: relative;
+}
+
+.composition-bar {
+  height: 100%;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  min-width: 28px;
+  transition: width 0.3s ease;
+}
+
+.composition-bar.exp-bar {
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+
+.composition-bar.gold-bar {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.bar-label {
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.map-comparison-section {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.comparison-title {
+  color: #4ade80;
+  font-size: 13px;
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.comparison-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comparison-item {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.comparison-item.current {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.comparison-name {
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.comparison-grade {
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.comparison-details {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.comparison-difficulty {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.comparison-risk {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.comparison-rewards {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.comparison-reward {
+  color: #d1d5db;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.comparison-hint {
+  color: #6b7280;
+  font-size: 11px;
+  text-align: center;
+  margin: 8px 0 0 0;
+  font-style: italic;
+}
+
 .power-breakdown-section {
   background: rgba(255, 255, 255, 0.05);
   padding: 14px;

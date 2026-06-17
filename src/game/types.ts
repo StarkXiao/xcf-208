@@ -541,6 +541,17 @@ export const MAP_MODIFIER_ICONS: Record<MapModifierType, string> = {
   cursed: '💀',
 };
 
+export interface OfflineRewardMapComparison {
+  areaId: string;
+  areaName: string;
+  difficultyName: string;
+  expReward: number;
+  goldReward: number;
+  deathRiskLevel: string;
+  deathRiskPercent: number;
+  riskRewardRatio: number;
+}
+
 export interface OfflineRewardBreakdown {
   baseExp: number;
   baseGold: number;
@@ -557,6 +568,22 @@ export interface OfflineRewardBreakdown {
   finalExp: number;
   finalGold: number;
   offlineMinutes: number;
+  expectedDeathLossExp: number;
+  expectedDeathLossGold: number;
+  deathLossRate: number;
+  recoveryHpCost: number;
+  recoveryMpCost: number;
+  totalRecoveryCost: number;
+  netExpProfit: number;
+  netGoldProfit: number;
+  rewardComposition: {
+    source: string;
+    expContribution: number;
+    goldContribution: number;
+    expPercent: number;
+    goldPercent: number;
+  }[];
+  mapComparison: OfflineRewardMapComparison[];
 }
 
 export type TalentCategory = 'combat' | 'survival' | 'growth' | 'fortune' | 'class_special' | 'race_special';
