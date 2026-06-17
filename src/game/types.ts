@@ -129,6 +129,34 @@ export interface ShopItemEffect {
   value: number;
 }
 
+export type MapModifierType = 'hazard' | 'blessing' | 'hiddenPath' | 'locked' | 'cursed';
+
+export interface MapAreaModifier {
+  areaId: string;
+  type: MapModifierType;
+  name: string;
+  description: string;
+  effect: { stat: keyof PlayerStats; value: number } | null;
+}
+
+export interface CompanionAffinityChange {
+  companionId: string;
+  value: number;
+}
+
+export interface EventWeightMod {
+  eventId: string;
+  delta: number;
+  reason: string;
+}
+
+export interface EventConsequence {
+  tags?: string[];
+  companionAffinity?: CompanionAffinityChange[];
+  mapModifiers?: MapAreaModifier[];
+  eventWeights?: EventWeightMod[];
+}
+
 export interface GameEvent {
   id: string;
   title: string;
@@ -136,16 +164,20 @@ export interface GameEvent {
   choices: EventChoice[];
   areaId?: string;
   minReputationLevel?: number;
+  requiredTags?: string[];
+  blockedByTags?: string[];
+  baseWeight?: number;
 }
 
 export interface EventChoice {
   id: string;
   text: string;
   effects: EventEffect[];
+  consequences?: EventConsequence;
 }
 
 export interface EventEffect {
-  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation';
+  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation' | 'speed' | 'luck';
   value: number;
 }
 
@@ -231,3 +263,43 @@ export interface ActiveExpedition {
   eventLog: string[];
   completed: boolean;
 }
+
+export type AffinityLevel = 'hostile' | 'neutral' | 'friendly' | 'trusted' | 'bonded';
+
+export interface CompanionAffinityRecord {
+  companionId: string;
+  value: number;
+  level: AffinityLevel;
+}
+
+export function getAffinityLevel(value: number): AffinityLevel {
+  if (value <= -50) return 'hostile';
+  if (value < 10) return 'neutral';
+  if (value < 30) return 'friendly';
+  if (value < 60) return 'trusted';
+  return 'bonded';
+}
+
+export const AFFINITY_LEVEL_NAMES: Record<AffinityLevel, string> = {
+  hostile: '敌对',
+  neutral: '中立',
+  friendly: '友好',
+  trusted: '信赖',
+  bonded: '羁绊',
+};
+
+export const AFFINITY_LEVEL_COLORS: Record<AffinityLevel, string> = {
+  hostile: '#ef4444',
+  neutral: '#9ca3af',
+  friendly: '#4ade80',
+  trusted: '#60a5fa',
+  bonded: '#fbbf24',
+};
+
+export const MAP_MODIFIER_ICONS: Record<MapModifierType, string> = {
+  hazard: '⚠️',
+  blessing: '✨',
+  hiddenPath: '🚪',
+  locked: '🔒',
+  cursed: '💀',
+};

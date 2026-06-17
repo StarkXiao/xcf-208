@@ -1,9 +1,14 @@
 import { useGameStore } from '../game/store';
-import { REPUTATION_LEVELS } from '../game/data';
-import type { EventEffect } from '../game/types';
+import { REPUTATION_LEVELS, COMPANIONS, MAP_AREAS } from '../game/data';
+import {
+  AFFINITY_LEVEL_NAMES,
+  AFFINITY_LEVEL_COLORS,
+  MAP_MODIFIER_ICONS,
+} from '../game/types';
+import type { EventEffect, EventConsequence, MapAreaModifier } from '../game/types';
 
 export default function EventModal() {
-  const { currentEvent, handleEventChoice, closeEvent, player, currentAreaId, getAreaEventBonus } = useGameStore();
+  const { currentEvent, handleEventChoice, closeEvent, player, currentAreaId, getAreaEventBonus, ownedCompanions } = useGameStore();
 
   if (!currentEvent) return null;
 
@@ -26,6 +31,10 @@ export default function EventModal() {
         return `${sign}${effect.value} ⚔️攻击`;
       case 'defense':
         return `${sign}${effect.value} 🛡️防御`;
+      case 'speed':
+        return `${sign}${effect.value} 👟速度`;
+      case 'luck':
+        return `${sign}${effect.value} 🍀幸运`;
       case 'soulOrbs':
         return `${sign}${effect.value} 💎魂珠`;
       case 'reputation':
@@ -56,6 +65,106 @@ export default function EventModal() {
     return true;
   };
 
+  const getCompanionName = (companionId: string) => {
+    const c = COMPANIONS.find((comp) => comp.id === companionId);
+    return c?.name || companionId;
+  };
+
+  const isCompanionOwned = (companionId: string) => {
+    return ownedCompanions.some((c) => c.id === companionId);
+  };
+
+  const getAreaName = (areaId: string) => {
+    const area = MAP_AREAS.find((a) => a.id === areaId);
+    return area?.name || areaId;
+  };
+
+  const getMapModifierIcon = (mod: MapAreaModifier) => {
+    return MAP_MODIFIER_ICONS[mod.type] || '📌';
+  };
+
+  const renderConsequencePreview = (csq: EventConsequence) => {
+    const parts: JSX.Element[] = [];
+
+    if (csq.tags && csq.tags.length > 0) {
+      parts.push(
+        <div key="tags" className="consequence-tags">
+          <span className="consequence-label">🏷️ 获得印记</span>
+          <div className="consequence-tag-list">
+            {csq.tags.map((tag) => (
+              <span key={tag} className="consequence-tag-item">{tag}</span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (csq.companionAffinity && csq.companionAffinity.length > 0) {
+      parts.push(
+        <div key="affinity" className="consequence-affinity">
+          <span className="consequence-label">💛 伙伴好感变化</span>
+          <div className="consequence-affinity-list">
+            {csq.companionAffinity.map((ca) => {
+              const owned = isCompanionOwned(ca.companionId);
+              return (
+                <span
+                  key={ca.companionId}
+                  className={`consequence-affinity-item ${ca.value > 0 ? 'positive' : 'negative'} ${!owned ? 'not-owned' : ''}`}
+                >
+                  {getCompanionName(ca.companionId)} {ca.value > 0 ? '+' : ''}{ca.value}
+                  {!owned && ' (未拥有)'}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (csq.mapModifiers && csq.mapModifiers.length > 0) {
+      parts.push(
+        <div key="map" className="consequence-map">
+          <span className="consequence-label">🗺️ 地图状态变化</span>
+          <div className="consequence-map-list">
+            {csq.mapModifiers.map((mod, i) => (
+              <span
+                key={i}
+                className={`consequence-map-item ${mod.type === 'hazard' || mod.type === 'cursed' ? 'negative' : 'positive'}`}
+              >
+                {getMapModifierIcon(mod)} {getAreaName(mod.areaId)} - {mod.name}
+                {mod.effect && (
+                  <span className="consequence-map-effect">
+                    ({mod.effect.stat} {mod.effect.value > 0 ? '+' : ''}{mod.effect.value})
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (csq.eventWeights && csq.eventWeights.length > 0) {
+      parts.push(
+        <div key="weights" className="consequence-weights">
+          <span className="consequence-label">🎲 后续事件影响</span>
+          <div className="consequence-weight-list">
+            {csq.eventWeights.map((ew, i) => (
+              <span
+                key={i}
+                className={`consequence-weight-item ${ew.delta > 0 ? 'positive' : 'negative'}`}
+              >
+                {ew.delta > 0 ? '⬆️' : '⬇️'} {ew.reason}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return parts.length > 0 ? <div className="consequence-preview">{parts}</div> : null;
+  };
+
   return (
     <div className="event-modal-overlay">
       <div className="event-modal">
@@ -77,6 +186,12 @@ export default function EventModal() {
           <div className="event-choices">
             {currentEvent.choices.map((choice) => {
               const affordable = canAffordChoice(choice.effects);
+              const hasConsequences = choice.consequences && (
+                (choice.consequences.tags && choice.consequences.tags.length > 0) ||
+                (choice.consequences.companionAffinity && choice.consequences.companionAffinity.length > 0) ||
+                (choice.consequences.mapModifiers && choice.consequences.mapModifiers.length > 0) ||
+                (choice.consequences.eventWeights && choice.consequences.eventWeights.length > 0)
+              );
               return (
                 <button
                   key={choice.id}
@@ -96,6 +211,9 @@ export default function EventModal() {
                         </span>
                       ))}
                     </div>
+                  )}
+                  {hasConsequences && choice.consequences && (
+                    renderConsequencePreview(choice.consequences)
                   )}
                 </button>
               );

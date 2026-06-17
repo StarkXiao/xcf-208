@@ -15,7 +15,11 @@ import type {
   ExpeditionPhase,
   Formation,
   FormationSlot,
+  MapAreaModifier,
+  CompanionAffinityRecord,
+  EventWeightMod,
 } from './types';
+import { getAffinityLevel } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -110,6 +114,21 @@ interface GameState {
   getUnlockedFormationSlots: () => number;
 
   activeExpedition: ActiveExpedition | null;
+  consequenceTags: string[];
+  companionAffinities: CompanionAffinityRecord[];
+  mapAreaModifiers: MapAreaModifier[];
+  eventWeightModifiers: EventWeightMod[];
+
+  addConsequenceTag: (tag: string) => void;
+  hasConsequenceTag: (tag: string) => boolean;
+  getCompanionAffinity: (companionId: string) => CompanionAffinityRecord;
+  addCompanionAffinity: (companionId: string, value: number) => void;
+  addMapAreaModifier: (modifier: MapAreaModifier) => void;
+  getMapAreaModifiers: (areaId: string) => MapAreaModifier[];
+  getMapAreaModifierBonus: (areaId: string, stat: keyof PlayerStats) => number;
+  getEventWeight: (eventId: string) => number;
+  addEventWeightModifier: (mod: EventWeightMod) => void;
+
   startExpedition: (missionId: string, companionIds: string[]) => void;
   advanceExpeditionStage: () => void;
   resolveExpeditionEvent: (eventId: string) => void;
@@ -198,6 +217,10 @@ export const useGameStore = create<GameState>()(
       purchasedShopItems: [],
       currentMonster: null,
       activeExpedition: null,
+      consequenceTags: [],
+      companionAffinities: [],
+      mapAreaModifiers: [],
+      eventWeightModifiers: [],
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -572,10 +595,20 @@ export const useGameStore = create<GameState>()(
         const currentAreaId = state.currentAreaId;
         const repLevel = get().getAreaReputationLevel(currentAreaId);
 
-        const areaSpecificEvents = RANDOM_EVENTS.filter(
-          (e) => e.areaId === currentAreaId && (e.minReputationLevel || 0) <= repLevel
+        const filterByTags = (events: GameEvent[]) => {
+          return events.filter((e) => {
+            if (e.requiredTags && !e.requiredTags.every((t) => state.consequenceTags.includes(t))) return false;
+            if (e.blockedByTags && e.blockedByTags.some((t) => state.consequenceTags.includes(t))) return false;
+            return true;
+          });
+        };
+
+        const areaSpecificEvents = filterByTags(
+          RANDOM_EVENTS.filter(
+            (e) => e.areaId === currentAreaId && (e.minReputationLevel || 0) <= repLevel
+          )
         );
-        const genericEvents = RANDOM_EVENTS.filter((e) => !e.areaId);
+        const genericEvents = filterByTags(RANDOM_EVENTS.filter((e) => !e.areaId));
 
         const eventBonus = get().getAreaEventBonus(currentAreaId);
         const areaWeight = 0.3 + eventBonus;
@@ -588,12 +621,30 @@ export const useGameStore = create<GameState>()(
         }
 
         if (availableEvents.length === 0) {
-          availableEvents = RANDOM_EVENTS.filter((e) => !e.areaId);
+          availableEvents = filterByTags(RANDOM_EVENTS.filter((e) => !e.areaId));
         }
 
-        const randomEvent = availableEvents[Math.floor(Math.random() * availableEvents.length)];
-        set({ currentEvent: { ...randomEvent } });
-        get().addBattleLog(`✨ 触发了随机事件：${randomEvent.title}`, 'event');
+        if (availableEvents.length === 0) return;
+
+        const weighted = availableEvents.map((e) => {
+          const base = e.baseWeight ?? 1.0;
+          const mod = get().getEventWeight(e.id);
+          return { event: e, weight: Math.max(0.05, base + mod) };
+        });
+
+        const totalWeight = weighted.reduce((s, w) => s + w.weight, 0);
+        let roll = Math.random() * totalWeight;
+        let selectedEvent = weighted[0].event;
+        for (const w of weighted) {
+          roll -= w.weight;
+          if (roll <= 0) {
+            selectedEvent = w.event;
+            break;
+          }
+        }
+
+        set({ currentEvent: { ...selectedEvent } });
+        get().addBattleLog(`✨ 触发了随机事件：${selectedEvent.title}`, 'event');
       },
 
       handleEventChoice: (choiceId) => {
@@ -669,6 +720,28 @@ export const useGameStore = create<GameState>()(
                 },
               }));
               break;
+            case 'speed':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: {
+                    ...s.player.stats,
+                    speed: s.player.stats.speed + effect.value,
+                  },
+                },
+              }));
+              break;
+            case 'luck':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: {
+                    ...s.player.stats,
+                    luck: s.player.stats.luck + effect.value,
+                  },
+                },
+              }));
+              break;
             case 'soulOrbs':
               get().addSoulOrbs(effect.value);
               break;
@@ -679,6 +752,48 @@ export const useGameStore = create<GameState>()(
               break;
           }
         });
+
+        if (choice.consequences) {
+          const csq = choice.consequences;
+
+          if (csq.tags && csq.tags.length > 0) {
+            csq.tags.forEach((tag) => {
+              get().addConsequenceTag(tag);
+            });
+          }
+
+          if (csq.companionAffinity && csq.companionAffinity.length > 0) {
+            csq.companionAffinity.forEach((ca) => {
+              get().addCompanionAffinity(ca.companionId, ca.value);
+              const companion = COMPANIONS.find((c) => c.id === ca.companionId);
+              const owned = state.ownedCompanions.find((c) => c.id === ca.companionId);
+              if (companion && owned) {
+                if (ca.value > 0) {
+                  get().addBattleLog(`💛 ${companion.name}好感 +${ca.value}`, 'event');
+                } else {
+                  get().addBattleLog(`💔 ${companion.name}好感 ${ca.value}`, 'event');
+                }
+              }
+            });
+          }
+
+          if (csq.mapModifiers && csq.mapModifiers.length > 0) {
+            csq.mapModifiers.forEach((mod) => {
+              get().addMapAreaModifier(mod);
+              const area = state.mapAreas.find((a) => a.id === mod.areaId);
+              if (area) {
+                const icon = mod.type === 'hazard' || mod.type === 'cursed' ? '⚠️' : '✨';
+                get().addBattleLog(`${icon} ${area.name} - ${mod.name}: ${mod.description}`, 'system');
+              }
+            });
+          }
+
+          if (csq.eventWeights && csq.eventWeights.length > 0) {
+            csq.eventWeights.forEach((ew) => {
+              get().addEventWeightModifier(ew);
+            });
+          }
+        }
 
         set({ currentEvent: null });
       },
@@ -734,6 +849,10 @@ export const useGameStore = create<GameState>()(
           currentMonster: null,
           areaReputations: newReputations,
           purchasedShopItems: [],
+          consequenceTags: [],
+          companionAffinities: [],
+          mapAreaModifiers: [],
+          eventWeightModifiers: [],
         });
 
         return true;
@@ -741,6 +860,73 @@ export const useGameStore = create<GameState>()(
 
       setAutoBattle: (value) => set({ isAutoBattle: value }),
       setCurrentMonster: (monster) => set({ currentMonster: monster }),
+
+      addConsequenceTag: (tag) => {
+        set((state) => {
+          if (state.consequenceTags.includes(tag)) return state;
+          return { consequenceTags: [...state.consequenceTags, tag] };
+        });
+      },
+
+      hasConsequenceTag: (tag) => {
+        return get().consequenceTags.includes(tag);
+      },
+
+      getCompanionAffinity: (companionId) => {
+        const record = get().companionAffinities.find((a) => a.companionId === companionId);
+        if (record) return record;
+        return { companionId, value: 0, level: getAffinityLevel(0) };
+      },
+
+      addCompanionAffinity: (companionId, value) => {
+        set((state) => {
+          const existing = state.companionAffinities.find((a) => a.companionId === companionId);
+          if (existing) {
+            const newValue = existing.value + value;
+            return {
+              companionAffinities: state.companionAffinities.map((a) =>
+                a.companionId === companionId
+                  ? { ...a, value: newValue, level: getAffinityLevel(newValue) }
+                  : a
+              ),
+            };
+          }
+          return {
+            companionAffinities: [
+              ...state.companionAffinities,
+              { companionId, value, level: getAffinityLevel(value) },
+            ],
+          };
+        });
+      },
+
+      addMapAreaModifier: (modifier) => {
+        set((state) => ({
+          mapAreaModifiers: [...state.mapAreaModifiers, modifier],
+        }));
+      },
+
+      getMapAreaModifiers: (areaId) => {
+        return get().mapAreaModifiers.filter((m) => m.areaId === areaId);
+      },
+
+      getMapAreaModifierBonus: (areaId, stat) => {
+        return get().mapAreaModifiers
+          .filter((m) => m.areaId === areaId && m.effect && m.effect.stat === stat)
+          .reduce((sum, m) => sum + (m.effect?.value || 0), 0);
+      },
+
+      getEventWeight: (eventId) => {
+        return get().eventWeightModifiers
+          .filter((m) => m.eventId === eventId)
+          .reduce((sum, m) => sum + m.delta, 0);
+      },
+
+      addEventWeightModifier: (mod) => {
+        set((state) => ({
+          eventWeightModifiers: [...state.eventWeightModifiers, mod],
+        }));
+      },
 
       calculateDamage: () => {
         const state = get();
@@ -1239,7 +1425,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'isekai-idle-game',
-      version: 3,
+      version: 4,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -1256,6 +1442,12 @@ export const useGameStore = create<GameState>()(
             bondId: c.bondId || COMPANIONS.find((cc) => cc.id === c.id)?.bondId,
           }));
           state.formation = initFormation(1);
+        }
+        if (version < 4) {
+          state.consequenceTags = [];
+          state.companionAffinities = [];
+          state.mapAreaModifiers = [];
+          state.eventWeightModifiers = [];
         }
         return state as unknown as GameState;
       },

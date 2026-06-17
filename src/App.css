@@ -1205,6 +1205,121 @@
   color: white;
 }
 
+.consequence-preview {
+  margin-top: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.consequence-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c4b5fd;
+  margin-bottom: 4px;
+}
+
+.consequence-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.consequence-tag-item {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.consequence-affinity-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.consequence-affinity-item {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.consequence-affinity-item.positive {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.consequence-affinity-item.negative {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.consequence-affinity-item.not-owned {
+  opacity: 0.5;
+}
+
+.consequence-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.consequence-map-item {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.consequence-map-item.positive {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+}
+
+.consequence-map-item.negative {
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.consequence-map-effect {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.consequence-weight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.consequence-weight-item {
+  display: block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.consequence-weight-item.positive {
+  background: rgba(96, 165, 250, 0.1);
+  color: #93c5fd;
+}
+
+.consequence-weight-item.negative {
+  background: rgba(251, 146, 60, 0.1);
+  color: #fdba74;
+}
+
 .offline-rewards {
   display: flex;
   flex-direction: column;

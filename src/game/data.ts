@@ -290,49 +290,222 @@ export const RANDOM_EVENTS: GameEvent[] = [
     id: 'treasure_chest',
     title: '神秘宝箱',
     description: '你在路边发现了一个闪闪发光的宝箱...',
+    baseWeight: 1.0,
     choices: [
-      { id: 'open', text: '打开宝箱', effects: [{ type: 'gold', value: 50 }] },
-      { id: 'leave', text: '谨慎离开', effects: [{ type: 'exp', value: 20 }] },
+      {
+        id: 'open',
+        text: '打开宝箱',
+        effects: [{ type: 'gold', value: 50 }],
+        consequences: {
+          tags: ['greedy', 'treasure_found'],
+          eventWeights: [
+            { eventId: 'merchant', delta: 0.3, reason: '宝箱引起了商人的注意' },
+            { eventId: 'dungeon_entrance', delta: 0.5, reason: '宝箱中发现了地牢线索' },
+          ],
+        },
+      },
+      {
+        id: 'leave',
+        text: '谨慎离开',
+        effects: [{ type: 'exp', value: 20 }],
+        consequences: {
+          tags: ['cautious'],
+          eventWeights: [
+            { eventId: 'old_sage', delta: 0.4, reason: '谨慎态度吸引了智者' },
+            { eventId: 'herb_garden', delta: 0.3, reason: '留心观察发现了草药' },
+          ],
+        },
+      },
     ],
   },
   {
     id: 'merchant',
     title: '流浪商人',
     description: '一位神秘的商人出现在你面前，提出了一笔交易...',
+    baseWeight: 1.0,
     choices: [
-      { id: 'buy', text: '用金币交换经验', effects: [{ type: 'gold', value: -30 }, { type: 'exp', value: 80 }] },
-      { id: 'sell', text: '用经验交换金币', effects: [{ type: 'exp', value: -50 }, { type: 'gold', value: 100 }] },
-      { id: 'refuse', text: '婉拒离开', effects: [] },
+      {
+        id: 'buy',
+        text: '用金币交换经验',
+        effects: [{ type: 'gold', value: -30 }, { type: 'exp', value: 80 }],
+        consequences: {
+          tags: ['merchant_ally'],
+          companionAffinity: [
+            { companionId: 'cave_explorer', value: 5 },
+          ],
+          eventWeights: [
+            { eventId: 'merchant', delta: 0.3, reason: '商人好感度提升' },
+          ],
+        },
+      },
+      {
+        id: 'sell',
+        text: '用经验交换金币',
+        effects: [{ type: 'exp', value: -50 }, { type: 'gold', value: 100 }],
+        consequences: {
+          tags: ['merchant_ally'],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '商路繁荣', description: '与商人的合作使森林商路更加繁荣', effect: { stat: 'gold', value: 2 } },
+          ],
+        },
+      },
+      {
+        id: 'refuse',
+        text: '婉拒离开',
+        effects: [],
+        consequences: {
+          tags: ['merchant_refused'],
+          eventWeights: [
+            { eventId: 'merchant', delta: -0.5, reason: '拒绝了商人的交易' },
+          ],
+        },
+      },
     ],
   },
   {
     id: 'herb_garden',
     title: '草药花园',
     description: '你发现了一片神奇的草药花园...',
+    baseWeight: 1.0,
     choices: [
-      { id: 'hp_herb', text: '采集生命草药', effects: [{ type: 'hp', value: 30 }] },
-      { id: 'mp_herb', text: '采集魔力草药', effects: [{ type: 'mp', value: 25 }] },
-      { id: 'luck_herb', text: '采集幸运草药', effects: [{ type: 'gold', value: 30 }] },
+      {
+        id: 'hp_herb',
+        text: '采集生命草药',
+        effects: [{ type: 'hp', value: 30 }],
+        consequences: {
+          tags: ['herb_knowledge'],
+          companionAffinity: [
+            { companionId: 'holy_priest', value: 3 },
+          ],
+        },
+      },
+      {
+        id: 'mp_herb',
+        text: '采集魔力草药',
+        effects: [{ type: 'mp', value: 25 }],
+        consequences: {
+          tags: ['herb_knowledge'],
+          companionAffinity: [
+            { companionId: 'dark_mage', value: 3 },
+            { companionId: 'ruins_scholar', value: 3 },
+          ],
+        },
+      },
+      {
+        id: 'luck_herb',
+        text: '采集幸运草药',
+        effects: [{ type: 'gold', value: 30 }],
+        consequences: {
+          tags: ['lucky_charm'],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '花园祝福', description: '草药花园的祝福提升了森林区域的幸运', effect: { stat: 'luck', value: 1 } },
+          ],
+        },
+      },
     ],
   },
   {
     id: 'old_sage',
     title: '神秘老者',
     description: '一位白胡子老者看起来想要传授你一些东西...',
+    baseWeight: 1.0,
     choices: [
-      { id: 'attack_train', text: '学习攻击技巧', effects: [{ type: 'attack', value: 2 }] },
-      { id: 'defense_train', text: '学习防御技巧', effects: [{ type: 'defense', value: 2 }] },
-      { id: 'soul', text: '赠送魂珠', effects: [{ type: 'soulOrbs', value: 1 }] },
+      {
+        id: 'attack_train',
+        text: '学习攻击技巧',
+        effects: [{ type: 'attack', value: 2 }],
+        consequences: {
+          tags: ['combat_training'],
+          companionAffinity: [
+            { companionId: 'novice_warrior', value: 5 },
+            { companionId: 'volcano_warrior', value: 5 },
+          ],
+          eventWeights: [
+            { eventId: 'dungeon_entrance', delta: 0.4, reason: '战斗技巧提升了探索信心' },
+          ],
+        },
+      },
+      {
+        id: 'defense_train',
+        text: '学习防御技巧',
+        effects: [{ type: 'defense', value: 2 }],
+        consequences: {
+          tags: ['defense_training'],
+          companionAffinity: [
+            { companionId: 'dwarf_blacksmith', value: 5 },
+          ],
+        },
+      },
+      {
+        id: 'soul',
+        text: '赠送魂珠',
+        effects: [{ type: 'soulOrbs', value: 1 }],
+        consequences: {
+          tags: ['sage_blessing', 'spiritual'],
+          companionAffinity: [
+            { companionId: 'holy_priest', value: 8 },
+            { companionId: 'dark_mage', value: 3 },
+          ],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'blessing', name: '智者祝福', description: '老者的祝福使遗迹区域更加安全', effect: { stat: 'defense', value: 2 } },
+          ],
+          eventWeights: [
+            { eventId: 'ruins_guardian', delta: 0.5, reason: '老者推荐你前往遗迹' },
+          ],
+        },
+      },
     ],
   },
   {
     id: 'dungeon_entrance',
     title: '地牢入口',
     description: '你发现了一个神秘的地牢入口，里面似乎有宝藏...',
+    baseWeight: 0.8,
     choices: [
-      { id: 'enter', text: '进入探索', effects: [{ type: 'gold', value: 200 }, { type: 'hp', value: -50 }] },
-      { id: 'train', text: '在地牢门口修炼', effects: [{ type: 'exp', value: 100 }] },
-      { id: 'leave', text: '太危险了，离开', effects: [] },
+      {
+        id: 'enter',
+        text: '进入探索',
+        effects: [{ type: 'gold', value: 200 }, { type: 'hp', value: -50 }],
+        consequences: {
+          tags: ['dungeon_explored', 'brave'],
+          companionAffinity: [
+            { companionId: 'cave_explorer', value: 10 },
+            { companionId: 'forest_ranger', value: -3 },
+          ],
+          mapModifiers: [
+            { areaId: 'cave', type: 'hiddenPath', name: '地牢暗道', description: '发现了通往洞穴深处的暗道', effect: { stat: 'speed', value: 1 } },
+          ],
+          eventWeights: [
+            { eventId: 'cave_dwarf_clan', delta: 0.5, reason: '地牢探索与矮人氏族产生了联系' },
+            { eventId: 'treasure_chest', delta: 0.3, reason: '探索者更容易发现宝箱' },
+          ],
+        },
+      },
+      {
+        id: 'train',
+        text: '在地牢门口修炼',
+        effects: [{ type: 'exp', value: 100 }],
+        consequences: {
+          tags: ['patient'],
+          companionAffinity: [
+            { companionId: 'ruins_scholar', value: 5 },
+          ],
+        },
+      },
+      {
+        id: 'leave',
+        text: '太危险了，离开',
+        effects: [],
+        consequences: {
+          tags: ['cautious'],
+          companionAffinity: [
+            { companionId: 'forest_ranger', value: 3 },
+          ],
+          eventWeights: [
+            { eventId: 'dungeon_entrance', delta: -0.3, reason: '胆怯使你回避地牢' },
+          ],
+        },
+      },
     ],
   },
   {
@@ -341,10 +514,56 @@ export const RANDOM_EVENTS: GameEvent[] = [
     description: '森林深处传来美妙的歌声，一位精灵向你招手...',
     areaId: 'forest',
     minReputationLevel: 1,
+    baseWeight: 1.2,
     choices: [
-      { id: 'follow', text: '跟随精灵', effects: [{ type: 'exp', value: 120 }, { type: 'reputation', value: 30 }] },
-      { id: 'gift', text: '赠送金币', effects: [{ type: 'gold', value: -50 }, { type: 'reputation', value: 50 }] },
-      { id: 'decline', text: '婉言谢绝', effects: [{ type: 'exp', value: 30 }] },
+      {
+        id: 'follow',
+        text: '跟随精灵',
+        effects: [{ type: 'exp', value: 120 }, { type: 'reputation', value: 30 }],
+        consequences: {
+          tags: ['spirit_friend', 'forest_ally'],
+          companionAffinity: [
+            { companionId: 'forest_archer', value: 8 },
+            { companionId: 'forest_ranger', value: 8 },
+          ],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '精灵庇护', description: '精灵的庇护使森林更加安全', effect: { stat: 'luck', value: 2 } },
+          ],
+          eventWeights: [
+            { eventId: 'herb_garden', delta: 0.5, reason: '精灵指路发现了草药花园' },
+            { eventId: 'forest_spirit', delta: 0.3, reason: '精灵愿意再次相见' },
+          ],
+        },
+      },
+      {
+        id: 'gift',
+        text: '赠送金币',
+        effects: [{ type: 'gold', value: -50 }, { type: 'reputation', value: 50 }],
+        consequences: {
+          tags: ['generous', 'forest_ally'],
+          companionAffinity: [
+            { companionId: 'forest_archer', value: 5 },
+          ],
+          mapModifiers: [
+            { areaId: 'forest', type: 'blessing', name: '慷慨之恩', description: '慷慨赢得了森林居民的信任', effect: { stat: 'gold', value: 3 } },
+          ],
+        },
+      },
+      {
+        id: 'decline',
+        text: '婉言谢绝',
+        effects: [{ type: 'exp', value: 30 }],
+        consequences: {
+          tags: ['forest_declined'],
+          companionAffinity: [
+            { companionId: 'forest_archer', value: -5 },
+            { companionId: 'forest_ranger', value: -3 },
+          ],
+          eventWeights: [
+            { eventId: 'forest_spirit', delta: -0.5, reason: '精灵对你感到失望' },
+          ],
+        },
+      },
     ],
   },
   {
@@ -353,10 +572,53 @@ export const RANDOM_EVENTS: GameEvent[] = [
     description: '你遇到了一支友善的矮人氏族，他们似乎对你的到来感到高兴...',
     areaId: 'cave',
     minReputationLevel: 2,
+    baseWeight: 1.2,
     choices: [
-      { id: 'trade', text: '交换物资', effects: [{ type: 'gold', value: 150 }, { type: 'reputation', value: 40 }] },
-      { id: 'forge', text: '请求锻造', effects: [{ type: 'attack', value: 3 }, { type: 'defense', value: 3 }, { type: 'reputation', value: 20 }] },
-      { id: 'feast', text: '参加宴会', effects: [{ type: 'hp', value: 100 }, { type: 'reputation', value: 35 }] },
+      {
+        id: 'trade',
+        text: '交换物资',
+        effects: [{ type: 'gold', value: 150 }, { type: 'reputation', value: 40 }],
+        consequences: {
+          tags: ['dwarf_ally', 'trade_master'],
+          companionAffinity: [
+            { companionId: 'dwarf_blacksmith', value: 8 },
+            { companionId: 'cave_explorer', value: 5 },
+          ],
+          mapModifiers: [
+            { areaId: 'cave', type: 'blessing', name: '矮人贸易', description: '与矮人的贸易使洞穴资源更丰富', effect: { stat: 'gold', value: 5 } },
+          ],
+        },
+      },
+      {
+        id: 'forge',
+        text: '请求锻造',
+        effects: [{ type: 'attack', value: 3 }, { type: 'defense', value: 3 }, { type: 'reputation', value: 20 }],
+        consequences: {
+          tags: ['dwarf_ally', 'forged_weapon'],
+          companionAffinity: [
+            { companionId: 'dwarf_blacksmith', value: 12 },
+            { companionId: 'novice_warrior', value: 5 },
+          ],
+          eventWeights: [
+            { eventId: 'cave_dwarf_clan', delta: 0.4, reason: '矮人对你的锻造请求感到满意' },
+          ],
+        },
+      },
+      {
+        id: 'feast',
+        text: '参加宴会',
+        effects: [{ type: 'hp', value: 100 }, { type: 'reputation', value: 35 }],
+        consequences: {
+          tags: ['dwarf_ally', 'feast_hero'],
+          companionAffinity: [
+            { companionId: 'cave_explorer', value: 8 },
+            { companionId: 'dwarf_blacksmith', value: 5 },
+          ],
+          mapModifiers: [
+            { areaId: 'cave', type: 'blessing', name: '宴会余温', description: '矮人宴会的祝福提升了洞穴区域的恢复力', effect: { stat: 'hp', value: 5 } },
+          ],
+        },
+      },
     ],
   },
   {
@@ -365,10 +627,61 @@ export const RANDOM_EVENTS: GameEvent[] = [
     description: '一个古老的守护者苏醒了，它在审视你的灵魂...',
     areaId: 'ruins',
     minReputationLevel: 3,
+    baseWeight: 1.0,
+    requiredTags: ['spiritual', 'brave'],
     choices: [
-      { id: 'challenge', text: '发起挑战', effects: [{ type: 'exp', value: 300 }, { type: 'hp', value: -80 }, { type: 'reputation', value: 60 }] },
-      { id: 'pray', text: '虔诚祈祷', effects: [{ type: 'soulOrbs', value: 2 }, { type: 'reputation', value: 40 }] },
-      { id: 'study', text: '学习古文', effects: [{ type: 'attack', value: 5 }, { type: 'reputation', value: 30 }] },
+      {
+        id: 'challenge',
+        text: '发起挑战',
+        effects: [{ type: 'exp', value: 300 }, { type: 'hp', value: -80 }, { type: 'reputation', value: 60 }],
+        consequences: {
+          tags: ['guardian_challenger', 'brave'],
+          companionAffinity: [
+            { companionId: 'dragon_knight', value: 10 },
+            { companionId: 'volcano_warrior', value: 8 },
+            { companionId: 'holy_priest', value: -5 },
+          ],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'hazard', name: '守护者之怒', description: '挑战守护者激怒了遗迹中的力量', effect: { stat: 'hp', value: -3 } },
+          ],
+          eventWeights: [
+            { eventId: 'volcano_dragon', delta: 0.5, reason: '挑战守护者的勇气传到了火龙耳中' },
+          ],
+        },
+      },
+      {
+        id: 'pray',
+        text: '虔诚祈祷',
+        effects: [{ type: 'soulOrbs', value: 2 }, { type: 'reputation', value: 40 }],
+        consequences: {
+          tags: ['guardian_blessed', 'spiritual'],
+          companionAffinity: [
+            { companionId: 'holy_priest', value: 12 },
+            { companionId: 'dark_mage', value: -3 },
+          ],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'blessing', name: '守护者庇佑', description: '守护者赐予了遗迹的祝福', effect: { stat: 'defense', value: 3 } },
+          ],
+          eventWeights: [
+            { eventId: 'old_sage', delta: 0.4, reason: '守护者认可了你的虔诚' },
+          ],
+        },
+      },
+      {
+        id: 'study',
+        text: '学习古文',
+        effects: [{ type: 'attack', value: 5 }, { type: 'reputation', value: 30 }],
+        consequences: {
+          tags: ['ancient_knowledge', 'scholarly'],
+          companionAffinity: [
+            { companionId: 'ruins_scholar', value: 10 },
+            { companionId: 'dark_mage', value: 8 },
+          ],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'hiddenPath', name: '古文密道', description: '解读古文发现了隐藏通道', effect: { stat: 'speed', value: 2 } },
+          ],
+        },
+      },
     ],
   },
   {
@@ -377,10 +690,64 @@ export const RANDOM_EVENTS: GameEvent[] = [
     description: '一条年迈的火龙向你发起试炼邀请，通过将获得极大力量...',
     areaId: 'volcano',
     minReputationLevel: 4,
+    baseWeight: 0.6,
+    requiredTags: ['brave'],
     choices: [
-      { id: 'accept', text: '接受试炼', effects: [{ type: 'attack', value: 8 }, { type: 'hp', value: -120 }, { type: 'reputation', value: 80 }] },
-      { id: 'offer', text: '献上贡品', effects: [{ type: 'gold', value: -500 }, { type: 'soulOrbs', value: 3 }, { type: 'reputation', value: 50 }] },
-      { id: 'flee', text: '选择离开', effects: [{ type: 'reputation', value: -20 }] },
+      {
+        id: 'accept',
+        text: '接受试炼',
+        effects: [{ type: 'attack', value: 8 }, { type: 'hp', value: -120 }, { type: 'reputation', value: 80 }],
+        consequences: {
+          tags: ['dragon_trial_passed', 'brave', 'dragon_friend'],
+          companionAffinity: [
+            { companionId: 'dragon_knight', value: 15 },
+            { companionId: 'volcano_warrior', value: 12 },
+            { companionId: 'holy_priest', value: -8 },
+          ],
+          mapModifiers: [
+            { areaId: 'volcano', type: 'blessing', name: '龙焰淬炼', description: '火龙试炼的火焰淬炼了你的身躯', effect: { stat: 'attack', value: 5 } },
+            { areaId: 'ruins', type: 'cursed', name: '龙威压迫', description: '火龙的威压使遗迹区域变得不安', effect: { stat: 'luck', value: -2 } },
+          ],
+          eventWeights: [
+            { eventId: 'volcano_dragon', delta: -0.3, reason: '试炼已通过' },
+            { eventId: 'treasure_chest', delta: 0.5, reason: '龙族盟友带来财富线索' },
+          ],
+        },
+      },
+      {
+        id: 'offer',
+        text: '献上贡品',
+        effects: [{ type: 'gold', value: -500 }, { type: 'soulOrbs', value: 3 }, { type: 'reputation', value: 50 }],
+        consequences: {
+          tags: ['dragon_tribute', 'dragon_friend'],
+          companionAffinity: [
+            { companionId: 'dragon_knight', value: 8 },
+            { companionId: 'volcano_warrior', value: 5 },
+          ],
+          mapModifiers: [
+            { areaId: 'volcano', type: 'blessing', name: '龙之赏赐', description: '火龙接受了贡品并赐予庇护', effect: { stat: 'defense', value: 4 } },
+          ],
+        },
+      },
+      {
+        id: 'flee',
+        text: '选择离开',
+        effects: [{ type: 'reputation', value: -20 }],
+        consequences: {
+          tags: ['dragon_offended', 'coward'],
+          companionAffinity: [
+            { companionId: 'dragon_knight', value: -15 },
+            { companionId: 'volcano_warrior', value: -10 },
+            { companionId: 'forest_ranger', value: 3 },
+          ],
+          mapModifiers: [
+            { areaId: 'volcano', type: 'hazard', name: '龙怒', description: '火龙因你的逃避而愤怒，火山区域更加危险', effect: { stat: 'hp', value: -5 } },
+          ],
+          eventWeights: [
+            { eventId: 'volcano_dragon', delta: -0.8, reason: '火龙不再信任你' },
+          ],
+        },
+      },
     ],
   },
 ];
