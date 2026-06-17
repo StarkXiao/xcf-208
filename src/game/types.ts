@@ -22,6 +22,8 @@ export interface Player {
   skillPoints: number;
   rebirthCount: number;
   totalRebirthBonus: number;
+  talentPoints: number;
+  inheritedTalents: TalentNode[];
 }
 
 export interface Companion {
@@ -229,7 +231,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -334,3 +336,52 @@ export const MAP_MODIFIER_ICONS: Record<MapModifierType, string> = {
   locked: '🔒',
   cursed: '💀',
 };
+
+export type TalentCategory = 'combat' | 'survival' | 'growth' | 'fortune' | 'class_special' | 'race_special';
+export type TalentRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export interface TalentEffect {
+  type: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs' | 'critRate' | 'critDamage' | 'dodge';
+  value: number;
+  isPercent: boolean;
+}
+
+export interface Talent {
+  id: string;
+  name: string;
+  description: string;
+  category: TalentCategory;
+  rarity: TalentRarity;
+  maxLevel: number;
+  baseCost: number;
+  costMultiplier: number;
+  effects: TalentEffect[];
+  classRestriction?: string[];
+  raceRestriction?: string[];
+  requiredRebirthCount?: number;
+  prerequisiteTalentIds?: string[];
+  icon: string;
+}
+
+export interface TalentNode {
+  talentId: string;
+  currentLevel: number;
+}
+
+export interface TalentTree {
+  id: TalentCategory;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export type TalentSynergyType = 'warrior_path' | 'mage_path' | 'rogue_path' | 'holy_path' | 'nature_path' | 'dragon_path';
+
+export interface TalentSynergy {
+  id: TalentSynergyType;
+  name: string;
+  description: string;
+  requiredTalentIds: string[];
+  effects: TalentEffect[];
+  icon: string;
+}

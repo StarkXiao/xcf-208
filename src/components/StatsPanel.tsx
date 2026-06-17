@@ -38,7 +38,7 @@ function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }:
 }
 
 export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus } = useGameStore();
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, getTotalTalentBonus, getActiveSynergies } = useGameStore();
   const { stats, skillPoints } = player;
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;
@@ -46,6 +46,30 @@ export default function StatsPanel() {
   const attackBonus = rebirthBonuses['attack_boost'] || 0;
   const defenseBonus = rebirthBonuses['defense_boost'] || 0;
   const hpBonus = rebirthBonuses['hp_boost'] || 0;
+
+  const talentAtkBonus = getTotalTalentBonus('attack');
+  const talentDefBonus = getTotalTalentBonus('defense');
+  const talentHpBonus = getTotalTalentBonus('hp');
+  const talentExpBonus = getTotalTalentBonus('exp');
+  const talentGoldBonus = getTotalTalentBonus('gold');
+  const talentCritRate = getTotalTalentBonus('critRate');
+  const talentCritDamage = getTotalTalentBonus('critDamage');
+  const talentDodge = getTotalTalentBonus('dodge');
+  const talentLuck = getTotalTalentBonus('luck');
+  const talentSpeed = getTotalTalentBonus('speed');
+  const talentMp = getTotalTalentBonus('mp');
+  const talentSoulOrbs = getTotalTalentBonus('soulOrbs');
+  const activeSynergies = getActiveSynergies();
+
+  const hasAnyTalentBonus = talentAtkBonus.percent > 0 || talentAtkBonus.flat > 0 ||
+    talentDefBonus.percent > 0 || talentDefBonus.flat > 0 ||
+    talentHpBonus.percent > 0 || talentHpBonus.flat > 0 ||
+    talentExpBonus.percent > 0 || talentGoldBonus.percent > 0 ||
+    talentCritRate.percent > 0 || talentCritDamage.percent > 0 ||
+    talentDodge.percent > 0 || talentLuck.flat > 0 ||
+    talentSpeed.percent > 0 || talentSpeed.flat > 0 ||
+    talentMp.percent > 0 || talentMp.flat > 0 ||
+    talentSoulOrbs.percent > 0;
 
   const formationCompanions = getFormationCompanions();
   const bondBonus = getBondBonus();
@@ -137,6 +161,62 @@ export default function StatsPanel() {
             {hpBonus > 0 && <div className="bonus-item">生命 +{(hpBonus * 100).toFixed(0)}%</div>}
             {expBonus > 0 && <div className="bonus-item">经验 +{(expBonus * 100).toFixed(0)}%</div>}
             {goldBonus > 0 && <div className="bonus-item">金币 +{(goldBonus * 100).toFixed(0)}%</div>}
+          </div>
+        </div>
+      )}
+
+      {hasAnyTalentBonus && (
+        <div className="talent-bonus-section">
+          <h4>🌟 天赋加成</h4>
+          <div className="bonus-list">
+            {(talentAtkBonus.percent > 0 || talentAtkBonus.flat > 0) && (
+              <div className="bonus-item">
+                攻击 {talentAtkBonus.percent > 0 ? `+${(talentAtkBonus.percent * 100).toFixed(0)}%` : ''}
+                {talentAtkBonus.flat > 0 ? ` +${talentAtkBonus.flat}` : ''}
+              </div>
+            )}
+            {(talentDefBonus.percent > 0 || talentDefBonus.flat > 0) && (
+              <div className="bonus-item">
+                防御 {talentDefBonus.percent > 0 ? `+${(talentDefBonus.percent * 100).toFixed(0)}%` : ''}
+                {talentDefBonus.flat > 0 ? ` +${talentDefBonus.flat}` : ''}
+              </div>
+            )}
+            {(talentHpBonus.percent > 0 || talentHpBonus.flat > 0) && (
+              <div className="bonus-item">
+                生命 {talentHpBonus.percent > 0 ? `+${(talentHpBonus.percent * 100).toFixed(0)}%` : ''}
+                {talentHpBonus.flat > 0 ? ` +${talentHpBonus.flat}` : ''}
+              </div>
+            )}
+            {(talentMp.percent > 0 || talentMp.flat > 0) && (
+              <div className="bonus-item">
+                魔力 {talentMp.percent > 0 ? `+${(talentMp.percent * 100).toFixed(0)}%` : ''}
+                {talentMp.flat > 0 ? ` +${talentMp.flat}` : ''}
+              </div>
+            )}
+            {(talentSpeed.percent > 0 || talentSpeed.flat > 0) && (
+              <div className="bonus-item">
+                速度 {talentSpeed.percent > 0 ? `+${(talentSpeed.percent * 100).toFixed(0)}%` : ''}
+                {talentSpeed.flat > 0 ? ` +${talentSpeed.flat}` : ''}
+              </div>
+            )}
+            {talentLuck.flat > 0 && <div className="bonus-item">幸运 +{talentLuck.flat}</div>}
+            {talentExpBonus.percent > 0 && <div className="bonus-item">经验 +{(talentExpBonus.percent * 100).toFixed(0)}%</div>}
+            {talentGoldBonus.percent > 0 && <div className="bonus-item">金币 +{(talentGoldBonus.percent * 100).toFixed(0)}%</div>}
+            {talentSoulOrbs.percent > 0 && <div className="bonus-item">魂珠获取 +{(talentSoulOrbs.percent * 100).toFixed(0)}%</div>}
+            {talentCritRate.percent > 0 && <div className="bonus-item">暴击率 +{(talentCritRate.percent * 100).toFixed(1)}%</div>}
+            {talentCritDamage.percent > 0 && <div className="bonus-item">暴击伤害 +{(talentCritDamage.percent * 100).toFixed(0)}%</div>}
+            {talentDodge.percent > 0 && <div className="bonus-item">闪避率 +{(talentDodge.percent * 100).toFixed(1)}%</div>}
+          </div>
+        </div>
+      )}
+
+      {activeSynergies.length > 0 && (
+        <div className="synergy-section">
+          <h4>🔗 天赋协同</h4>
+          <div className="bonus-list">
+            {activeSynergies.map((id) => (
+              <div key={id} className="synergy-item">已激活</div>
+            ))}
           </div>
         </div>
       )}

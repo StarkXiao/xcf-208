@@ -37,7 +37,13 @@ import {
   FORMATION_SLOT_CONFIG,
   SKILLS,
   MONSTER_PHASES,
+  TALENTS,
+  TALENT_SYNERGIES,
 } from './data';
+import type {
+  Talent,
+  TalentEffect,
+} from './types';
 
 interface GameState {
   screen: GameScreen;
@@ -157,6 +163,19 @@ interface GameState {
   getMonsterPhaseMultipliers: () => { attack: number; defense: number; speed: number };
   updateMonsterPhase: () => void;
   getMonsterPhases: () => MonsterPhase[];
+
+  getTalentLevel: (talentId: string) => number;
+  getTalentCost: (talent: Talent, currentLevel: number) => number;
+  upgradeTalent: (talentId: string) => boolean;
+  canUpgradeTalent: (talent: Talent) => boolean;
+  isTalentUnlocked: (talent: Talent) => boolean;
+  getTalentBonus: (type: TalentEffect['type']) => number;
+  getTalentBonusFlat: (type: TalentEffect['type']) => number;
+  getActiveSynergies: () => string[];
+  getSynergyBonus: (type: TalentEffect['type']) => number;
+  getSynergyBonusFlat: (type: TalentEffect['type']) => number;
+  getTotalTalentBonus: (type: TalentEffect['type']) => { percent: number; flat: number };
+  resetTalents: () => boolean;
 }
 
 let logIdCounter = 0;
@@ -222,6 +241,8 @@ export const useGameStore = create<GameState>()(
         skillPoints: 0,
         rebirthCount: 0,
         totalRebirthBonus: 0,
+        talentPoints: 0,
+        inheritedTalents: [],
       },
       ownedCompanions: [],
       formation: initFormation(1),
@@ -254,12 +275,28 @@ export const useGameStore = create<GameState>()(
         const defenseBonus = state.rebirthBonuses['defense_boost'] || 0;
         const hpBonus = state.rebirthBonuses['hp_boost'] || 0;
 
+        const talentAtkPct = get().getTotalTalentBonus('attack').percent;
+        const talentAtkFlat = get().getTotalTalentBonus('attack').flat;
+        const talentDefPct = get().getTotalTalentBonus('defense').percent;
+        const talentDefFlat = get().getTotalTalentBonus('defense').flat;
+        const talentHpPct = get().getTotalTalentBonus('hp').percent;
+        const talentHpFlat = get().getTotalTalentBonus('hp').flat;
+        const talentMpPct = get().getTotalTalentBonus('mp').percent;
+        const talentMpFlat = get().getTotalTalentBonus('mp').flat;
+        const talentSpdPct = get().getTotalTalentBonus('speed').percent;
+        const talentSpdFlat = get().getTotalTalentBonus('speed').flat;
+        const talentLckFlat = get().getTotalTalentBonus('luck').flat;
+
         const newStats = {
           ...baseStats,
-          attack: Math.floor(baseStats.attack * (1 + attackBonus + rebirthBonus * 0.01)),
-          defense: Math.floor(baseStats.defense * (1 + defenseBonus + rebirthBonus * 0.01)),
-          maxHp: Math.floor(baseStats.maxHp * (1 + hpBonus + rebirthBonus * 0.01)),
-          hp: Math.floor(baseStats.maxHp * (1 + hpBonus + rebirthBonus * 0.01)),
+          attack: Math.floor((baseStats.attack + talentAtkFlat) * (1 + attackBonus + rebirthBonus * 0.01 + talentAtkPct)),
+          defense: Math.floor((baseStats.defense + talentDefFlat) * (1 + defenseBonus + rebirthBonus * 0.01 + talentDefPct)),
+          maxHp: Math.floor((baseStats.maxHp + talentHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct)),
+          hp: Math.floor((baseStats.maxHp + talentHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct)),
+          maxMp: Math.floor((baseStats.maxMp + talentMpFlat) * (1 + talentMpPct)),
+          mp: Math.floor((baseStats.maxMp + talentMpFlat) * (1 + talentMpPct)),
+          speed: Math.floor((baseStats.speed + talentSpdFlat) * (1 + talentSpdPct)),
+          luck: baseStats.luck + talentLckFlat,
         };
 
         set({
@@ -275,6 +312,13 @@ export const useGameStore = create<GameState>()(
         });
 
         get().addBattleLog(`${name} 作为 ${race} ${playerClass} 降临到了异世界！`, 'system');
+        const activeSynergies = get().getActiveSynergies();
+        if (activeSynergies.length > 0) {
+          get().addBattleLog(
+            `🔗 激活天赋协同：${activeSynergies.map((id) => TALENT_SYNERGIES.find((s) => s.id === id)?.name).join('、')}`,
+            'system'
+          );
+        }
       },
 
       addExp: (amount) => {
@@ -848,6 +892,9 @@ export const useGameStore = create<GameState>()(
           };
         });
 
+        const newRebirthCount = state.player.rebirthCount + 1;
+        const bonusTalentPoints = newRebirthCount >= 1 ? 1 + Math.floor(newRebirthCount / 2) : 0;
+
         set({
           screen: 'rebirth',
           player: {
@@ -856,8 +903,9 @@ export const useGameStore = create<GameState>()(
             race: '',
             class: '',
             stats: { ...INITIAL_STATS, soulOrbs: state.player.stats.soulOrbs - totalCost },
-            rebirthCount: state.player.rebirthCount + 1,
+            rebirthCount: newRebirthCount,
             totalRebirthBonus: state.player.totalRebirthBonus + bonusIds.length,
+            talentPoints: state.player.talentPoints + bonusTalentPoints,
           },
           ownedCompanions: [],
           formation: initFormation(1),
@@ -979,13 +1027,15 @@ export const useGameStore = create<GameState>()(
       calculateGoldBonus: () => {
         const state = get();
         const mapModifierBonus = get().getMapModifierTotalBonus('gold') * 0.01;
-        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus;
+        const talentBonus = get().getTotalTalentBonus('gold').percent;
+        return 1 + (state.rebirthBonuses['gold_boost'] || 0) + mapModifierBonus + talentBonus;
       },
 
       calculateExpBonus: () => {
         const state = get();
         const mapModifierBonus = get().getMapModifierTotalBonus('exp') * 0.01;
-        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus;
+        const talentBonus = get().getTotalTalentBonus('exp').percent;
+        return 1 + (state.rebirthBonuses['exp_boost'] || 0) + mapModifierBonus + talentBonus;
       },
 
       getTotalAttack: () => {
@@ -1526,7 +1576,9 @@ export const useGameStore = create<GameState>()(
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('speed');
         const rebirthBonus = state.rebirthBonuses['speed_boost'] || 0;
-        return Math.floor((baseSpeed + bondBonus.speed + mapModifierBonus) * (1 + rebirthBonus));
+        const talentPct = get().getTotalTalentBonus('speed').percent;
+        const talentFlat = get().getTotalTalentBonus('speed').flat;
+        return Math.floor((baseSpeed + bondBonus.speed + mapModifierBonus + talentFlat) * (1 + rebirthBonus + talentPct));
       },
 
       useMp: (amount) => {
@@ -1601,10 +1653,218 @@ export const useGameStore = create<GameState>()(
           get().addBattleLog(`⚠️ ${state.currentMonster.name} 进入 ${phase.name} 阶段！${phase.description}`, 'phase');
         }
       },
+
+      getTalentLevel: (talentId) => {
+        const state = get();
+        const node = state.player.inheritedTalents.find((t) => t.talentId === talentId);
+        return node?.currentLevel || 0;
+      },
+
+      getTalentCost: (talent, currentLevel) => {
+        return Math.ceil(talent.baseCost * Math.pow(talent.costMultiplier, currentLevel));
+      },
+
+      isTalentUnlocked: (talent) => {
+        const state = get();
+        if (talent.requiredRebirthCount && state.player.rebirthCount < talent.requiredRebirthCount) {
+          return false;
+        }
+        if (talent.classRestriction && talent.classRestriction.length > 0 && state.player.class) {
+          if (!talent.classRestriction.includes(state.player.class)) {
+            return false;
+          }
+        }
+        if (talent.raceRestriction && talent.raceRestriction.length > 0 && state.player.race) {
+          if (!talent.raceRestriction.includes(state.player.race)) {
+            return false;
+          }
+        }
+        if (talent.prerequisiteTalentIds && talent.prerequisiteTalentIds.length > 0) {
+          for (const prereqId of talent.prerequisiteTalentIds) {
+            const prereq = TALENTS.find((t) => t.id === prereqId);
+            if (!prereq) continue;
+            const prereqLevel = get().getTalentLevel(prereqId);
+            if (prereqLevel < prereq.maxLevel) {
+              return false;
+            }
+          }
+        }
+        return true;
+      },
+
+      canUpgradeTalent: (talent) => {
+        const state = get();
+        const currentLevel = get().getTalentLevel(talent.id);
+        if (currentLevel >= talent.maxLevel) return false;
+        if (!get().isTalentUnlocked(talent)) return false;
+        const cost = get().getTalentCost(talent, currentLevel);
+        return state.player.stats.soulOrbs >= cost;
+      },
+
+      upgradeTalent: (talentId) => {
+        const talent = TALENTS.find((t) => t.id === talentId);
+        if (!talent) return false;
+
+        const currentLevel = get().getTalentLevel(talentId);
+        if (!get().canUpgradeTalent(talent)) return false;
+
+        const cost = get().getTalentCost(talent, currentLevel);
+
+        set((state) => {
+          const newTalents = [...state.player.inheritedTalents];
+          const existingIndex = newTalents.findIndex((t) => t.talentId === talentId);
+          if (existingIndex >= 0) {
+            newTalents[existingIndex] = {
+              ...newTalents[existingIndex],
+              currentLevel: newTalents[existingIndex].currentLevel + 1,
+            };
+          } else {
+            newTalents.push({ talentId, currentLevel: 1 });
+          }
+
+          let extraTalentPoints = 0;
+          if (talentId === 'race_human_wisdom') {
+            extraTalentPoints = 3;
+          }
+
+          return {
+            player: {
+              ...state.player,
+              stats: {
+                ...state.player.stats,
+                soulOrbs: state.player.stats.soulOrbs - cost,
+              },
+              inheritedTalents: newTalents,
+              talentPoints: state.player.talentPoints + extraTalentPoints,
+            },
+          };
+        });
+
+        get().addBattleLog(
+          `🌟 天赋 ${talent.name} 升至 ${currentLevel + 1} 级！消耗 ${cost} 魂珠`,
+          'system'
+        );
+        return true;
+      },
+
+      getTalentBonus: (type) => {
+        const state = get();
+        let total = 0;
+        for (const node of state.player.inheritedTalents) {
+          const talent = TALENTS.find((t) => t.id === node.talentId);
+          if (!talent) continue;
+          for (const effect of talent.effects) {
+            if (effect.type === type && effect.isPercent) {
+              total += effect.value * node.currentLevel;
+            }
+          }
+        }
+        return total;
+      },
+
+      getTalentBonusFlat: (type) => {
+        const state = get();
+        let total = 0;
+        for (const node of state.player.inheritedTalents) {
+          const talent = TALENTS.find((t) => t.id === node.talentId);
+          if (!talent) continue;
+          for (const effect of talent.effects) {
+            if (effect.type === type && !effect.isPercent) {
+              total += effect.value * node.currentLevel;
+            }
+          }
+        }
+        return total;
+      },
+
+      getActiveSynergies: () => {
+        const activeIds: string[] = [];
+        for (const synergy of TALENT_SYNERGIES) {
+          const allActive = synergy.requiredTalentIds.every((tid) => {
+            const talent = TALENTS.find((t) => t.id === tid);
+            if (!talent) return false;
+            const level = get().getTalentLevel(tid);
+            return level >= 1;
+          });
+          if (allActive) {
+            activeIds.push(synergy.id);
+          }
+        }
+        return activeIds;
+      },
+
+      getSynergyBonus: (type) => {
+        let total = 0;
+        const activeSynergies = get().getActiveSynergies();
+        for (const synergyId of activeSynergies) {
+          const synergy = TALENT_SYNERGIES.find((s) => s.id === synergyId);
+          if (!synergy) continue;
+          for (const effect of synergy.effects) {
+            if (effect.type === type && effect.isPercent) {
+              total += effect.value;
+            }
+          }
+        }
+        return total;
+      },
+
+      getSynergyBonusFlat: (type) => {
+        let total = 0;
+        const activeSynergies = get().getActiveSynergies();
+        for (const synergyId of activeSynergies) {
+          const synergy = TALENT_SYNERGIES.find((s) => s.id === synergyId);
+          if (!synergy) continue;
+          for (const effect of synergy.effects) {
+            if (effect.type === type && !effect.isPercent) {
+              total += effect.value;
+            }
+          }
+        }
+        return total;
+      },
+
+      getTotalTalentBonus: (type) => {
+        return {
+          percent: get().getTalentBonus(type) + get().getSynergyBonus(type),
+          flat: get().getTalentBonusFlat(type) + get().getSynergyBonusFlat(type),
+        };
+      },
+
+      resetTalents: () => {
+        const state = get();
+        const totalCost = state.player.inheritedTalents.reduce((sum, node) => {
+          const talent = TALENTS.find((t) => t.id === node.talentId);
+          if (!talent) return sum;
+          let cost = 0;
+          for (let i = 0; i < node.currentLevel; i++) {
+            cost += get().getTalentCost(talent, i);
+          }
+          return sum + cost;
+        }, 0);
+        const refund = Math.floor(totalCost * 0.7);
+
+        set((state) => ({
+          player: {
+            ...state.player,
+            inheritedTalents: [],
+            talentPoints: 0,
+            stats: {
+              ...state.player.stats,
+              soulOrbs: state.player.stats.soulOrbs + refund,
+            },
+          },
+        }));
+
+        get().addBattleLog(
+          `🔄 天赋已重置，返还 ${refund} 魂珠（70%）`,
+          'system'
+        );
+        return true;
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 4,
+      version: 5,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -1627,6 +1887,18 @@ export const useGameStore = create<GameState>()(
           state.companionAffinities = [];
           state.mapAreaModifiers = [];
           state.eventWeightModifiers = [];
+        }
+        if (version < 5) {
+          const player = state.player as Player || {
+            name: '', race: '', class: '',
+            stats: { ...INITIAL_STATS },
+            skillPoints: 0, rebirthCount: 0, totalRebirthBonus: 0,
+          };
+          state.player = {
+            ...player,
+            talentPoints: 0,
+            inheritedTalents: [],
+          };
         }
         return state as unknown as GameState;
       },

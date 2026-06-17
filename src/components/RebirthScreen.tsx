@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import { RACES, CLASSES, REBIRTH_OPTIONS, REPUTATION_LEVELS } from '../game/data';
+import { RACES, CLASSES, REBIRTH_OPTIONS, REPUTATION_LEVELS, TALENTS } from '../game/data';
 
 export default function RebirthScreen() {
   const [name, setName] = useState('');
@@ -13,10 +13,15 @@ export default function RebirthScreen() {
     initializePlayer,
     areaReputations,
     mapAreas,
+    getActiveSynergies,
   } = useGameStore();
 
   const isRebirth = player.rebirthCount > 0;
   const preserveRatio = rebirthBonuses['reputation_preserve'] || 0;
+
+  const totalTalentLevels = player.inheritedTalents.reduce((sum, t) => sum + t.currentLevel, 0);
+  const activeTalentCount = player.inheritedTalents.filter((t) => t.currentLevel > 0).length;
+  const activeSynergies = getActiveSynergies();
 
   const handleStart = () => {
     if (!name.trim()) return;
@@ -35,6 +40,9 @@ export default function RebirthScreen() {
             <p>已转生次数：<span className="highlight">{player.rebirthCount}</span></p>
             <p>累计转生加成：<span className="highlight">+{player.totalRebirthBonus}%</span></p>
             <p>魂珠：<span className="highlight-soul">💎 {player.stats.soulOrbs}</span></p>
+            {player.talentPoints > 0 && (
+              <p>天赋点数：<span className="highlight">🌟 {player.talentPoints}</span></p>
+            )}
             {Object.keys(rebirthBonuses).length > 0 && (
               <div className="rebirth-bonus-summary">
                 <p className="bonus-summary-title">本次转生加成</p>
@@ -47,6 +55,24 @@ export default function RebirthScreen() {
                     </p>
                   );
                 })}
+              </div>
+            )}
+            {activeTalentCount > 0 && (
+              <div className="rebirth-bonus-summary">
+                <p className="bonus-summary-title">🌟 继承天赋 ({activeTalentCount}项，总等级 {totalTalentLevels})</p>
+                {player.inheritedTalents.map((node) => {
+                  if (node.currentLevel <= 0) return null;
+                  const talent = TALENTS.find((t) => t.id === node.talentId);
+                  if (!talent) return null;
+                  return (
+                    <p key={node.talentId} className="bonus-summary-item">
+                      {talent.icon} {talent.name}：Lv.{node.currentLevel}/{talent.maxLevel}
+                    </p>
+                  );
+                })}
+                {activeSynergies.length > 0 && (
+                  <p className="synergy-summary">🔗 激活协同：{activeSynergies.length}个</p>
+                )}
               </div>
             )}
             {areaReputations.some((r) => r.points > 0) && (

@@ -6,6 +6,7 @@ import CompanionsPanel from './CompanionsPanel';
 import EventModal from './EventModal';
 import OfflineRewardsModal from './OfflineRewardsModal';
 import ExpeditionPanel from './ExpeditionPanel';
+import TalentPanel from './TalentPanel';
 import { REBIRTH_OPTIONS, REPUTATION_LEVELS } from '../game/data';
 
 export default function GameScreen() {
@@ -45,6 +46,7 @@ export default function GameScreen() {
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
+    { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -88,6 +90,9 @@ export default function GameScreen() {
       }
     });
 
+    const newRebirthCount = player.rebirthCount + 1;
+    const bonusTalentPoints = newRebirthCount >= 1 ? 1 + Math.floor(newRebirthCount / 2) : 0;
+
     setShowRebirthModal(false);
     setSelectedRebirthBonuses([]);
     
@@ -99,8 +104,9 @@ export default function GameScreen() {
         race: '',
         class: '',
         stats: { ...state.player.stats, soulOrbs: remainingSoulOrbs },
-        rebirthCount: state.player.rebirthCount + 1,
+        rebirthCount: newRebirthCount,
         totalRebirthBonus: state.player.totalRebirthBonus + selectedRebirthBonuses.length,
+        talentPoints: state.player.talentPoints + bonusTalentPoints,
       },
       ownedCompanions: [],
       formation: { slots: useGameStore.getState().formation.slots.map((s) => ({ ...s, companionId: null })), activeBondIds: [] },
@@ -118,6 +124,8 @@ export default function GameScreen() {
         return <CompanionsPanel />;
       case 'expedition':
         return <ExpeditionPanel />;
+      case 'talents':
+        return <TalentPanel />;
       case 'events':
         return (
           <div className="rebirth-panel">
