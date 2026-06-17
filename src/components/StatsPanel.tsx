@@ -134,7 +134,7 @@ function StatBreakdownSection({
             <div className="power-source-section">
               <h5 className="power-source-title">🔄 转生增益</h5>
               <PowerBarRow
-                label={`转生加成 ($\{(component.rebirthPercent * 100).toFixed(0)}%)`}
+                label={`转生加成 (${(component.rebirthPercent * 100).toFixed(0)}%)`}
                 icon="✨"
                 value={component.rebirthValue}
                 maxValue={maxAbsValue}
@@ -144,7 +144,7 @@ function StatBreakdownSection({
             <div className="power-source-section">
               <h5 className="power-source-title">⚡ 临时效果</h5>
               <PowerBarRow
-                label={`天赋加成 ($\{(component.talentPercent * 100).toFixed(0)}%)`}
+                label={`天赋加成 (${(component.talentPercent * 100).toFixed(0)}%)`}
                 icon="🌟"
                 value={component.talentValue}
                 maxValue={maxAbsValue}
@@ -158,7 +158,7 @@ function StatBreakdownSection({
                 color="#06b6d4"
               />
               <PowerBarRow
-                label={`好感倍率 ($\{(component.affinityPercent * 100).toFixed(0)}%)`}
+                label={`好感倍率 (${(component.affinityPercent * 100).toFixed(0)}%)`}
                 icon="💛"
                 value={component.affinityValue}
                 maxValue={maxAbsValue}
