@@ -34,6 +34,8 @@ import type {
   CompanionShard,
   CompanionCodexEntry,
   RecruitPoolType,
+  ShopInventory,
+  ShopItem,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from './types';
 import {
@@ -75,6 +77,7 @@ interface GameState {
   isAutoBattle: boolean;
   areaReputations: AreaReputation[];
   purchasedShopItems: string[];
+  shopInventories: ShopInventory[];
   currentMonster: {
     id: string;
     name: string;
@@ -132,6 +135,11 @@ interface GameState {
   getDiscountedCost: (baseCost: number, areaId: string) => number;
   getDiscountedCompanionCost: (companion: Companion) => number;
   canRecruitCompanion: (companion: Companion) => boolean;
+  restockShop: (areaId: string, triggerType?: 'map_change' | 'event' | 'timer' | 'manual') => void;
+  getShopInventory: (areaId: string) => ShopInventory | undefined;
+  getItemStock: (itemId: string, areaId: string) => number;
+  getAvailableShopItems: (areaId: string) => ShopItem[];
+  shouldRestockShop: (areaId: string) => boolean;
 
   addCompanionStarExp: (companionId: string, exp: number) => void;
   getCompanionEffectiveAttack: (companion: Companion) => number;
@@ -253,6 +261,14 @@ function initAreaReputations(): AreaReputation[] {
   }));
 }
 
+function initShopInventories(): ShopInventory[] {
+  return MAP_AREAS.map((area) => ({
+    areaId: area.id,
+    items: [],
+    lastRestockTime: 0,
+  }));
+}
+
 function createEmptyLevelStats(): LevelStats {
   return {
     totalKills: 0,
@@ -351,8 +367,9 @@ export const useGameStore = create<GameState>()(
       totalPlayTime: 0,
       rebirthBonuses: {},
       isAutoBattle: false,
-      areaReputations: initAreaReputations(),
+          areaReputations: initAreaReputations(),
       purchasedShopItems: [],
+      shopInventories: initShopInventories(),
       currentMonster: null,
       activeExpedition: null,
       consequenceTags: [],
@@ -575,6 +592,10 @@ export const useGameStore = create<GameState>()(
             currentLevelStats: createEmptyLevelStats(),
           });
           get().addBattleLog(`来到了 ${area.name}`, 'system');
+          
+          if (get().shouldRestockShop(areaId)) {
+            get().restockShop(areaId, 'map_change');
+          }
         }
       },
 
@@ -997,6 +1018,15 @@ export const useGameStore = create<GameState>()(
         isGoodChoice = totalValue > 0;
         get().updateLevelStatsOnEvent(isGoodChoice);
 
+        if (Math.random() < 0.4) {
+          const currentAreaId = state.currentAreaId;
+          if (currentAreaId) {
+            setTimeout(() => {
+              get().restockShop(currentAreaId, 'event');
+            }, 500);
+          }
+        }
+
         set({ currentEvent: null });
       },
 
@@ -1055,6 +1085,7 @@ export const useGameStore = create<GameState>()(
           currentMonster: null,
           areaReputations: newReputations,
           purchasedShopItems: [],
+          shopInventories: initShopInventories(),
           consequenceTags: [],
           companionAffinities: [],
           mapAreaModifiers: [],
@@ -1336,6 +1367,10 @@ export const useGameStore = create<GameState>()(
         const repLevel = get().getAreaReputationLevel(item.areaId);
         if (repLevel < item.minReputationLevel) return false;
 
+        const stock = get().getItemStock(itemId, item.areaId);
+        const inventory = get().getShopInventory(item.areaId);
+        if (inventory && inventory.items.length > 0 && stock <= 0) return false;
+
         const discountedCost = get().getDiscountedCost(item.baseCost, item.areaId);
 
         if (item.currency === 'gold' && state.player.stats.gold < discountedCost) return false;
@@ -1388,9 +1423,175 @@ export const useGameStore = create<GameState>()(
           get().addExp(item.effect.value);
         }
 
+        set((state) => {
+          const newInventories = state.shopInventories.map((inv) => {
+            if (inv.areaId !== item.areaId) return inv;
+            return {
+              ...inv,
+              items: inv.items.map((invItem) => {
+                if (invItem.itemId !== itemId) return invItem;
+                return { ...invItem, currentStock: Math.max(0, invItem.currentStock - 1) };
+              }),
+            };
+          });
+          return { shopInventories: newInventories };
+        });
+
         get().addBattleLog(`🛒 购买了 ${item.name}！`, 'event');
         get().addAreaReputation(item.areaId, 5);
         return true;
+      },
+
+      getShopInventory: (areaId) => {
+        return get().shopInventories.find((inv) => inv.areaId === areaId);
+      },
+
+      getItemStock: (itemId, areaId) => {
+        const inventory = get().getShopInventory(areaId);
+        if (!inventory) return 0;
+        const invItem = inventory.items.find((i) => i.itemId === itemId);
+        return invItem?.currentStock ?? 0;
+      },
+
+      shouldRestockShop: (areaId) => {
+        const inventory = get().getShopInventory(areaId);
+        if (!inventory) return true;
+        if (inventory.items.length === 0) return true;
+        const RESTOCK_INTERVAL = 5 * 60 * 1000;
+        return Date.now() - inventory.lastRestockTime > RESTOCK_INTERVAL;
+      },
+
+      getAvailableShopItems: (areaId) => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        const repLevel = get().getAreaReputationLevel(areaId);
+        const consequenceTags = state.consequenceTags;
+        const inventory = get().getShopInventory(areaId);
+
+        return SHOP_ITEMS.filter((item) => {
+          if (item.areaId !== areaId) return false;
+          if (item.minReputationLevel > repLevel) return false;
+          if (item.minPlayerLevel && playerLevel < item.minPlayerLevel) return false;
+          if (item.maxPlayerLevel && playerLevel > item.maxPlayerLevel) return false;
+          if (item.requiredTags && !item.requiredTags.every((tag) => consequenceTags.includes(tag))) return false;
+
+          const stock = inventory ? get().getItemStock(item.id, areaId) : 0;
+          if (inventory && inventory.items.length > 0 && stock <= 0) return false;
+
+          return true;
+        });
+      },
+
+      restockShop: (areaId, triggerType = 'manual') => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        const playerGold = state.player.stats.gold;
+        const repLevel = get().getAreaReputationLevel(areaId);
+        const consequenceTags = state.consequenceTags;
+        const area = state.mapAreas.find((a) => a.id === areaId);
+        if (!area) return;
+
+        const areaItems = SHOP_ITEMS.filter((item) => {
+          if (item.areaId !== areaId) return false;
+          if (item.minReputationLevel > repLevel) return false;
+          if (item.minPlayerLevel && playerLevel < item.minPlayerLevel) return false;
+          if (item.maxPlayerLevel && playerLevel > item.maxPlayerLevel) return false;
+          if (item.requiredTags && !item.requiredTags.every((tag) => consequenceTags.includes(tag))) return false;
+          return true;
+        });
+
+        const avgItemCost = areaItems.length > 0
+          ? areaItems.reduce((sum, item) => sum + item.baseCost, 0) / areaItems.length
+          : 100;
+
+        const isGoldRich = playerGold > avgItemCost * 3;
+        const isGoldPoor = playerGold < avgItemCost;
+
+        const weightedItems = areaItems.map((item) => {
+          let weight = item.weight ?? 1.0;
+
+          if (item.rarity) {
+            const RARITY_WEIGHT: Record<string, number> = {
+              common: 1.0,
+              rare: 0.6,
+              epic: 0.3,
+              legendary: 0.1,
+            };
+            weight *= RARITY_WEIGHT[item.rarity] ?? 1.0;
+          }
+
+          if (isGoldRich && item.baseCost > avgItemCost * 1.5) {
+            weight *= 1.5;
+          }
+          if (isGoldPoor && item.baseCost < avgItemCost * 0.8) {
+            weight *= 1.8;
+          }
+          if (isGoldPoor && item.baseCost > avgItemCost * 1.2) {
+            weight *= 0.4;
+          }
+
+          if (triggerType === 'event' && item.requiredTags && item.requiredTags.length > 0) {
+            weight *= 2.0;
+          }
+
+          if (triggerType === 'map_change') {
+            weight *= 1.2;
+          }
+
+          return { item, weight: Math.max(0.1, weight) };
+        });
+
+        const totalWeight = weightedItems.reduce((sum, w) => sum + w.weight, 0);
+        const targetItemCount = Math.min(6, Math.max(3, Math.floor(areaItems.length * 0.6)));
+        const selectedItems: typeof areaItems = [];
+        const usedIndices = new Set<number>();
+
+        for (let i = 0; i < targetItemCount && usedIndices.size < weightedItems.length; i++) {
+          let roll = Math.random() * totalWeight;
+          let selectedIndex = 0;
+
+          for (let j = 0; j < weightedItems.length; j++) {
+            if (usedIndices.has(j)) continue;
+            roll -= weightedItems[j].weight;
+            if (roll <= 0) {
+              selectedIndex = j;
+              break;
+            }
+          }
+
+          if (!usedIndices.has(selectedIndex)) {
+            usedIndices.add(selectedIndex);
+            selectedItems.push(weightedItems[selectedIndex].item);
+          }
+        }
+
+        const now = Date.now();
+        const newInventoryItems = selectedItems.map((item) => ({
+          itemId: item.id,
+          currentStock: item.stock ?? 3,
+          maxStock: item.stock ?? 3,
+          restockTime: now,
+        }));
+
+        set((state) => ({
+          shopInventories: state.shopInventories.map((inv) =>
+            inv.areaId === areaId
+              ? { ...inv, items: newInventoryItems, lastRestockTime: now }
+              : inv
+          ),
+        }));
+
+        const triggerNames: Record<string, string> = {
+          map_change: '地图切换',
+          event: '事件影响',
+          timer: '定时刷新',
+          manual: '手动刷新',
+        };
+
+        get().addBattleLog(
+          `🔄 ${area.name}商店已补货（${triggerNames[triggerType]}），新到 ${selectedItems.length} 种商品`,
+          'system'
+        );
       },
 
       calculateOfflineRewards: () => {

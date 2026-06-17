@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../game/store';
-import { REPUTATION_LEVELS, SHOP_ITEMS } from '../game/data';
+import { REPUTATION_LEVELS, RARITY_COLORS, RARITY_NAMES } from '../game/data';
 import { MAP_MODIFIER_ICONS } from '../game/types';
+import type { ShopItem } from '../game/types';
 import GameCanvas from './GameCanvas';
 import BattleLog from './BattleLog';
 
 export default function MapPanel() {
   const [showMapSelect, setShowMapSelect] = useState(false);
   const [showShop, setShowShop] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   const {
     mapAreas,
@@ -37,7 +39,22 @@ export default function MapPanel() {
     claimFirstClearReward,
     currentLevelStats,
     checkStarCondition,
+    getAvailableShopItems,
+    getItemStock,
+    getShopInventory,
+    shouldRestockShop,
+    restockShop,
   } = useGameStore();
+
+  useEffect(() => {
+    if (!showShop) return;
+    
+    const timer = setInterval(() => {
+      forceUpdate((n) => n + 1);
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [showShop]);
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
   const currentRep = areaReputations.find((r) => r.areaId === currentAreaId) || { areaId: currentAreaId, points: 0, level: 0 };
@@ -58,7 +75,19 @@ export default function MapPanel() {
   const areaSpdBonus = getMapModifierTotalBonus('speed');
   const areaLukBonus = getMapModifierTotalBonus('luck');
 
-  const areaShopItems = SHOP_ITEMS.filter((item) => item.areaId === currentAreaId);
+  const areaShopItems = getAvailableShopItems(currentAreaId || '');
+  const shopInventory = getShopInventory(currentAreaId || '');
+  const shouldRestock = shouldRestockShop(currentAreaId || '');
+
+  const getRestockCountdown = () => {
+    if (!shopInventory || shopInventory.lastRestockTime === 0) return '补货中...';
+    const RESTOCK_INTERVAL = 5 * 60 * 1000;
+    const elapsed = Date.now() - shopInventory.lastRestockTime;
+    const remaining = Math.max(0, RESTOCK_INTERVAL - elapsed);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="map-panel">
@@ -408,34 +437,92 @@ export default function MapPanel() {
 
       {showShop && (
         <div className="shop-section">
-          <h4 className="shop-title">🛒 {currentArea?.name} 商店</h4>
+          <div className="shop-header">
+            <h4 className="shop-title">🛒 {currentArea?.name} 商店</h4>
+            <div className="shop-actions">
+              {!shouldRestock && (
+                <span className="restock-countdown">
+                  ⏱️ 下次补货: {getRestockCountdown()}
+                </span>
+              )}
+              <button
+                className={`restock-btn ${shouldRestock ? 'active' : ''}`}
+                onClick={() => restockShop(currentAreaId || '', 'manual')}
+              >
+                🔄 {shouldRestock ? '立即补货' : '强制补货'}
+              </button>
+            </div>
+          </div>
+          
+          {shopInventory && shopInventory.items.length > 0 && (
+            <div className="shop-dynamic-info">
+              <span className="dynamic-badge">📦 动态库存</span>
+              <span className="stock-info">当前在售 {shopInventory.items.length} 种商品</span>
+            </div>
+          )}
+          
           {areaShopItems.length === 0 ? (
-            <p className="shop-empty">此区域暂无商品</p>
+            <p className="shop-empty">此区域暂无商品，请稍后再来</p>
           ) : (
             <div className="shop-list">
-              {areaShopItems.map((item) => {
+              {areaShopItems.map((item: ShopItem) => {
                 const repLevel = getAreaReputation(currentAreaId).level;
-                const locked = repLevel < item.minReputationLevel;
+                const locked = repLevel < (item.minReputationLevel || 0);
                 const discountedCost = getDiscountedCost(item.baseCost, item.areaId);
                 const canAfford = item.currency === 'gold'
                   ? player.stats.gold >= discountedCost
                   : player.stats.soulOrbs >= discountedCost;
                 const purchased = purchasedShopItems.includes(item.id);
+                const stock = getItemStock(item.id, item.areaId);
+                const outOfStock = shopInventory && shopInventory.items.length > 0 && stock <= 0;
+
+                const rarityColor = item.rarity ? (RARITY_COLORS as Record<string, string>)[item.rarity] : '#9ca3af';
+                const rarityName = item.rarity ? (RARITY_NAMES as Record<string, string>)[item.rarity] : '';
 
                 return (
                   <div
                     key={item.id}
-                    className={`shop-item-card ${locked ? 'locked' : ''} ${purchased ? 'purchased' : ''}`}
+                    className={`shop-item-card ${locked ? 'locked' : ''} ${purchased ? 'purchased' : ''} ${outOfStock ? 'out-of-stock' : ''}`}
+                    style={{ borderColor: item.rarity ? rarityColor : undefined }}
                   >
-                    <div className="shop-item-icon">{item.icon}</div>
+                    <div className="shop-item-icon" style={{ boxShadow: item.rarity ? `0 0 10px ${rarityColor}` : undefined }}>
+                      {item.icon}
+                    </div>
                     <div className="shop-item-info">
-                      <h5>{item.name}</h5>
+                      <div className="shop-item-title-row">
+                        <h5>{item.name}</h5>
+                        {item.rarity && (
+                          <span className="item-rarity" style={{ color: rarityColor }}>
+                            {rarityName}
+                          </span>
+                        )}
+                      </div>
                       <p className="shop-item-desc">{item.description}</p>
+                      
+                      {shopInventory && shopInventory.items.length > 0 && (
+                        <p className={`shop-item-stock ${outOfStock ? 'empty' : ''}`}>
+                          📦 库存: {stock}
+                        </p>
+                      )}
+                      
+                      {item.minPlayerLevel && (
+                        <p className="shop-item-level">
+                          📊 需要等级: {item.minPlayerLevel}
+                        </p>
+                      )}
+                      
                       {locked && (
                         <p className="shop-item-locked">
                           🔒 需要声望等级: {REPUTATION_LEVELS.find((rl) => rl.level === item.minReputationLevel)?.name}
                         </p>
                       )}
+                      
+                      {item.requiredTags && item.requiredTags.length > 0 && (
+                        <p className="shop-item-tags">
+                          🏷️ 特殊商品
+                        </p>
+                      )}
+                      
                       {shopDiscount > 0 && !locked && (
                         <p className="shop-item-discount">
                           💰 折扣价: {discountedCost} <s>{item.baseCost}</s> {item.currency === 'gold' ? '金币' : '魂珠'}
@@ -450,6 +537,8 @@ export default function MapPanel() {
                     <div className="shop-item-action">
                       {purchased ? (
                         <button className="purchased-btn" disabled>已购买</button>
+                      ) : outOfStock ? (
+                        <button className="out-of-stock-btn" disabled>已售罄</button>
                       ) : (
                         <button
                           className={`buy-shop-btn ${!canAfford || locked ? 'disabled' : ''}`}

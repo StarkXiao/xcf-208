@@ -208,6 +208,26 @@ export interface ShopItem {
   minReputationLevel: number;
   effect: ShopItemEffect;
   icon: string;
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+  minPlayerLevel?: number;
+  maxPlayerLevel?: number;
+  isDynamic?: boolean;
+  weight?: number;
+  stock?: number;
+  requiredTags?: string[];
+}
+
+export interface ShopInventoryItem {
+  itemId: string;
+  currentStock: number;
+  maxStock: number;
+  restockTime: number;
+}
+
+export interface ShopInventory {
+  areaId: string;
+  items: ShopInventoryItem[];
+  lastRestockTime: number;
 }
 
 export interface ShopItemEffect {

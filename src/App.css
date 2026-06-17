@@ -6567,5 +6567,122 @@
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
-  }
+}
+
+.shop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.shop-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.restock-countdown {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.restock-btn {
+  padding: 6px 12px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.restock-btn:hover {
+  background: rgba(34, 197, 94, 0.4);
+}
+
+.restock-btn.active {
+  background: rgba(34, 197, 94, 0.4);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.shop-dynamic-info {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+}
+
+.dynamic-badge {
+  background: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.stock-info {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.shop-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.item-rarity {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.shop-item-stock {
+  color: #22c55e;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.shop-item-stock.empty {
+  color: #f87171;
+}
+
+.shop-item-level {
+  color: #60a5fa;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.shop-item-tags {
+  color: #fbbf24;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.shop-item-card.out-of-stock {
+  opacity: 0.5;
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+.out-of-stock-btn {
+  padding: 6px 14px;
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border: 1px solid #f87171;
+  border-radius: 6px;
+  font-size: 12px;
 }
