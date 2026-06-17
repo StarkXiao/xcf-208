@@ -243,7 +243,7 @@ export default function OfflineRewardsModal() {
                 <div className="map-comparison-section">
                   <h4 className="comparison-title">🗺️ 地图差异对比</h4>
                   <div className="comparison-list">
-                    {breakdown.mapComparison.map((map, idx) => {
+                    {breakdown.mapComparison.map((map) => {
                       const grade = getRiskRewardGrade(map.riskRewardRatio);
                       const isCurrent = map.areaId === useGameStore.getState().currentAreaId;
                       return (
