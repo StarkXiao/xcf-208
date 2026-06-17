@@ -10,6 +10,7 @@ import TalentPanel from './TalentPanel';
 import GuildPanel from './GuildPanel';
 import EquipmentPanel from './EquipmentPanel';
 import { ChapterPanel } from './ChapterPanel';
+import CommissionPanel from './CommissionPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -76,6 +77,7 @@ export default function GameScreen() {
     { id: 'chapters' as const, label: '📚 章节', icon: '📚' },
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
+    { id: 'commissions' as const, label: '📜 委托', icon: '📜' },
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
     { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'equipment' as const, label: '⚒️ 装备', icon: '⚒️' },
@@ -692,6 +694,8 @@ export default function GameScreen() {
         return <StatsPanel />;
       case 'companions':
         return <CompanionsPanel />;
+      case 'commissions':
+        return <CommissionPanel />;
       case 'expedition':
         return <ExpeditionPanel />;
       case 'guild':

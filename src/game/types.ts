@@ -436,7 +436,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment';
+export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1027,6 +1027,99 @@ export interface ActiveStageBattle {
   totalWaves: number;
   currentMonster: GameState['currentMonster'] | null;
   battleStats: LevelStats;
+}
+
+export type CommissionRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type CommissionType = 'gather' | 'combat' | 'explore' | 'escort' | 'hunt' | 'mystery';
+export type CommissionStatus = 'available' | 'in_progress' | 'completed' | 'failed';
+
+export interface RareMaterial {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: CommissionRarity;
+  sellPrice: number;
+  categories: string[];
+}
+
+export interface CommissionReward {
+  type: 'gold' | 'exp' | 'soulOrbs' | 'material' | 'reputation';
+  materialId?: string;
+  minAmount: number;
+  maxAmount: number;
+  chance: number;
+}
+
+export interface Commission {
+  id: string;
+  title: string;
+  description: string;
+  type: CommissionType;
+  rarity: CommissionRarity;
+  areaId: string;
+  minLevel: number;
+  durationSeconds: number;
+  minCompanions: number;
+  maxCompanions: number;
+  requiredPower: number;
+  rewards: CommissionReward[];
+  eventChance: number;
+  failureChance: number;
+  icon: string;
+  bgColor: string;
+  generatedAt: number;
+}
+
+export interface ActiveCommission {
+  commissionId: string;
+  companionIds: string[];
+  startTime: number;
+  durationSeconds: number;
+  currentEvent: CommissionEvent | null;
+  eventLog: string[];
+  rewards: CommissionRewardResult[];
+  status: 'in_progress' | 'event' | 'completed' | 'failed';
+  progress: number;
+  generatedAt: number;
+}
+
+export interface CommissionEvent {
+  id: string;
+  title: string;
+  description: string;
+  type: 'treasure' | 'combat' | 'trap' | 'shrine' | 'merchant' | 'ambush' | 'mystery';
+  choices: CommissionEventChoice[];
+  icon: string;
+}
+
+export interface CommissionEventChoice {
+  id: string;
+  text: string;
+  effects: CommissionEventEffect[];
+}
+
+export interface CommissionEventEffect {
+  type: 'gold' | 'exp' | 'soulOrbs' | 'material' | 'hp' | 'success_rate' | 'failure_rate';
+  value: number;
+  materialId?: string;
+  isPercent?: boolean;
+}
+
+export interface CommissionRewardResult {
+  type: string;
+  materialId?: string;
+  amount: number;
+}
+
+export interface InventoryMaterial {
+  materialId: string;
+  count: number;
+}
+
+export interface CommissionDailyRefresh {
+  lastRefreshTime: number;
+  commissions: Commission[];
 }
 
 declare module './types' {

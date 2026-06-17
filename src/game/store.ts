@@ -61,6 +61,13 @@ import type {
   BossMechanic,
   ActiveStageBattle,
   ChapterTab,
+  Commission,
+  ActiveCommission,
+  CommissionEvent,
+  CommissionEventEffect,
+  CommissionRewardResult,
+  InventoryMaterial,
+  RareMaterial,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -101,6 +108,15 @@ import {
   getEquipmentForgeExpToNext,
   CHAPTERS,
   STORY_DIALOGUES,
+  RARE_MATERIALS,
+  COMMISSION_TEMPLATES,
+  COMMISSION_EVENTS,
+  COMMISSION_REFRESH_INTERVAL,
+  COMMISSION_MAX_ACTIVE,
+  COMMISSION_DAILY_REFRESH_COUNT,
+  COMMISSION_RARITY_COLORS,
+  COMMISSION_RARITY_NAMES,
+  COMMISSION_TYPES,
 } from './data';
 
 interface GameState {
@@ -434,6 +450,29 @@ interface GameState {
 
   startStageBattle: (chapterId: string, stageId: string) => boolean;
   endStageBattle: (victory: boolean) => void;
+
+  availableCommissions: Commission[];
+  activeCommissions: ActiveCommission[];
+  materialInventory: InventoryMaterial[];
+  lastCommissionRefresh: number;
+
+  refreshCommissions: () => void;
+  shouldRefreshCommissions: () => boolean;
+  getCommissionPower: (companionIds: string[]) => number;
+  startCommission: (commissionId: string, companionIds: string[]) => boolean;
+  updateCommissionProgress: () => void;
+  triggerCommissionEvent: (commissionId: string) => void;
+  resolveCommissionEvent: (commissionId: string, choiceId: string) => void;
+  completeCommission: (commissionId: string) => CommissionRewardResult[];
+  failCommission: (commissionId: string) => void;
+  cancelCommission: (commissionId: string) => void;
+  collectCommissionReward: (commissionId: string) => CommissionRewardResult[] | null;
+  getMaterialCount: (materialId: string) => number;
+  addMaterial: (materialId: string, count: number) => void;
+  sellMaterial: (materialId: string, count: number) => boolean;
+  getMaterialInfo: (materialId: string) => RareMaterial | undefined;
+  getActiveCommissionCount: () => number;
+  canStartCommission: () => boolean;
 }
 
 let logIdCounter = 0;
@@ -711,6 +750,11 @@ export const useGameStore = create<GameState>()(
       activeStageBattle: null,
       currentDialogue: null,
       chapterActiveTab: 'chapters',
+
+      availableCommissions: [],
+      activeCommissions: [],
+      materialInventory: [],
+      lastCommissionRefresh: 0,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -2333,6 +2377,11 @@ export const useGameStore = create<GameState>()(
 
       collectOfflineRewards: () => {
         const rewards = get().calculateOfflineRewards();
+        const state = get();
+        const now = Date.now();
+        const offlineTime = now - state.lastOnlineTime;
+        const offlineSeconds = Math.min(offlineTime / 1000, 8 * 60 * 60);
+
         if (rewards.exp > 0 || rewards.gold > 0) {
           get().addExp(rewards.exp);
           get().addGold(rewards.gold);
@@ -2349,6 +2398,67 @@ export const useGameStore = create<GameState>()(
             }
           });
         }
+
+        if (state.activeCommissions.length > 0 && offlineSeconds > 0) {
+          let completedCount = 0;
+          let eventCount = 0;
+
+          const updatedCommissions = state.activeCommissions.map((ac) => {
+            if (ac.status !== 'in_progress') return ac;
+
+            const template = COMMISSION_TEMPLATES.find((t) => {
+              const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
+              const commissionTitle = availCommission?.title || ac.commissionId;
+              return t.title === commissionTitle;
+            });
+
+            if (!template) return ac;
+
+            const elapsed = (now - ac.startTime) / 1000;
+            const progress = Math.min(1, elapsed / ac.durationSeconds);
+
+            let newStatus = ac.status;
+            let newEvent = ac.currentEvent;
+            let newEventLog = [...ac.eventLog];
+
+            if (progress >= 1) {
+              newStatus = 'completed';
+              newEventLog.push('✅ 委托完成！');
+              completedCount++;
+            } else if (
+              ac.currentEvent === null &&
+              Math.random() < template.eventChance * Math.min(1, offlineSeconds / 300) &&
+              progress > 0.1 &&
+              progress < 0.9
+            ) {
+              const randomEvent = COMMISSION_EVENTS[
+                Math.floor(Math.random() * COMMISSION_EVENTS.length)
+              ];
+              newEvent = { ...randomEvent };
+              newStatus = 'event';
+              newEventLog.push(`✨ 触发事件：${randomEvent.title}`);
+              eventCount++;
+            }
+
+            return {
+              ...ac,
+              progress,
+              status: newStatus,
+              currentEvent: newEvent,
+              eventLog: newEventLog,
+            };
+          });
+
+          set({ activeCommissions: updatedCommissions });
+
+          if (completedCount > 0) {
+            get().addBattleLog(`📜 离线期间完成了 ${completedCount} 个委托`, 'event');
+          }
+          if (eventCount > 0) {
+            get().addBattleLog(`✨ 离线期间触发了 ${eventCount} 个委托事件`, 'event');
+          }
+        }
+
         get().updateLastOnlineTime();
       },
 
@@ -5669,6 +5779,431 @@ export const useGameStore = create<GameState>()(
         }
 
         set({ activeStageBattle: null });
+      },
+
+      refreshCommissions: () => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        const now = Date.now();
+
+        const eligibleTemplates = COMMISSION_TEMPLATES.filter(
+          (t) => t.minLevel <= playerLevel
+        );
+
+        const shuffled = [...eligibleTemplates].sort(() => Math.random() - 0.5);
+        const selected = shuffled.slice(0, COMMISSION_DAILY_REFRESH_COUNT);
+
+        const commissions: Commission[] = selected.map((template, idx) => ({
+          ...template,
+          id: `commission_${now}_${idx}`,
+          generatedAt: now,
+        }));
+
+        set({
+          availableCommissions: commissions,
+          lastCommissionRefresh: now,
+        });
+      },
+
+      shouldRefreshCommissions: () => {
+        const state = get();
+        const now = Date.now();
+        const timeSinceRefresh = (now - state.lastCommissionRefresh) / 1000;
+        return (
+          state.availableCommissions.length === 0 ||
+          timeSinceRefresh >= COMMISSION_REFRESH_INTERVAL
+        );
+      },
+
+      getCommissionPower: (companionIds) => {
+        const state = get();
+        let totalPower = 0;
+
+        companionIds.forEach((id) => {
+          const companion = state.ownedCompanions.find((c) => c.id === id);
+          if (companion) {
+            const atk = state.getCompanionEffectiveAttack(companion);
+            const def = state.getCompanionEffectiveDefense(companion);
+            totalPower += atk + def;
+          }
+        });
+
+        const playerAtk = state.getTotalAttack();
+        const playerDef = state.getTotalDefense();
+        totalPower += playerAtk + playerDef;
+
+        return Math.floor(totalPower);
+      },
+
+      startCommission: (commissionId, companionIds) => {
+        const state = get();
+        const commission = state.availableCommissions.find(
+          (c) => c.id === commissionId
+        );
+        if (!commission) return false;
+
+        const activeCount = state.activeCommissions.filter(
+          (c) => c.status === 'in_progress' || c.status === 'event'
+        ).length;
+        if (activeCount >= COMMISSION_MAX_ACTIVE) return false;
+
+        if (
+          companionIds.length < commission.minCompanions ||
+          companionIds.length > commission.maxCompanions
+        ) {
+          return false;
+        }
+
+        const busyCompanionIds = state.activeCommissions
+          .filter((c) => c.status === 'in_progress' || c.status === 'event')
+          .flatMap((c) => c.companionIds);
+        const hasBusy = companionIds.some((id) => busyCompanionIds.includes(id));
+        if (hasBusy) return false;
+
+        const now = Date.now();
+        const activeCommission: ActiveCommission = {
+          commissionId,
+          companionIds,
+          startTime: now,
+          durationSeconds: commission.durationSeconds,
+          currentEvent: null,
+          eventLog: [`📜 接受了委托：${commission.title}`],
+          rewards: [],
+          status: 'in_progress',
+          progress: 0,
+          generatedAt: commission.generatedAt,
+        };
+
+        set((state) => ({
+          availableCommissions: state.availableCommissions.filter(
+            (c) => c.id !== commissionId
+          ),
+          activeCommissions: [...state.activeCommissions, activeCommission],
+        }));
+
+        get().addBattleLog(`📜 接受了委托：${commission.title}`, 'event');
+        return true;
+      },
+
+      updateCommissionProgress: () => {
+        const state = get();
+        const now = Date.now();
+
+        const updatedCommissions = state.activeCommissions.map((ac) => {
+          if (ac.status !== 'in_progress') return ac;
+
+          const commission = COMMISSION_TEMPLATES.find(
+            (t) => t.title === state.availableCommissions.find((c) => c.id === ac.commissionId)?.title ||
+                    state.activeCommissions.find((a) => a.commissionId === ac.commissionId)?.commissionId
+          );
+
+          const template = COMMISSION_TEMPLATES.find((t) => {
+            const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
+            const activeCommission = state.activeCommissions.find((a) => a.commissionId === ac.commissionId);
+            const commissionTitle = availCommission?.title || activeCommission?.commissionId || '';
+            return t.title === commissionTitle;
+          });
+
+          if (!template) return ac;
+
+          const elapsed = (now - ac.startTime) / 1000;
+          const progress = Math.min(1, elapsed / ac.durationSeconds);
+
+          let newStatus = ac.status;
+          let newEvent = ac.currentEvent;
+          let newEventLog = [...ac.eventLog];
+
+          if (progress >= 1) {
+            newStatus = 'completed';
+            newEventLog.push('✅ 委托完成！');
+          } else if (
+            ac.currentEvent === null &&
+            Math.random() < template.eventChance * 0.02 &&
+            progress > 0.1 &&
+            progress < 0.9
+          ) {
+            const randomEvent = COMMISSION_EVENTS[
+              Math.floor(Math.random() * COMMISSION_EVENTS.length)
+            ];
+            newEvent = { ...randomEvent };
+            newStatus = 'event';
+            newEventLog.push(`✨ 触发事件：${randomEvent.title}`);
+          }
+
+          return {
+            ...ac,
+            progress,
+            status: newStatus,
+            currentEvent: newEvent,
+            eventLog: newEventLog,
+          };
+        });
+
+        set({ activeCommissions: updatedCommissions });
+      },
+
+      triggerCommissionEvent: (commissionId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac || ac.status !== 'in_progress') return;
+
+        const randomEvent = COMMISSION_EVENTS[
+          Math.floor(Math.random() * COMMISSION_EVENTS.length)
+        ];
+
+        set((state) => ({
+          activeCommissions: state.activeCommissions.map((c) =>
+            c.commissionId === commissionId
+              ? {
+                  ...c,
+                  currentEvent: { ...randomEvent },
+                  status: 'event',
+                  eventLog: [...c.eventLog, `✨ 触发事件：${randomEvent.title}`],
+                }
+              : c
+          ),
+        }));
+      },
+
+      resolveCommissionEvent: (commissionId, choiceId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac || !ac.currentEvent || ac.status !== 'event') return;
+
+        const choice = ac.currentEvent.choices.find((c) => c.id === choiceId);
+        if (!choice) return;
+
+        let newRewards = [...ac.rewards];
+        let newEventLog = [...ac.eventLog];
+        let bonusSuccessRate = 0;
+        let bonusFailureRate = 0;
+
+        choice.effects.forEach((effect) => {
+          if (effect.type === 'gold') {
+            if (effect.isPercent) {
+              newRewards.push({ type: 'gold', amount: Math.floor(100 * (effect.value / 100)) });
+            } else if (effect.value > 0) {
+              newRewards.push({ type: 'gold', amount: effect.value });
+            }
+          } else if (effect.type === 'exp') {
+            if (effect.isPercent) {
+              newRewards.push({ type: 'exp', amount: Math.floor(50 * (effect.value / 100)) });
+            } else if (effect.value > 0) {
+              newRewards.push({ type: 'exp', amount: effect.value });
+            }
+          } else if (effect.type === 'soulOrbs' && effect.value > 0) {
+            newRewards.push({ type: 'soulOrbs', amount: effect.value });
+          } else if (effect.type === 'material' && effect.materialId && effect.value > 0) {
+            newRewards.push({
+              type: 'material',
+              materialId: effect.materialId,
+              amount: effect.value,
+            });
+          } else if (effect.type === 'success_rate') {
+            bonusSuccessRate += effect.value;
+          } else if (effect.type === 'failure_rate') {
+            bonusFailureRate += effect.value;
+          }
+        });
+
+        newEventLog.push(`📝 选择了：${choice.text}`);
+
+        set((state) => ({
+          activeCommissions: state.activeCommissions.map((c) =>
+            c.commissionId === commissionId
+              ? {
+                  ...c,
+                  currentEvent: null,
+                  status: 'in_progress',
+                  rewards: newRewards,
+                  eventLog: newEventLog,
+                }
+              : c
+          ),
+        }));
+      },
+
+      completeCommission: (commissionId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac) return [];
+
+        const template = COMMISSION_TEMPLATES.find((t) => {
+          const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
+          const commissionTitle = availCommission?.title || ac.commissionId;
+          return t.title === commissionTitle;
+        });
+
+        if (!template) return [];
+
+        const results: CommissionRewardResult[] = [...ac.rewards];
+
+        template.rewards.forEach((reward) => {
+          if (Math.random() < reward.chance) {
+            const amount = Math.floor(
+              reward.minAmount + Math.random() * (reward.maxAmount - reward.minAmount)
+            );
+            if (amount > 0) {
+              results.push({
+                type: reward.type,
+                materialId: reward.materialId,
+                amount,
+              });
+            }
+          }
+        });
+
+        results.forEach((result) => {
+          switch (result.type) {
+            case 'gold':
+              get().addGold(result.amount);
+              break;
+            case 'exp':
+              get().addExp(result.amount);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(result.amount);
+              break;
+            case 'material':
+              if (result.materialId) {
+                get().addMaterial(result.materialId, result.amount);
+              }
+              break;
+            case 'reputation':
+              if (template.areaId) {
+                get().addAreaReputation(template.areaId, result.amount);
+              }
+              break;
+          }
+        });
+
+        set((state) => ({
+          activeCommissions: state.activeCommissions.filter(
+            (c) => c.commissionId !== commissionId
+          ),
+        }));
+
+        get().addBattleLog(`🎉 完成了委托：${template.title}`, 'event');
+
+        ac.companionIds.forEach((cid) => {
+          get().addCompanionStarExp(cid, Math.floor(template.baseExp / 10));
+        });
+
+        return results;
+      },
+
+      failCommission: (commissionId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac) return;
+
+        const template = COMMISSION_TEMPLATES.find((t) => {
+          const availCommission = state.availableCommissions.find((c) => c.id === ac.commissionId);
+          const commissionTitle = availCommission?.title || ac.commissionId;
+          return t.title === commissionTitle;
+        });
+
+        set((state) => ({
+          activeCommissions: state.activeCommissions.filter(
+            (c) => c.commissionId !== commissionId
+          ),
+        }));
+
+        get().addBattleLog(`💔 委托失败：${template?.title || commissionId}`, 'event');
+      },
+
+      cancelCommission: (commissionId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac) return;
+
+        set((state) => ({
+          activeCommissions: state.activeCommissions.filter(
+            (c) => c.commissionId !== commissionId
+          ),
+        }));
+
+        get().addBattleLog('📜 取消了委托', 'event');
+      },
+
+      collectCommissionReward: (commissionId) => {
+        const state = get();
+        const ac = state.activeCommissions.find((c) => c.commissionId === commissionId);
+        if (!ac || ac.status !== 'completed') return null;
+
+        return get().completeCommission(commissionId);
+      },
+
+      getMaterialCount: (materialId) => {
+        const state = get();
+        const material = state.materialInventory.find((m) => m.materialId === materialId);
+        return material?.count || 0;
+      },
+
+      addMaterial: (materialId, count) => {
+        set((state) => {
+          const existing = state.materialInventory.find(
+            (m) => m.materialId === materialId
+          );
+          if (existing) {
+            return {
+              materialInventory: state.materialInventory.map((m) =>
+                m.materialId === materialId
+                  ? { ...m, count: m.count + count }
+                  : m
+              ),
+            };
+          } else {
+            return {
+              materialInventory: [
+                ...state.materialInventory,
+                { materialId, count },
+              ],
+            };
+          }
+        });
+      },
+
+      sellMaterial: (materialId, count) => {
+        const state = get();
+        const material = state.materialInventory.find(
+          (m) => m.materialId === materialId
+        );
+        if (!material || material.count < count) return false;
+
+        const materialInfo = RARE_MATERIALS.find((m) => m.id === materialId);
+        if (!materialInfo) return false;
+
+        const goldEarned = materialInfo.sellPrice * count;
+
+        set((state) => ({
+          materialInventory: state.materialInventory
+            .map((m) =>
+              m.materialId === materialId ? { ...m, count: m.count - count } : m
+            )
+            .filter((m) => m.count > 0),
+        }));
+
+        get().addGold(goldEarned);
+        get().addBattleLog(`💰 出售了 ${count} 个${materialInfo.name}，获得 ${goldEarned} 金币`, 'gold');
+
+        return true;
+      },
+
+      getMaterialInfo: (materialId) => {
+        return RARE_MATERIALS.find((m) => m.id === materialId);
+      },
+
+      getActiveCommissionCount: () => {
+        const state = get();
+        return state.activeCommissions.filter(
+          (c) => c.status === 'in_progress' || c.status === 'event'
+        ).length;
+      },
+
+      canStartCommission: () => {
+        const state = get();
+        return state.getActiveCommissionCount() < COMMISSION_MAX_ACTIVE;
       },
     }),
     {
