@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import type { PlayerStats } from '../game/types';
+import type { PlayerStats, PowerComponent } from '../game/types';
+import { RARITY_COLORS, RARITY_NAMES, TALENT_TREES } from '../game/data';
 
 function StatBar({ label, current, max, color }: { label: string; current: number; max: number; color: string }) {
   return (
@@ -37,9 +39,152 @@ function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }:
   );
 }
 
+function PowerBarRow({ label, icon, value, maxValue, color, showPercent = false }: {
+  label: string; icon: string; value: number; maxValue: number; color: string; showPercent?: boolean;
+}) {
+  const percent = maxValue > 0 ? (Math.abs(value) / maxValue) * 100 : 0;
+  return (
+    <div className="power-bar-row">
+      <div className="power-bar-label">
+        <span className="power-bar-icon">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className="power-bar-track">
+        <div
+          className="power-bar-fill"
+          style={{
+            width: `${Math.min(100, percent)}%`,
+            backgroundColor: value >= 0 ? color : '#ef4444',
+          }}
+        />
+      </div>
+      <span className={`power-bar-value ${value < 0 ? 'negative' : ''}`}>
+        {value >= 0 ? '+' : ''}{showPercent && value !== 0 && typeof value === 'number' ? `${(value * 100).toFixed(0)}%` : value}
+      </span>
+    </div>
+  );
+}
+
+function StatBreakdownSection({
+  title,
+  icon,
+  component,
+  expanded,
+  onToggle,
+  color,
+}: {
+  title: string;
+  icon: string;
+  component: PowerComponent;
+  expanded: boolean;
+  onToggle: () => void;
+  color: string;
+}) {
+  const maxAbsValue = Math.max(
+    component.base,
+    component.companion,
+    component.bond,
+    Math.abs(component.rebirthValue),
+    Math.abs(component.talentValue),
+    Math.abs(component.mapModifier),
+    Math.abs(component.affinityValue),
+    1
+  );
+
+  return (
+    <div className="stat-breakdown-section">
+      <div className="stat-breakdown-header" onClick={onToggle}>
+        <div className="stat-breakdown-title">
+          <span className="stat-breakdown-icon" style={{ color }}>{icon}</span>
+          <span>{title}</span>
+          <span className="stat-breakdown-total" style={{ color }}>{component.total}</span>
+        </div>
+        <span className={`expand-arrow ${expanded ? 'expanded' : ''}`}>▼</span>
+      </div>
+      {expanded && (
+        <div className="stat-breakdown-content">
+          <div className="power-breakdown-grid">
+            <div className="power-source-section">
+              <h5 className="power-source-title">🏠 基础值</h5>
+              <PowerBarRow
+                label="角色基础"
+                icon="👤"
+                value={component.base}
+                maxValue={maxAbsValue}
+                color="#60a5fa"
+              />
+            </div>
+            <div className="power-source-section">
+              <h5 className="power-source-title">🤝 伙伴加成</h5>
+              <PowerBarRow
+                label="编队伙伴"
+                icon="👥"
+                value={component.companion}
+                maxValue={maxAbsValue}
+                color="#22c55e"
+              />
+              <PowerBarRow
+                label="羁绊加成"
+                icon="🔗"
+                value={component.bond}
+                maxValue={maxAbsValue}
+                color="#fbbf24"
+              />
+            </div>
+            <div className="power-source-section">
+              <h5 className="power-source-title">🔄 转生增益</h5>
+              <PowerBarRow
+                label={`转生加成 ($\{(component.rebirthPercent * 100).toFixed(0)}%)`}
+                icon="✨"
+                value={component.rebirthValue}
+                maxValue={maxAbsValue}
+                color="#a855f7"
+              />
+            </div>
+            <div className="power-source-section">
+              <h5 className="power-source-title">⚡ 临时效果</h5>
+              <PowerBarRow
+                label={`天赋加成 ($\{(component.talentPercent * 100).toFixed(0)}%)`}
+                icon="🌟"
+                value={component.talentValue}
+                maxValue={maxAbsValue}
+                color="#f472b6"
+              />
+              <PowerBarRow
+                label="地图修正"
+                icon="🗺️"
+                value={component.mapModifier}
+                maxValue={maxAbsValue}
+                color="#06b6d4"
+              />
+              <PowerBarRow
+                label={`好感倍率 ($\{(component.affinityPercent * 100).toFixed(0)}%)`}
+                icon="💛"
+                value={component.affinityValue}
+                maxValue={maxAbsValue}
+                color="#f59e0b"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, getTotalTalentBonus, getActiveSynergies } = useGameStore();
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, getTotalTalentBonus, getActiveSynergies, getPowerBreakdown } = useGameStore();
   const { stats, skillPoints } = player;
+
+  const [expandedStats, setExpandedStats] = useState<Record<string, boolean>>({
+    attack: true,
+    defense: false,
+    hp: false,
+    speed: false,
+  });
+  const [showSources, setShowSources] = useState(false);
+
+  const powerBreakdown = getPowerBreakdown();
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;
   const goldBonus = rebirthBonuses['gold_boost'] || 0;
@@ -76,6 +221,17 @@ export default function StatsPanel() {
   const formationAtk = formationCompanions.reduce((s, c) => s + useGameStore.getState().getCompanionEffectiveAttack(c), 0);
   const formationDef = formationCompanions.reduce((s, c) => s + useGameStore.getState().getCompanionEffectiveDefense(c), 0);
 
+  const totalPower = powerBreakdown.attack.total + powerBreakdown.defense.total + Math.floor(powerBreakdown.hp.total / 10) + powerBreakdown.speed.total;
+
+  const toggleStat = (stat: string) => {
+    setExpandedStats((prev) => ({ ...prev, [stat]: !prev[stat] }));
+  };
+
+  const getTalentTreeName = (category: string) => {
+    const tree = TALENT_TREES.find((t) => t.id === category);
+    return tree?.name || category;
+  };
+
   return (
     <div className="stats-panel">
       <div className="stats-header">
@@ -107,6 +263,219 @@ export default function StatsPanel() {
         <UpgradeButton stat="defense" label="🛡️ 防御力" value={`${stats.defense} (+2)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
         <UpgradeButton stat="speed" label="👟 速度" value={`${stats.speed} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
         <UpgradeButton stat="luck" label="🍀 幸运" value={`${stats.luck} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+      </div>
+
+      <div className="power-breakdown-section">
+        <div className="power-header">
+          <h4>💪 战力拆解</h4>
+          <div className="total-power">
+            <span className="total-power-label">总战力</span>
+            <span className="total-power-value">{totalPower.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <StatBreakdownSection
+          title="⚔️ 攻击力"
+          icon="⚔️"
+          component={powerBreakdown.attack}
+          expanded={expandedStats.attack}
+          onToggle={() => toggleStat('attack')}
+          color="#ef4444"
+        />
+
+        <StatBreakdownSection
+          title="🛡️ 防御力"
+          icon="🛡️"
+          component={powerBreakdown.defense}
+          expanded={expandedStats.defense}
+          onToggle={() => toggleStat('defense')}
+          color="#3b82f6"
+        />
+
+        <StatBreakdownSection
+          title="❤️ 生命值"
+          icon="❤️"
+          component={powerBreakdown.hp}
+          expanded={expandedStats.hp}
+          onToggle={() => toggleStat('hp')}
+          color="#22c55e"
+        />
+
+        <StatBreakdownSection
+          title="👟 速度"
+          icon="👟"
+          component={powerBreakdown.speed}
+          expanded={expandedStats.speed}
+          onToggle={() => toggleStat('speed')}
+          color="#f59e0b"
+        />
+
+        <button className="sources-toggle-btn" onClick={() => setShowSources(!showSources)}>
+          {showSources ? '▼ 收起来源详情' : '▶ 查看来源详情'}
+        </button>
+
+        {showSources && (
+          <div className="sources-detail-section">
+            {powerBreakdown.companionDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>🤝 伙伴来源</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.companionDetails.map((c, idx) => (
+                    <div key={idx} className="source-detail-item">
+                      <div className="source-detail-left">
+                        <span
+                          className="source-rarity-dot"
+                          style={{ backgroundColor: RARITY_COLORS[c.rarity as keyof typeof RARITY_COLORS] }}
+                        />
+                        <span className="source-detail-name">{c.name}</span>
+                        <span className="source-detail-badge">
+                          {'⭐'.repeat(c.stars)}
+                        </span>
+                      </div>
+                      <div className="source-detail-right">
+                        <span className="attack-val">⚔️ +{c.attack}</span>
+                        <span className="defense-val">🛡️ +{c.defense}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {powerBreakdown.bondDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>🔗 羁绊效果</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.bondDetails.map((b, idx) => (
+                    <div key={idx} className="source-detail-item bond-item">
+                      <div className="source-detail-left">
+                        <span className="bond-icon">{b.icon}</span>
+                        <div>
+                          <span className="source-detail-name">{b.name}</span>
+                          <div className="bond-members">{b.members.join('、')}</div>
+                        </div>
+                      </div>
+                      <div className="source-detail-right">
+                        {b.bonus.map((bo, bi) => (
+                          <span key={bi} className="bond-bonus-tag">
+                            {bo.type === 'attack' ? '⚔️' : bo.type === 'defense' ? '🛡️' : bo.type === 'hp' ? '❤️' : bo.type === 'speed' ? '👟' : '🍀'}
+                            +{bo.value}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {powerBreakdown.rebirthDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>🔄 转生祝福</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.rebirthDetails.map((r, idx) => (
+                    <div key={idx} className="source-detail-item">
+                      <div className="source-detail-left">
+                        <span className="rebirth-icon">{r.icon}</span>
+                        <span className="source-detail-name">{r.name}</span>
+                      </div>
+                      <div className="source-detail-right">
+                        <span className="rebirth-value">+{(r.value * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {powerBreakdown.talentDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>🌟 天赋激活</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.talentDetails.map((t, idx) => (
+                    <div key={idx} className="source-detail-item talent-item">
+                      <div className="source-detail-left">
+                        <span className="talent-icon">{t.icon}</span>
+                        <div>
+                          <span className="source-detail-name">{t.name}</span>
+                          <div className="talent-meta">
+                            <span
+                              className="talent-rarity-badge"
+                              style={{
+                                backgroundColor: `${RARITY_COLORS[t.rarity as keyof typeof RARITY_COLORS]}30`,
+                                color: RARITY_COLORS[t.rarity as keyof typeof RARITY_COLORS],
+                              }}
+                            >
+                              {RARITY_NAMES[t.rarity as keyof typeof RARITY_NAMES]}
+                            </span>
+                            <span className="talent-level">Lv.{t.level}</span>
+                            <span className="talent-category">{getTalentTreeName(t.category)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {powerBreakdown.mapModifierDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>🗺️ 区域状态</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.mapModifierDetails.map((m, idx) => (
+                    <div key={idx} className={`source-detail-item modifier-item ${m.value < 0 ? 'negative' : ''}`}>
+                      <div className="source-detail-left">
+                        <span className="modifier-type-tag">
+                          {m.type === 'blessing' ? '✨' : m.type === 'hazard' ? '⚠️' : m.type === 'cursed' ? '💀' : m.type === 'hiddenPath' ? '🚪' : '🔒'}
+                        </span>
+                        <div>
+                          <span className="source-detail-name">{m.name}</span>
+                          <div className="modifier-area">{m.areaName} - {m.description}</div>
+                        </div>
+                      </div>
+                      <div className="source-detail-right">
+                        <span className={`modifier-value ${m.value < 0 ? 'negative' : ''}`}>
+                          {m.stat === 'attack' ? '⚔️' : m.stat === 'defense' ? '🛡️' : m.stat === 'hp' ? '❤️' : m.stat === 'speed' ? '👟' : m.stat === 'luck' ? '🍀' : m.stat === 'mp' ? '💙' : m.stat === 'gold' ? '💰' : '⭐'}
+                          {m.value >= 0 ? '+' : ''}{m.value}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {powerBreakdown.affinityDetails.length > 0 && (
+              <div className="source-detail-block">
+                <h5>💛 伙伴好感度</h5>
+                <div className="source-detail-list">
+                  {powerBreakdown.affinityDetails.map((a, idx) => (
+                    <div key={idx} className="source-detail-item">
+                      <div className="source-detail-left">
+                        <span
+                          className="affinity-level-badge"
+                          style={{ backgroundColor: `${a.color}30`, color: a.color }}
+                        >
+                          {a.level}
+                        </span>
+                        <span className="source-detail-name">{a.name}</span>
+                      </div>
+                      <div className="source-detail-right">
+                        <span className="affinity-score" style={{ color: a.color }}>
+                          {a.value >= 0 ? '+' : ''}{a.value}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="affinity-multiplier-hint">
+                  好感平均倍率：×{(1 + ((powerBreakdown.attack.affinityPercent + powerBreakdown.defense.affinityPercent) / 2)).toFixed(2)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="total-stats-section">

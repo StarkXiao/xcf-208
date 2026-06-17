@@ -403,3 +403,30 @@ export interface TalentSynergy {
   effects: TalentEffect[];
   icon: string;
 }
+
+export interface PowerComponent {
+  base: number;
+  companion: number;
+  bond: number;
+  rebirthPercent: number;
+  rebirthValue: number;
+  talentPercent: number;
+  talentValue: number;
+  mapModifier: number;
+  affinityPercent: number;
+  affinityValue: number;
+  total: number;
+}
+
+export interface PowerBreakdown {
+  attack: PowerComponent;
+  defense: PowerComponent;
+  hp: PowerComponent;
+  speed: PowerComponent;
+  companionDetails: { name: string; rarity: string; stars: number; attack: number; defense: number; level: number }[];
+  rebirthDetails: { id: string; name: string; icon: string; value: number }[];
+  talentDetails: { name: string; level: number; category: string; rarity: string; icon: string }[];
+  mapModifierDetails: { areaId: string; areaName: string; type: string; name: string; description: string; stat: string; value: number }[];
+  affinityDetails: { companionId: string; name: string; level: string; value: number; color: string }[];
+  bondDetails: { id: string; name: string; icon: string; members: string[]; bonus: { type: 'attack' | 'defense' | 'hp' | 'speed' | 'luck'; value: number }[] }[];
+}

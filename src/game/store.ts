@@ -21,8 +21,12 @@ import type {
   Skill,
   MonsterPhase,
   OfflineRewardBreakdown,
+  PowerBreakdown,
+  PowerComponent,
+  Talent,
+  TalentEffect,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -41,10 +45,6 @@ import {
   TALENTS,
   TALENT_SYNERGIES,
 } from './data';
-import type {
-  Talent,
-  TalentEffect,
-} from './types';
 
 interface GameState {
   screen: GameScreen;
@@ -177,6 +177,7 @@ interface GameState {
   getSynergyBonusFlat: (type: TalentEffect['type']) => number;
   getTotalTalentBonus: (type: TalentEffect['type']) => { percent: number; flat: number };
   resetTalents: () => boolean;
+  getPowerBreakdown: () => PowerBreakdown;
 }
 
 let logIdCounter = 0;
@@ -1981,6 +1982,169 @@ export const useGameStore = create<GameState>()(
           'system'
         );
         return true;
+      },
+
+      getPowerBreakdown: () => {
+        const state = get();
+        const formationCompanions = get().getFormationCompanions();
+        const bondBonus = get().getBondBonus();
+        const rebirthBonuses = state.rebirthBonuses;
+        const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
+
+        const calcComponent = (
+          baseStat: number,
+          statType: keyof PlayerStats
+        ): PowerComponent => {
+          const companionContribution = formationCompanions.reduce((s, c) => {
+            if (statType === 'attack') return s + computeEffectiveAttack(c);
+            if (statType === 'defense') return s + computeEffectiveDefense(c);
+            return s;
+          }, 0);
+
+          type BondKey = keyof typeof bondBonus;
+          const bondStatKey = statType === 'maxHp' ? 'hp' as const : statType as BondKey;
+          const bondContribution = (bondStatKey in bondBonus) ? bondBonus[bondStatKey] : 0;
+          const rebirthPct = statType === 'attack' ? (rebirthBonuses['attack_boost'] || 0)
+            : statType === 'defense' ? (rebirthBonuses['defense_boost'] || 0)
+            : statType === 'maxHp' ? (rebirthBonuses['hp_boost'] || 0)
+            : statType === 'speed' ? (rebirthBonuses['speed_boost'] || 0)
+            : 0;
+          const totalRebirthBonus = state.player.totalRebirthBonus * 0.01;
+          const totalRebirthPct = rebirthPct + (statType === 'attack' || statType === 'defense' || statType === 'maxHp' ? totalRebirthBonus : 0);
+
+          const talentBonus = get().getTotalTalentBonus(statType === 'maxHp' ? 'hp' : statType as TalentEffect['type']);
+          const mapModifierBonus = get().getMapModifierTotalBonus(statType);
+          const affinityBonus = get().getAffinityTotalBonus(statType);
+
+          const preMultiplier = baseStat + talentBonus.flat + mapModifierBonus + affinityBonus;
+          const postRebirth = preMultiplier * (1 + totalRebirthPct + talentBonus.percent);
+          const withCompanion = postRebirth + companionContribution + bondContribution;
+          const total = Math.floor(withCompanion * affinityMultiplier);
+
+          const rebirthValue = Math.floor(preMultiplier * totalRebirthPct);
+          const talentValue = Math.floor(preMultiplier * talentBonus.percent);
+          const affinityValue = Math.floor(withCompanion * (affinityMultiplier - 1));
+
+          return {
+            base: baseStat,
+            companion: companionContribution,
+            bond: bondContribution,
+            rebirthPercent: totalRebirthPct,
+            rebirthValue,
+            talentPercent: talentBonus.percent,
+            talentValue: talentValue + talentBonus.flat,
+            mapModifier: mapModifierBonus,
+            affinityPercent: affinityMultiplier - 1,
+            affinityValue,
+            total,
+          };
+        };
+
+        const attack = calcComponent(state.player.stats.attack, 'attack');
+        const defense = calcComponent(state.player.stats.defense, 'defense');
+        const hp = calcComponent(state.player.stats.maxHp, 'maxHp');
+        const speed = calcComponent(state.player.stats.speed, 'speed');
+
+        const companionDetails = formationCompanions.map((c) => ({
+          name: c.name,
+          rarity: c.rarity,
+          stars: c.stars,
+          attack: computeEffectiveAttack(c),
+          defense: computeEffectiveDefense(c),
+          level: c.level,
+        }));
+
+        const rebirthDetails: PowerBreakdown['rebirthDetails'] = [];
+        Object.entries(rebirthBonuses).forEach(([id, value]) => {
+          if (value > 0) {
+            const option = REBIRTH_OPTIONS.find((o) => o.id === id);
+            if (option) {
+              rebirthDetails.push({
+                id,
+                name: option.name,
+                icon: option.icon,
+                value,
+              });
+            }
+          }
+        });
+
+        const talentDetails = state.player.inheritedTalents
+          .filter((node) => node.currentLevel > 0)
+          .map((node) => {
+            const talent = TALENTS.find((t) => t.id === node.talentId);
+            return {
+              name: talent?.name || '未知天赋',
+              level: node.currentLevel,
+              category: talent?.category || 'combat',
+              rarity: talent?.rarity || 'common',
+              icon: talent?.icon || '🌟',
+            };
+          });
+
+        const mapModifierDetails: PowerBreakdown['mapModifierDetails'] = [];
+        state.mapAreaModifiers.forEach((mod) => {
+          if (mod.effect) {
+            const area = state.mapAreas.find((a) => a.id === mod.areaId);
+            mapModifierDetails.push({
+              areaId: mod.areaId,
+              areaName: area?.name || '未知区域',
+              type: mod.type,
+              name: mod.name,
+              description: mod.description,
+              stat: mod.effect.stat,
+              value: mod.effect.value,
+            });
+          }
+        });
+
+        const affinityDetails = formationCompanions.map((c) => {
+          const affinity = get().getCompanionAffinity(c.id);
+          return {
+            companionId: c.id,
+            name: c.name,
+            level: AFFINITY_LEVEL_NAMES[affinity.level],
+            value: affinity.value,
+            color: AFFINITY_LEVEL_COLORS[affinity.level],
+          };
+        });
+
+        const activeBondIds = state.formation.activeBondIds;
+        type BondBonusType = 'attack' | 'defense' | 'hp' | 'speed' | 'luck';
+        const bondDetails: PowerBreakdown['bondDetails'] = [];
+        activeBondIds.forEach((bondId) => {
+          const bond = BONDS.find((b) => b.id === bondId);
+          if (!bond) return;
+          const memberIds = bond.memberIds;
+          const formationIds = state.formation.slots
+            .filter((s) => s.unlocked && s.companionId !== null)
+            .map((s) => s.companionId!);
+          if (!memberIds.every((id) => formationIds.includes(id))) return;
+
+          const members = state.ownedCompanions.filter((c) => memberIds.includes(c.id));
+          const minStars = members.length > 0 ? Math.min(...members.map((m) => m.stars)) : 0;
+
+          bondDetails.push({
+            id: bond.id,
+            name: bond.name,
+            icon: bond.icon,
+            members: members.map((m) => m.name),
+            bonus: bond.bonusPerStar.map((b) => ({ type: b.type as BondBonusType, value: b.value * minStars })),
+          });
+        });
+
+        return {
+          attack,
+          defense,
+          hp,
+          speed,
+          companionDetails,
+          rebirthDetails,
+          talentDetails,
+          mapModifierDetails,
+          affinityDetails,
+          bondDetails,
+        };
       },
     }),
     {
