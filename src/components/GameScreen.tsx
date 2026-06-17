@@ -9,7 +9,7 @@ import ExpeditionPanel from './ExpeditionPanel';
 import TalentPanel from './TalentPanel';
 import GuildPanel from './GuildPanel';
 import EquipmentPanel from './EquipmentPanel';
-import ChapterPanel from './ChapterPanel';
+import { ChapterPanel } from './ChapterPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -73,7 +73,7 @@ export default function GameScreen() {
 
   const tabs = [
     { id: 'map' as const, label: '🗺️ 地图', icon: '🗺️' },
-    { id: 'chapter' as const, label: '📖 章节', icon: '📖' },
+    { id: 'chapters' as const, label: '📚 章节', icon: '📚' },
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
@@ -686,7 +686,7 @@ export default function GameScreen() {
     switch (activeTab) {
       case 'map':
         return <MapPanel />;
-      case 'chapter':
+      case 'chapters':
         return <ChapterPanel />;
       case 'stats':
         return <StatsPanel />;

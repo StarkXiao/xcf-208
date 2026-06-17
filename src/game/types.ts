@@ -205,9 +205,11 @@ export interface MapArea {
 
 export interface RebirthChallengeTarget {
   id: string;
-  type: 'bossKills' | 'eliteKills' | 'areaClear' | 'totalPower' | 'level' | 'totalKills';
+  type: 'bossKills' | 'eliteKills' | 'areaClear' | 'totalPower' | 'level' | 'totalKills' | 'chapterClear' | 'chapterStars' | 'bossDefeated';
   target: number;
   areaId?: string;
+  chapterId?: string;
+  bossId?: string;
   description: string;
   reward: StarReward[];
   completed: boolean;
@@ -434,7 +436,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment';
+export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -911,17 +913,35 @@ export interface EquipmentEquipResult {
   message: string;
 }
 
-export type ChapterStageType = 'story' | 'battle' | 'elite' | 'boss' | 'treasure' | 'event' | 'rest';
+export type StageType = 'normal' | 'elite' | 'boss' | 'story' | 'treasure' | 'shrine' | 'rest';
+
+export interface StoryDialogue {
+  id: string;
+  speaker: string;
+  speakerAvatar?: string;
+  text: string;
+  choices?: {
+    id: string;
+    text: string;
+    nextDialogueId?: string;
+    effects?: EventEffect[];
+  }[];
+  nextDialogueId?: string;
+}
 
 export interface BossMechanic {
   id: string;
   name: string;
   description: string;
-  type: 'enrage' | 'summon' | 'shield' | 'heal' | 'aoe' | 'debuff' | 'phase_change';
-  triggerHpPercent: number;
-  cooldown?: number;
-  damageMultiplier?: number;
+  type: 'phase_transition' | 'enrage' | 'summon' | 'shield' | 'berserk' | 'heal';
+  hpThreshold?: number;
+  attackMultiplier?: number;
   defenseMultiplier?: number;
+  speedMultiplier?: number;
+  summonMonsterIds?: string[];
+  shieldAmount?: number;
+  healAmount?: number;
+  cooldown?: number;
   icon: string;
 }
 
@@ -929,100 +949,88 @@ export interface ChapterStage {
   id: string;
   name: string;
   description: string;
-  type: ChapterStageType;
-  x: number;
-  y: number;
+  type: StageType;
+  chapterId: string;
+  position: { x: number; y: number };
   connections: string[];
   minLevel: number;
+  areaId: string;
+  monsterIds?: string[];
+  monsterCount?: number;
+  eliteChance?: number;
+  bossMonsterId?: string;
+  bossMechanics?: BossMechanic[];
+  storyDialogueId?: string;
   rewards: StarReward[];
   firstClearRewards?: StarReward[];
-  enemyId?: string;
-  enemyTier?: MonsterTier;
-  enemyCount?: number;
-  eventId?: string;
-  storyText?: string;
-  bossMechanics?: BossMechanic[];
+  starConditions?: StarCondition[];
   staminaCost: number;
+  requiredStageIds?: string[];
+  unlockConditions?: AreaUnlockCondition[];
   icon: string;
   bgColor: string;
-}
-
-export interface ChapterProgress {
-  stageId: string;
-  cleared: boolean;
-  stars: number;
-  bestStars: number;
-  firstClearedAt: number | null;
-  claimed: boolean;
-  firstClearClaimed: boolean;
-  attempts: number;
 }
 
 export interface Chapter {
   id: string;
   name: string;
-  chapterNumber: number;
+  subtitle: string;
   description: string;
+  chapterNumber: number;
   areaId: string;
+  minLevel: number;
   icon: string;
   bgColor: string;
-  minLevel: number;
   stages: ChapterStage[];
   startStageId: string;
   bossStageId: string;
   unlockConditions: AreaUnlockCondition[];
-  completionRewards: StarReward[];
-  rebirthUnlockRequirement?: {
-    bossDefeated: boolean;
-    totalStars: number;
-  };
+  prologueDialogueId?: string;
+  epilogueDialogueId?: string;
+  chapterRewards: StarReward[];
 }
 
-export type ChapterScreen = 'chapter_select' | 'chapter_map' | 'stage_battle' | 'story' | 'reward';
+export interface StageProgress {
+  stageId: string;
+  chapterId: string;
+  cleared: boolean;
+  firstClearedAt: number | null;
+  bestStars: number;
+  currentStars: number;
+  claimedRewards: boolean;
+  claimedFirstClear: boolean;
+  bestStats: LevelStats;
+  attempts: number;
+}
 
-export interface ChapterBattleState {
-  currentChapterId: string | null;
+export interface ChapterProgress {
+  chapterId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  completed: boolean;
+  completedAt: number | null;
+  stageProgresses: StageProgress[];
   currentStageId: string | null;
-  isInBattle: boolean;
-  currentEnemy: {
-    id: string;
-    name: string;
-    hp: number;
-    maxHp: number;
-    attack: number;
-    defense: number;
-    speed: number;
-    tier: MonsterTier;
-    color: string;
-    currentPhase: number;
-    mechanics: BossMechanic[];
-    activeMechanics: string[];
-  } | null;
-  battleLog: string[];
-  battleResult: 'win' | 'lose' | null;
-  earnedStars: number;
-  battlePhase: 'idle' | 'fighting' | 'result';
+  totalStars: number;
+  maxStars: number;
+  claimedChapterReward: boolean;
+  storyProgress: string[];
 }
 
-export function getChapterStageTypeIcon(type: ChapterStageType): string {
-  const icons: Record<ChapterStageType, string> = {
-    story: '📜',
-    battle: '⚔️',
-    elite: '✨',
-    boss: '👑',
-    treasure: '💎',
-    event: '✨',
-    rest: '🏕️',
-  };
-  return icons[type];
+export type ChapterTab = 'chapters' | 'stages' | 'bosses';
+
+export interface ActiveStageBattle {
+  chapterId: string;
+  stageId: string;
+  phase: 'preparing' | 'fighting' | 'victory' | 'defeat';
+  currentWave: number;
+  totalWaves: number;
+  currentMonster: GameState['currentMonster'] | null;
+  battleStats: LevelStats;
 }
 
-export const CHAPTER_STAGE_TYPE_NAMES: Record<ChapterStageType, string> = {
-  story: '剧情',
-  battle: '战斗',
-  elite: '精英',
-  boss: '首领',
-  treasure: '宝藏',
-  event: '事件',
-  rest: '休息',
-};
+declare module './types' {
+  interface GameState {
+    activeStageBattle?: ActiveStageBattle | null;
+  }
+}
