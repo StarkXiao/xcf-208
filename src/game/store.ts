@@ -53,6 +53,12 @@ import type {
   EquipmentRarity,
   AffixStat,
   EquipmentAffixInstance,
+  Chapter,
+  ChapterProgress,
+  ChapterStage,
+  ChapterBattleState,
+  BossMechanic,
+  ChapterScreen,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -91,6 +97,7 @@ import {
   EQUIPMENT_MAX_LEVEL,
   getEquipmentRarityConfig,
   getEquipmentForgeExpToNext,
+  MAIN_CHAPTERS,
 } from './data';
 
 interface GameState {
@@ -384,6 +391,36 @@ interface GameState {
   getForgeRecipe: (recipeId: string) => typeof FORGE_RECIPES[number] | undefined;
   canForge: (recipeId: string, inputUids: string[]) => boolean;
   addEquipmentForgeExp: (uid: string, exp: number) => void;
+
+  chapterProgresses: Record<string, ChapterProgress[]>;
+  currentChapterId: string | null;
+  chapterBattleState: ChapterBattleState;
+  chapterStamina: number;
+  maxChapterStamina: number;
+  lastChapterStaminaRegen: number;
+
+  getChapterProgress: (chapterId: string) => ChapterProgress[];
+  getStageProgress: (chapterId: string, stageId: string) => ChapterProgress | undefined;
+  isStageAccessible: (chapterId: string, stageId: string) => boolean;
+  isChapterUnlocked: (chapterId: string) => boolean;
+  getChapterUnlockProgress: (chapterId: string) => { condition: string; current: number; target: number; completed: boolean }[];
+  enterChapterStage: (chapterId: string, stageId: string) => boolean;
+  startChapterBattle: (chapterId: string, stageId: string) => boolean;
+  calculateChapterBattlePower: () => { playerAttack: number; playerDefense: number; playerHp: number };
+  simulateChapterBattle: (chapterId: string, stageId: string) => { won: boolean; stars: number; damageDealt: number; damageTaken: number; timeSeconds: number };
+  claimStageReward: (chapterId: string, stageId: string) => boolean;
+  claimFirstClearReward: (chapterId: string, stageId: string) => boolean;
+  canClaimStageReward: (chapterId: string, stageId: string) => boolean;
+  canClaimFirstClearReward: (chapterId: string, stageId: string) => boolean;
+  getChapterTotalStars: (chapterId: string) => number;
+  getChapterMaxStars: (chapterId: string) => number;
+  isChapterBossDefeated: (chapterId: string) => boolean;
+  regenChapterStamina: () => void;
+  consumeChapterStamina: (amount: number) => boolean;
+  setCurrentChapter: (chapterId: string | null) => void;
+  resetChapterBattle: () => void;
+  completeChapterBattle: (won: boolean, stars: number) => void;
+  applyStageRewards: (rewards: StarReward[]) => void;
 }
 
 let logIdCounter = 0;
@@ -515,6 +552,36 @@ function initGuildDailyRewards(): GuildDailyReward[] {
   }));
 }
 
+function initChapterProgresses(): Record<string, ChapterProgress[]> {
+  const progresses: Record<string, ChapterProgress[]> = {};
+  MAIN_CHAPTERS.forEach((chapter) => {
+    progresses[chapter.id] = chapter.stages.map((stage) => ({
+      stageId: stage.id,
+      cleared: false,
+      stars: 0,
+      bestStars: 0,
+      firstClearedAt: null,
+      claimed: false,
+      firstClearClaimed: false,
+      attempts: 0,
+    }));
+  });
+  return progresses;
+}
+
+function initChapterBattleState(): ChapterBattleState {
+  return {
+    currentChapterId: null,
+    currentStageId: null,
+    isInBattle: false,
+    currentEnemy: null,
+    battleLog: [],
+    battleResult: null,
+    earnedStars: 0,
+    battlePhase: 'idle',
+  };
+}
+
 function initFormation(playerLevel: number): Formation {
   const slots: FormationSlot[] = FORMATION_SLOT_CONFIG.map((cfg) => ({
     index: cfg.index,
@@ -602,6 +669,13 @@ export const useGameStore = create<GameState>()(
       equipmentInventory: [],
       companionEquipments: {},
       equipmentUidCounter: 0,
+
+      chapterProgresses: initChapterProgresses(),
+      currentChapterId: null,
+      chapterBattleState: initChapterBattleState(),
+      chapterStamina: 100,
+      maxChapterStamina: 100,
+      lastChapterStaminaRegen: Date.now(),
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -4924,10 +4998,537 @@ export const useGameStore = create<GameState>()(
           }),
         }));
       },
+
+      getChapterProgress: (chapterId) => {
+        return get().chapterProgresses[chapterId] || [];
+      },
+
+      getStageProgress: (chapterId, stageId) => {
+        const progresses = get().chapterProgresses[chapterId];
+        return progresses?.find((p) => p.stageId === stageId);
+      },
+
+      isStageAccessible: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return false;
+
+        const state = get();
+        if (state.player.stats.level < stage.minLevel) return false;
+
+        if (stageId === chapter.startStageId) return true;
+
+        const progresses = state.chapterProgresses[chapterId];
+        if (!progresses) return false;
+
+        return chapter.stages.some((s) => {
+          if (!s.connections.includes(stageId)) return false;
+          const prog = progresses.find((p) => p.stageId === s.id);
+          return prog?.cleared || false;
+        });
+      },
+
+      isChapterUnlocked: (chapterId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const state = get();
+        if (state.player.stats.level < chapter.minLevel) return false;
+
+        for (const cond of chapter.unlockConditions) {
+          let current = 0;
+          if (cond.type === 'level') {
+            current = state.player.stats.level;
+          } else if (cond.type === 'bossKills') {
+            current = cond.areaId
+              ? state.monsterKillStats.killsByArea[cond.areaId]?.boss || 0
+              : state.monsterKillStats.bossKills;
+          } else if (cond.type === 'eliteKills') {
+            current = cond.areaId
+              ? state.monsterKillStats.killsByArea[cond.areaId]?.elite || 0
+              : state.monsterKillStats.eliteKills;
+          }
+          if (current < cond.threshold) return false;
+        }
+        return true;
+      },
+
+      getChapterUnlockProgress: (chapterId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return [];
+
+        const state = get();
+        return chapter.unlockConditions.map((cond) => {
+          let current = 0;
+          if (cond.type === 'level') {
+            current = state.player.stats.level;
+          } else if (cond.type === 'bossKills') {
+            current = cond.areaId
+              ? state.monsterKillStats.killsByArea[cond.areaId]?.boss || 0
+              : state.monsterKillStats.bossKills;
+          } else if (cond.type === 'eliteKills') {
+            current = cond.areaId
+              ? state.monsterKillStats.killsByArea[cond.areaId]?.elite || 0
+              : state.monsterKillStats.eliteKills;
+          }
+          return {
+            condition: cond.description,
+            current,
+            target: cond.threshold,
+            completed: current >= cond.threshold,
+          };
+        });
+      },
+
+      enterChapterStage: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return false;
+
+        if (!get().isStageAccessible(chapterId, stageId)) return false;
+
+        if (stage.staminaCost > 0 && !get().consumeChapterStamina(stage.staminaCost)) {
+          return false;
+        }
+
+        set((state) => ({
+          currentChapterId: chapterId,
+          chapterBattleState: {
+            ...state.chapterBattleState,
+            currentChapterId: chapterId,
+            currentStageId: stageId,
+            battlePhase: 'idle',
+            battleResult: null,
+            earnedStars: 0,
+            battleLog: [],
+          },
+        }));
+
+        return true;
+      },
+
+      startChapterBattle: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return false;
+
+        if (!stage.enemyId) return false;
+
+        const area = MAP_AREAS.find((a) => a.id === chapter.areaId);
+        if (!area) return false;
+
+        const monster = area.monsters.find((m) => m.id === stage.enemyId);
+        if (!monster) return false;
+
+        const tier = stage.enemyTier || 'normal';
+        const tierConfig = MONSTER_TIER_CONFIGS[tier];
+        const playerLevel = get().player.stats.level;
+
+        const levelScale = 1 + (playerLevel - area.minLevel) * 0.05;
+
+        const hpMultiplier = tier === 'boss' && monster.bossHpMultiplier
+          ? monster.bossHpMultiplier
+          : tier === 'elite' && monster.eliteHpMultiplier
+            ? monster.eliteHpMultiplier
+            : tierConfig.hpMultiplier;
+
+        const atkMultiplier = tier === 'boss' && monster.bossAtkMultiplier
+          ? monster.bossAtkMultiplier
+          : tier === 'elite' && monster.eliteAtkMultiplier
+            ? monster.eliteAtkMultiplier
+            : tierConfig.attackMultiplier;
+
+        const enemy = {
+          id: monster.id,
+          name: monster.name,
+          hp: Math.floor(monster.hp * hpMultiplier * levelScale * (stage.enemyCount || 1) * 0.6),
+          maxHp: Math.floor(monster.hp * hpMultiplier * levelScale * (stage.enemyCount || 1) * 0.6),
+          attack: Math.floor(monster.attack * atkMultiplier * levelScale),
+          defense: Math.floor(monster.defense * tierConfig.defenseMultiplier * levelScale),
+          speed: monster.speed,
+          tier,
+          color: monster.color,
+          currentPhase: 0,
+          mechanics: stage.bossMechanics || [],
+          activeMechanics: [] as string[],
+        };
+
+        set((state) => ({
+          chapterBattleState: {
+            ...state.chapterBattleState,
+            currentChapterId: chapterId,
+            currentStageId: stageId,
+            isInBattle: true,
+            currentEnemy: enemy,
+            battlePhase: 'fighting',
+            battleResult: null,
+            earnedStars: 0,
+            battleLog: [`⚔️ 战斗开始！遭遇了 ${tierConfig.name}${monster.name}！`],
+          },
+        }));
+
+        return true;
+      },
+
+      calculateChapterBattlePower: () => {
+        const state = get();
+        const playerAtk = state.getTotalAttack();
+        const playerDef = state.getTotalDefense();
+        const playerHp = state.getTotalMaxHp();
+
+        const formationCompanions = state.getFormationCompanions();
+        let companionAtk = 0;
+        let companionDef = 0;
+        formationCompanions.forEach((c) => {
+          companionAtk += state.getCompanionEffectiveAttack(c);
+          companionDef += state.getCompanionEffectiveDefense(c);
+        });
+
+        const bondBonus = state.getBondBonus();
+
+        return {
+          playerAttack: playerAtk + companionAtk + bondBonus.attack,
+          playerDefense: playerDef + companionDef + bondBonus.defense,
+          playerHp: playerHp + bondBonus.hp,
+        };
+      },
+
+      simulateChapterBattle: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return { won: false, stars: 0, damageDealt: 0, damageTaken: 0, timeSeconds: 0 };
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return { won: false, stars: 0, damageDealt: 0, damageTaken: 0, timeSeconds: 0 };
+
+        const { playerAttack, playerDefense, playerHp } = get().calculateChapterBattlePower();
+        const enemy = get().chapterBattleState.currentEnemy;
+        if (!enemy) return { won: false, stars: 0, damageDealt: 0, damageTaken: 0, timeSeconds: 0 };
+
+        let enemyHp = enemy.maxHp;
+        let playerHpCurrent = playerHp;
+        let totalDamageDealt = 0;
+        let totalDamageTaken = 0;
+        let timeSeconds = 0;
+        let currentEnemyAtk = enemy.attack;
+        let currentEnemyDef = enemy.defense;
+        const activeMechs = new Set<string>();
+
+        const playerSpeed = get().getTotalSpeed();
+        const enemySpeed = enemy.speed;
+        const totalSpeed = playerSpeed + enemySpeed;
+
+        const maxTurns = 200;
+        let turns = 0;
+
+        while (enemyHp > 0 && playerHpCurrent > 0 && turns < maxTurns) {
+          turns++;
+          timeSeconds += 1;
+
+          if (enemy.mechanics) {
+            enemy.mechanics.forEach((mech) => {
+              if (activeMechs.has(mech.id)) return;
+              const hpPercent = enemyHp / enemy.maxHp;
+              if (hpPercent <= mech.triggerHpPercent) {
+                activeMechs.add(mech.id);
+                if (mech.damageMultiplier) {
+                  currentEnemyAtk = Math.floor(enemy.attack * mech.damageMultiplier);
+                }
+                if (mech.defenseMultiplier) {
+                  currentEnemyDef = Math.floor(enemy.defense * mech.defenseMultiplier);
+                }
+              }
+            });
+          }
+
+          const playerTurnChance = playerSpeed / totalSpeed;
+          const isPlayerTurn = Math.random() < playerTurnChance;
+
+          if (isPlayerTurn) {
+            const baseDamage = Math.max(1, playerAttack - currentEnemyDef * 0.5);
+            const variance = 0.9 + Math.random() * 0.2;
+            const damage = Math.floor(baseDamage * variance);
+            enemyHp = Math.max(0, enemyHp - damage);
+            totalDamageDealt += damage;
+          } else {
+            const baseDamage = Math.max(1, currentEnemyAtk - playerDefense * 0.5);
+            const variance = 0.9 + Math.random() * 0.2;
+            const damage = Math.floor(baseDamage * variance);
+            playerHpCurrent = Math.max(0, playerHpCurrent - damage);
+            totalDamageTaken += damage;
+          }
+        }
+
+        const won = enemyHp <= 0;
+        let stars = 0;
+        if (won) {
+          stars = 1;
+          const hpPercent = playerHpCurrent / playerHp;
+          if (hpPercent >= 0.7) stars = 3;
+          else if (hpPercent >= 0.4) stars = 2;
+          if (turns <= 30) stars = Math.min(3, stars + 1);
+        }
+        stars = Math.min(3, stars);
+
+        return { won, stars, damageDealt: totalDamageDealt, damageTaken: totalDamageTaken, timeSeconds };
+      },
+
+      claimStageReward: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return false;
+
+        const progress = get().getStageProgress(chapterId, stageId);
+        if (!progress || progress.claimed || progress.bestStars === 0) return false;
+
+        get().applyStageRewards(stage.rewards);
+
+        set((state) => {
+          const progresses = [...(state.chapterProgresses[chapterId] || [])];
+          const idx = progresses.findIndex((p) => p.stageId === stageId);
+          if (idx >= 0) {
+            progresses[idx] = { ...progresses[idx], claimed: true };
+          }
+          return {
+            chapterProgresses: {
+              ...state.chapterProgresses,
+              [chapterId]: progresses,
+            },
+          };
+        });
+
+        get().addBattleLog(`🎁 领取了 ${stage.name} 的奖励`, 'system');
+        return true;
+      },
+
+      claimFirstClearReward: (chapterId, stageId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+
+        const stage = chapter.stages.find((s) => s.id === stageId);
+        if (!stage) return false;
+
+        const progress = get().getStageProgress(chapterId, stageId);
+        if (!progress || progress.firstClearClaimed || !progress.cleared) return false;
+
+        if (stage.firstClearRewards) {
+          get().applyStageRewards(stage.firstClearRewards);
+        }
+
+        set((state) => {
+          const progresses = [...(state.chapterProgresses[chapterId] || [])];
+          const idx = progresses.findIndex((p) => p.stageId === stageId);
+          if (idx >= 0) {
+            progresses[idx] = { ...progresses[idx], firstClearClaimed: true };
+          }
+          return {
+            chapterProgresses: {
+              ...state.chapterProgresses,
+              [chapterId]: progresses,
+            },
+          };
+        });
+
+        get().addBattleLog(`🎉 领取了 ${stage.name} 的首通奖励！`, 'system');
+        return true;
+      },
+
+      canClaimStageReward: (chapterId, stageId) => {
+        const progress = get().getStageProgress(chapterId, stageId);
+        return !!(progress && !progress.claimed && progress.bestStars > 0);
+      },
+
+      canClaimFirstClearReward: (chapterId, stageId) => {
+        const progress = get().getStageProgress(chapterId, stageId);
+        return !!(progress && !progress.firstClearClaimed && progress.cleared);
+      },
+
+      getChapterTotalStars: (chapterId) => {
+        const progresses = get().chapterProgresses[chapterId] || [];
+        return progresses.reduce((sum, p) => sum + p.bestStars, 0);
+      },
+
+      getChapterMaxStars: (chapterId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return 0;
+        return chapter.stages.filter((s) => s.type === 'battle' || s.type === 'elite' || s.type === 'boss').length * 3;
+      },
+
+      isChapterBossDefeated: (chapterId) => {
+        const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+        if (!chapter) return false;
+        const progress = get().getStageProgress(chapterId, chapter.bossStageId);
+        return !!progress?.cleared;
+      },
+
+      regenChapterStamina: () => {
+        const state = get();
+        const now = Date.now();
+        const elapsed = now - state.lastChapterStaminaRegen;
+        const regenRate = 60000;
+
+        if (elapsed >= regenRate) {
+          const regenAmount = Math.floor(elapsed / regenRate);
+          const newStamina = Math.min(state.maxChapterStamina, state.chapterStamina + regenAmount);
+
+          set({
+            chapterStamina: newStamina,
+            lastChapterStaminaRegen: state.lastChapterStaminaRegen + regenAmount * regenRate,
+          });
+        }
+      },
+
+      consumeChapterStamina: (amount) => {
+        const state = get();
+        if (state.chapterStamina < amount) return false;
+        set({ chapterStamina: state.chapterStamina - amount });
+        return true;
+      },
+
+      setCurrentChapter: (chapterId) => {
+        set({ currentChapterId: chapterId });
+      },
+
+      resetChapterBattle: () => {
+        set((state) => ({
+          chapterBattleState: {
+            ...state.chapterBattleState,
+            isInBattle: false,
+            currentEnemy: null,
+            battlePhase: 'idle',
+            battleResult: null,
+            earnedStars: 0,
+            battleLog: [],
+          },
+        }));
+      },
+
+      completeChapterBattle: (won, stars) => {
+        const state = get();
+        const chapterId = state.chapterBattleState.currentChapterId;
+        const stageId = state.chapterBattleState.currentStageId;
+
+        if (!chapterId || !stageId) return;
+
+        set((s) => ({
+          chapterBattleState: {
+            ...s.chapterBattleState,
+            isInBattle: false,
+            battlePhase: 'result',
+            battleResult: won ? 'win' : 'lose',
+            earnedStars: stars,
+          },
+        }));
+
+        if (won) {
+          set((s) => {
+            const progresses = [...(s.chapterProgresses[chapterId] || [])];
+            const idx = progresses.findIndex((p) => p.stageId === stageId);
+            if (idx >= 0) {
+              const oldProgress = progresses[idx];
+              progresses[idx] = {
+                ...oldProgress,
+                cleared: true,
+                stars: Math.max(oldProgress.stars, stars),
+                bestStars: Math.max(oldProgress.bestStars, stars),
+                firstClearedAt: oldProgress.firstClearedAt || Date.now(),
+                attempts: oldProgress.attempts + 1,
+              };
+            }
+            return {
+              chapterProgresses: {
+                ...s.chapterProgresses,
+                [chapterId]: progresses,
+              },
+            };
+          });
+
+          const stage = MAIN_CHAPTERS.find((c) => c.id === chapterId)?.stages.find((s) => s.id === stageId);
+          if (stage?.enemyTier === 'boss' && stage?.enemyId) {
+            const chapter = MAIN_CHAPTERS.find((c) => c.id === chapterId);
+            if (chapter) {
+              get().updateKillStats('boss', chapter.areaId, stage.enemyId);
+              get().checkRebirthChallenges();
+            }
+          }
+
+          get().addBattleLog(`🎉 战斗胜利！获得 ${stars} 颗星！`, 'system');
+        } else {
+          get().addBattleLog('💀 战斗失败...', 'system');
+        }
+      },
+
+      applyStageRewards: (rewards) => {
+        rewards.forEach((reward) => {
+          switch (reward.type) {
+            case 'gold':
+              get().addGold(reward.value);
+              break;
+            case 'exp':
+              get().addExp(reward.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(reward.value);
+              break;
+            case 'attack':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, attack: s.player.stats.attack + reward.value },
+                },
+              }));
+              break;
+            case 'defense':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, defense: s.player.stats.defense + reward.value },
+                },
+              }));
+              break;
+            case 'hp':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: {
+                    ...s.player.stats,
+                    maxHp: s.player.stats.maxHp + reward.value,
+                    hp: s.player.stats.hp + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'reputation':
+              const state = get();
+              if (state.currentChapterId) {
+                const chapter = MAIN_CHAPTERS.find((c) => c.id === state.currentChapterId);
+                if (chapter) {
+                  get().addAreaReputation(chapter.areaId, reward.value);
+                }
+              }
+              break;
+            case 'speed':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, speed: s.player.stats.speed + reward.value },
+                },
+              }));
+              break;
+          }
+        });
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 10,
+      version: 11,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -5015,6 +5616,20 @@ export const useGameStore = create<GameState>()(
           state.lastDailyRewardDate = null;
           state.guildActiveTab = 'map';
           state.guildFormation = [];
+        }
+        if (version < 10) {
+          state.equipmentInventory = [];
+          state.equipmentInventorySize = 30;
+          state.nextEquipmentUid = 1;
+          state.currentEquipmentIds = { weapon: null, armor: null, accessory: null };
+        }
+        if (version < 11) {
+          state.chapterProgresses = initChapterProgresses();
+          state.currentChapterId = null;
+          state.chapterBattleState = initChapterBattleState();
+          state.chapterStamina = 60;
+          state.maxChapterStamina = 60;
+          state.lastChapterStaminaRegen = Date.now();
         }
         return state as unknown as GameState;
       },
