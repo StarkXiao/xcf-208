@@ -150,7 +150,7 @@ export default function GameCanvas() {
       }
 
       const playerBobY = Math.sin(timestamp * 0.003) * 3;
-      drawPlayer(ctx, playerX, playerYRef.current + playerBobY, player.stats.hp / player.stats.maxHp);
+      drawPlayer(ctx, playerX, playerYRef.current + playerBobY);
 
       ownedCompanions.forEach((companion, index) => {
         const compX = playerX - 40 - index * 30;
@@ -347,7 +347,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: nu
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, _hpPercent: number) {
+function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.save();
   ctx.translate(x, y);
 

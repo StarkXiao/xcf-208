@@ -1,10 +1,8 @@
 import { useGameStore } from '../game/store';
+import type { PlayerStats } from '../game/types';
 
-export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses } = useGameStore();
-  const { stats, skillPoints } = player;
-
-  const StatBar = ({ label, current, max, color }: { label: string; current: number; max: number; color: string }) => (
+function StatBar({ label, current, max, color }: { label: string; current: number; max: number; color: string }) {
+  return (
     <div className="stat-bar-container">
       <div className="stat-bar-label">
         <span>{label}</span>
@@ -21,20 +19,27 @@ export default function StatsPanel() {
       </div>
     </div>
   );
+}
 
-  const UpgradeButton = ({ stat, label, value, cost = 1 }: { stat: keyof typeof stats; label: string; value: number | string; cost?: number }) => (
+function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }: { stat: keyof PlayerStats; label: string; value: number | string; cost?: number; skillPoints: number; onUpgrade: (stat: keyof PlayerStats, cost: number) => void }) {
+  return (
     <div className="upgrade-item">
       <span className="upgrade-label">{label}</span>
       <span className="upgrade-value">{value}</span>
       <button
         className="upgrade-btn"
-        onClick={() => upgradeStat(stat, cost)}
+        onClick={() => onUpgrade(stat, cost)}
         disabled={skillPoints < cost}
       >
         +{cost}点
       </button>
     </div>
   );
+}
+
+export default function StatsPanel() {
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses } = useGameStore();
+  const { stats, skillPoints } = player;
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;
   const goldBonus = rebirthBonuses['gold_boost'] || 0;
@@ -67,12 +72,12 @@ export default function StatsPanel() {
 
       <div className="upgrade-section">
         <h4>属性升级</h4>
-        <UpgradeButton stat="maxHp" label="❤️ 生命值" value={`${stats.maxHp} (+10)`} />
-        <UpgradeButton stat="maxMp" label="💙 魔力值" value={`${stats.maxMp} (+5)`} />
-        <UpgradeButton stat="attack" label="⚔️ 攻击力" value={`${stats.attack} (+2)`} />
-        <UpgradeButton stat="defense" label="🛡️ 防御力" value={`${stats.defense} (+2)`} />
-        <UpgradeButton stat="speed" label="👟 速度" value={`${stats.speed} (+1)`} />
-        <UpgradeButton stat="luck" label="🍀 幸运" value={`${stats.luck} (+1)`} />
+        <UpgradeButton stat="maxHp" label="❤️ 生命值" value={`${stats.maxHp} (+10)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="maxMp" label="💙 魔力值" value={`${stats.maxMp} (+5)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="attack" label="⚔️ 攻击力" value={`${stats.attack} (+2)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="defense" label="🛡️ 防御力" value={`${stats.defense} (+2)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="speed" label="👟 速度" value={`${stats.speed} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
+        <UpgradeButton stat="luck" label="🍀 幸运" value={`${stats.luck} (+1)`} skillPoints={skillPoints} onUpgrade={upgradeStat} />
       </div>
 
       <div className="total-stats-section">

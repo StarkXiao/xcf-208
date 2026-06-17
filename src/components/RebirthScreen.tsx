@@ -6,51 +6,19 @@ export default function RebirthScreen() {
   const [name, setName] = useState('');
   const [selectedRace, setSelectedRace] = useState(RACES[0]);
   const [selectedClass, setSelectedClass] = useState(CLASSES[0]);
-  const [selectedBonuses, setSelectedBonuses] = useState<string[]>([]);
-  const [showBonusSelect, setShowBonusSelect] = useState(false);
 
   const {
     player,
     rebirthBonuses,
     initializePlayer,
-    performRebirth,
   } = useGameStore();
 
   const isRebirth = player.rebirthCount > 0;
 
   const handleStart = () => {
     if (!name.trim()) return;
-    
-    if (isRebirth && selectedBonuses.length > 0) {
-      const success = performRebirth(selectedBonuses);
-      if (success) {
-        initializePlayer(name, selectedRace, selectedClass);
-      }
-    } else {
-      initializePlayer(name, selectedRace, selectedClass);
-    }
+    initializePlayer(name, selectedRace, selectedClass);
   };
-
-  const toggleBonus = (bonusId: string) => {
-    const option = REBIRTH_OPTIONS.find((o) => o.id === bonusId);
-    if (!option) return;
-
-    const currentCost = selectedBonuses.reduce((sum, id) => {
-      const opt = REBIRTH_OPTIONS.find((o) => o.id === id);
-      return sum + (opt?.cost || 0);
-    }, 0);
-
-    if (selectedBonuses.includes(bonusId)) {
-      setSelectedBonuses(selectedBonuses.filter((id) => id !== bonusId));
-    } else if (currentCost + option.cost <= player.stats.soulOrbs) {
-      setSelectedBonuses([...selectedBonuses, bonusId]);
-    }
-  };
-
-  const totalSelectedCost = selectedBonuses.reduce((sum, id) => {
-    const opt = REBIRTH_OPTIONS.find((o) => o.id === id);
-    return sum + (opt?.cost || 0);
-  }, 0);
 
   return (
     <div className="rebirth-screen">
@@ -64,6 +32,20 @@ export default function RebirthScreen() {
             <p>已转生次数：<span className="highlight">{player.rebirthCount}</span></p>
             <p>累计转生加成：<span className="highlight">+{player.totalRebirthBonus}%</span></p>
             <p>魂珠：<span className="highlight-soul">💎 {player.stats.soulOrbs}</span></p>
+            {Object.keys(rebirthBonuses).length > 0 && (
+              <div className="rebirth-bonus-summary">
+                <p className="bonus-summary-title">本次转生加成</p>
+                {REBIRTH_OPTIONS.map((option) => {
+                  const bonus = rebirthBonuses[option.id];
+                  if (!bonus) return null;
+                  return (
+                    <p key={option.id} className="bonus-summary-item">
+                      {option.icon} {option.name}：+{(bonus * 100).toFixed(0)}%
+                    </p>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -107,44 +89,6 @@ export default function RebirthScreen() {
             ))}
           </div>
         </div>
-
-        {isRebirth && (
-          <div className="form-group">
-            <label>
-              转生加成 
-              <button 
-                className="toggle-btn"
-                onClick={() => setShowBonusSelect(!showBonusSelect)}
-              >
-                {showBonusSelect ? '收起' : '展开'}
-              </button>
-            </label>
-            {showBonusSelect && (
-              <div className="bonus-grid">
-                {REBIRTH_OPTIONS.map((option) => {
-                  const currentBonus = rebirthBonuses[option.id] || 0;
-                  const isSelected = selectedBonuses.includes(option.id);
-                  return (
-                    <button
-                      key={option.id}
-                      className={`bonus-card ${isSelected ? 'selected' : ''}`}
-                      onClick={() => toggleBonus(option.id)}
-                      disabled={!isSelected && totalSelectedCost + option.cost > player.stats.soulOrbs}
-                    >
-                      <div className="bonus-icon">{option.icon}</div>
-                      <div className="bonus-name">{option.name}</div>
-                      <div className="bonus-desc">{option.description}</div>
-                      <div className="bonus-current">
-                        当前: +{(currentBonus * 100).toFixed(0)}%
-                      </div>
-                      <div className="bonus-cost">💎 {option.cost} 魂珠</div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
         <button
           className="start-btn"

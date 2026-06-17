@@ -60,6 +60,25 @@
   font-weight: bold;
 }
 
+.rebirth-bonus-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.bonus-summary-title {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.bonus-summary-item {
+  color: #7c3aed;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
 .form-group {
   margin-bottom: 20px;
 }

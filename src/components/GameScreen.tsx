@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../game/store';
 import StatsPanel from './StatsPanel';
 import MapPanel from './MapPanel';
@@ -13,10 +13,29 @@ export default function GameScreen() {
     setActiveTab,
     player,
     rebirthBonuses,
+    updateLastOnlineTime,
   } = useGameStore();
 
   const [showRebirthModal, setShowRebirthModal] = useState(false);
   const [selectedRebirthBonuses, setSelectedRebirthBonuses] = useState<string[]>([]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updateLastOnlineTime();
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        updateLastOnlineTime();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [updateLastOnlineTime]);
 
   const tabs = [
     { id: 'map' as const, label: '🗺️ 地图', icon: '🗺️' },
