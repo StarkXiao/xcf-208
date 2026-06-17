@@ -20,8 +20,9 @@ import type {
   EventWeightMod,
   Skill,
   MonsterPhase,
+  OfflineRewardBreakdown,
 } from './types';
-import { getAffinityLevel } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -102,7 +103,7 @@ interface GameState {
   calculateDefense: () => number;
   calculateGoldBonus: () => number;
   calculateExpBonus: () => number;
-  calculateOfflineRewards: () => { exp: number; gold: number };
+  calculateOfflineRewards: () => { exp: number; gold: number; breakdown: OfflineRewardBreakdown | null };
   collectOfflineRewards: () => void;
   updateLastOnlineTime: () => void;
   getTotalAttack: () => number;
@@ -1256,33 +1257,153 @@ export const useGameStore = create<GameState>()(
         const now = Date.now();
         const offlineTime = now - state.lastOnlineTime;
         const offlineSeconds = Math.min(offlineTime / 1000, 8 * 60 * 60);
+        const offlineMinutes = Math.floor(offlineSeconds / 60);
 
         const currentArea = state.mapAreas.find((a) => a.id === state.currentAreaId);
         if (!currentArea || offlineSeconds < 60) {
-          return { exp: 0, gold: 0 };
+          return { exp: 0, gold: 0, breakdown: null };
         }
 
+        const MAP_DIFFICULTY: Record<string, { multiplier: number; name: string }> = {
+          forest: { multiplier: 1.0, name: '简单' },
+          cave: { multiplier: 1.5, name: '普通' },
+          ruins: { multiplier: 2.2, name: '困难' },
+          volcano: { multiplier: 3.0, name: '噩梦' },
+        };
+        const mapDiff = MAP_DIFFICULTY[currentArea.id] || { multiplier: 1.0, name: '简单' };
+
         const formationCompanions = get().getFormationCompanions();
+        const companionCount = formationCompanions.length;
+        const RARITY_BONUS: Record<string, number> = {
+          common: 0,
+          rare: 0.15,
+          epic: 0.30,
+          legendary: 0.60,
+        };
+        const companionRarityBonus = formationCompanions.reduce(
+          (sum, c) => sum + (RARITY_BONUS[c.rarity] || 0),
+          0
+        );
+        const companionStarBonus = formationCompanions.reduce(
+          (sum, c) => sum + (c.stars - 1) * 0.05,
+          0
+        );
+        const companionCountBonus = companionCount * 0.08;
         const companionPowerBonus = 1 + formationCompanions.reduce(
           (sum, c) => sum + (computeEffectiveAttack(c) + computeEffectiveDefense(c)) * 0.001,
           0
         );
         const bondBonus = get().getBondBonus();
         const bondPowerBonus = 1 + (bondBonus.attack + bondBonus.defense) * 0.002;
+        const totalCompanionBonus = companionCountBonus + companionRarityBonus + companionStarBonus;
+
+        const areaModifiers = get().getMapAreaModifiers(currentArea.id);
+        const MODIFIER_BONUS: Record<string, number> = {
+          blessing: 0.20,
+          hiddenPath: 0.15,
+          hazard: -0.10,
+          cursed: -0.25,
+          locked: 0,
+        };
+        const eventModifiers = areaModifiers.map((m) => ({
+          name: m.name,
+          icon: MAP_MODIFIER_ICONS[m.type] || '❓',
+          bonus: MODIFIER_BONUS[m.type] || 0,
+        }));
+        const eventStatusBonus = eventModifiers.reduce((sum, m) => sum + m.bonus, 0);
+
+        const avgMonster = currentArea.monsters.reduce(
+          (acc, m) => ({
+            attack: acc.attack + m.attack,
+            defense: acc.defense + m.defense,
+            hp: acc.hp + m.hp,
+            expReward: acc.expReward + m.expReward,
+            goldReward: acc.goldReward + m.goldReward,
+          }),
+          { attack: 0, defense: 0, hp: 0, expReward: 0, goldReward: 0 }
+        );
+        const monsterCount = currentArea.monsters.length;
+        const avgMonsterPower = (avgMonster.attack + avgMonster.defense + avgMonster.hp / 10) / monsterCount;
+        const playerTotalPower = get().getTotalAttack() + get().getTotalDefense() + state.player.stats.maxHp / 10;
+        const powerRatio = avgMonsterPower > 0 ? playerTotalPower / avgMonsterPower : 5;
+        
+        let deathRiskPercent: number;
+        let deathRiskMultiplier: number;
+        let deathRiskLevel: string;
+        
+        if (powerRatio >= 5) {
+          deathRiskPercent = 5;
+          deathRiskMultiplier = 1.0;
+          deathRiskLevel = '安全';
+        } else if (powerRatio >= 3) {
+          deathRiskPercent = 15;
+          deathRiskMultiplier = 1.1;
+          deathRiskLevel = '低风险';
+        } else if (powerRatio >= 1.5) {
+          deathRiskPercent = 35;
+          deathRiskMultiplier = 1.25;
+          deathRiskLevel = '中风险';
+        } else if (powerRatio >= 0.8) {
+          deathRiskPercent = 60;
+          deathRiskMultiplier = 1.5;
+          deathRiskLevel = '高风险';
+        } else {
+          deathRiskPercent = 85;
+          deathRiskMultiplier = 2.0;
+          deathRiskLevel = '极高风险';
+        }
+
+        const efficiencyMultiplier = 0.5;
 
         const killsPerSecond = 0.3 * companionPowerBonus * bondPowerBonus;
         const totalKills = Math.floor(offlineSeconds * killsPerSecond);
-        const avgMonster = currentArea.monsters[0];
         const dropBonus = get().getAreaDropBonus(state.currentAreaId);
 
+        const baseExpPerKill = avgMonster.expReward / monsterCount;
+        const baseGoldPerKill = avgMonster.goldReward / monsterCount;
+        const baseExp = Math.floor(totalKills * baseExpPerKill);
+        const baseGold = Math.floor(totalKills * baseGoldPerKill);
+
         const expReward = Math.floor(
-          totalKills * avgMonster.expReward * 0.5 * state.calculateExpBonus() * (1 + dropBonus)
+          baseExp
+          * efficiencyMultiplier
+          * mapDiff.multiplier
+          * (1 + totalCompanionBonus)
+          * (1 + eventStatusBonus)
+          * deathRiskMultiplier
+          * state.calculateExpBonus()
+          * (1 + dropBonus)
         );
         const goldReward = Math.floor(
-          totalKills * avgMonster.goldReward * 0.5 * state.calculateGoldBonus() * (1 + dropBonus)
+          baseGold
+          * efficiencyMultiplier
+          * mapDiff.multiplier
+          * (1 + totalCompanionBonus)
+          * (1 + eventStatusBonus)
+          * deathRiskMultiplier
+          * state.calculateGoldBonus()
+          * (1 + dropBonus)
         );
 
-        return { exp: expReward, gold: goldReward };
+        const breakdown: OfflineRewardBreakdown = {
+          baseExp,
+          baseGold,
+          mapDifficultyMultiplier: mapDiff.multiplier,
+          mapDifficultyName: mapDiff.name,
+          companionBonus: totalCompanionBonus,
+          companionCount,
+          eventStatusBonus,
+          eventModifiers,
+          deathRiskMultiplier,
+          deathRiskLevel,
+          deathRiskPercent,
+          efficiencyMultiplier,
+          finalExp: expReward,
+          finalGold: goldReward,
+          offlineMinutes,
+        };
+
+        return { exp: expReward, gold: goldReward, breakdown };
       },
 
       collectOfflineRewards: () => {

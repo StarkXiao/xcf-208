@@ -337,6 +337,24 @@ export const MAP_MODIFIER_ICONS: Record<MapModifierType, string> = {
   cursed: '💀',
 };
 
+export interface OfflineRewardBreakdown {
+  baseExp: number;
+  baseGold: number;
+  mapDifficultyMultiplier: number;
+  mapDifficultyName: string;
+  companionBonus: number;
+  companionCount: number;
+  eventStatusBonus: number;
+  eventModifiers: { name: string; icon: string; bonus: number }[];
+  deathRiskMultiplier: number;
+  deathRiskLevel: string;
+  deathRiskPercent: number;
+  efficiencyMultiplier: number;
+  finalExp: number;
+  finalGold: number;
+  offlineMinutes: number;
+}
+
 export type TalentCategory = 'combat' | 'survival' | 'growth' | 'fortune' | 'class_special' | 'race_special';
 export type TalentRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
