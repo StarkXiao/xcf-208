@@ -6,6 +6,9 @@ import GameCanvas from './GameCanvas';
 import BattleLog from './BattleLog';
 
 export default function MapPanel() {
+  const [showMapSelect, setShowMapSelect] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+
   const {
     mapAreas,
     currentAreaId,

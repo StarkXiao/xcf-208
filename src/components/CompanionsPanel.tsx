@@ -1,7 +1,6 @@
 import { useGameStore } from '../game/store';
 import { COMPANIONS, RARITY_COLORS, RARITY_NAMES, REPUTATION_LEVELS, BONDS, STAR_UP_CONFIGS, FORMATION_SLOT_CONFIG } from '../game/data';
 import { AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS } from '../game/types';
-import type { CompanionAffinityRecord } from '../game/types';
 
 export default function CompanionsPanel() {
   const {
