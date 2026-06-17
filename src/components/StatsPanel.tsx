@@ -38,7 +38,7 @@ function UpgradeButton({ stat, label, value, cost = 1, skillPoints, onUpgrade }:
 }
 
 export default function StatsPanel() {
-  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses } = useGameStore();
+  const { player, upgradeStat, getTotalAttack, getTotalDefense, rebirthBonuses, getFormationCompanions, getBondBonus, formation } = useGameStore();
   const { stats, skillPoints } = player;
 
   const expBonus = rebirthBonuses['exp_boost'] || 0;
@@ -46,6 +46,11 @@ export default function StatsPanel() {
   const attackBonus = rebirthBonuses['attack_boost'] || 0;
   const defenseBonus = rebirthBonuses['defense_boost'] || 0;
   const hpBonus = rebirthBonuses['hp_boost'] || 0;
+
+  const formationCompanions = getFormationCompanions();
+  const bondBonus = getBondBonus();
+  const formationAtk = formationCompanions.reduce((s, c) => s + useGameStore.getState().getCompanionEffectiveAttack(c), 0);
+  const formationDef = formationCompanions.reduce((s, c) => s + useGameStore.getState().getCompanionEffectiveDefense(c), 0);
 
   return (
     <div className="stats-panel">
@@ -81,7 +86,7 @@ export default function StatsPanel() {
       </div>
 
       <div className="total-stats-section">
-        <h4>战斗属性（含伙伴）</h4>
+        <h4>战斗属性（含编队伙伴 + 羁绊）</h4>
         <div className="total-stats-grid">
           <div className="total-stat-item">
             <span>⚔️ 总攻击</span>
@@ -92,6 +97,24 @@ export default function StatsPanel() {
             <span>{getTotalDefense()}</span>
           </div>
         </div>
+        {formationCompanions.length > 0 && (
+          <div className="formation-breakdown">
+            <div className="breakdown-row">
+              <span>玩家基础</span>
+              <span>⚔️ {stats.attack} 🛡️ {stats.defense}</span>
+            </div>
+            <div className="breakdown-row">
+              <span>编队伙伴 ({formationCompanions.length}人)</span>
+              <span>⚔️ +{formationAtk} 🛡️ +{formationDef}</span>
+            </div>
+            {(bondBonus.attack > 0 || bondBonus.defense > 0) && (
+              <div className="breakdown-row bond">
+                <span>🔗 羁绊加成</span>
+                <span>⚔️ +{bondBonus.attack} 🛡️ +{bondBonus.defense}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="currency-section">

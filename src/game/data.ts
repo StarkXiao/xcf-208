@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -103,6 +103,10 @@ export const COMPANIONS: Companion[] = [
     defense: 5,
     cost: 100,
     description: '一位刚刚踏上冒险之旅的年轻战士',
+    bondId: 'human_brotherhood',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 50,
   },
   {
     id: 'forest_archer',
@@ -117,6 +121,10 @@ export const COMPANIONS: Companion[] = [
     description: '来自精灵森林的神射手，百发百中',
     areaId: 'forest',
     minReputationLevel: 2,
+    bondId: 'forest_sentinels',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 120,
   },
   {
     id: 'dwarf_blacksmith',
@@ -131,6 +139,10 @@ export const COMPANIONS: Companion[] = [
     description: '精通锻造的矮人，防御力出众',
     areaId: 'cave',
     minReputationLevel: 2,
+    bondId: 'underground_forge',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 120,
   },
   {
     id: 'dark_mage',
@@ -145,6 +157,10 @@ export const COMPANIONS: Companion[] = [
     description: '掌握禁忌魔法的暗黑法师，攻击力惊人',
     areaId: 'ruins',
     minReputationLevel: 3,
+    bondId: 'arcane_council',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 250,
   },
   {
     id: 'holy_priest',
@@ -159,6 +175,10 @@ export const COMPANIONS: Companion[] = [
     description: '受到神祝福的祭司，能提供强大的防护',
     areaId: 'ruins',
     minReputationLevel: 4,
+    bondId: 'human_brotherhood',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 250,
   },
   {
     id: 'dragon_knight',
@@ -173,6 +193,10 @@ export const COMPANIONS: Companion[] = [
     description: '与龙族签订契约的传说骑士，实力深不可测',
     areaId: 'volcano',
     minReputationLevel: 4,
+    bondId: 'dragon_pact',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 500,
   },
   {
     id: 'forest_ranger',
@@ -187,6 +211,10 @@ export const COMPANIONS: Companion[] = [
     description: '守护森林的游侠，对自然之力了如指掌',
     areaId: 'forest',
     minReputationLevel: 1,
+    bondId: 'forest_sentinels',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 50,
   },
   {
     id: 'cave_explorer',
@@ -201,6 +229,10 @@ export const COMPANIONS: Companion[] = [
     description: '常年穿梭于地下洞穴的探险老手',
     areaId: 'cave',
     minReputationLevel: 1,
+    bondId: 'underground_forge',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 50,
   },
   {
     id: 'ruins_scholar',
@@ -215,6 +247,10 @@ export const COMPANIONS: Companion[] = [
     description: '钻研古代文明的知识渊博的学者',
     areaId: 'ruins',
     minReputationLevel: 2,
+    bondId: 'arcane_council',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 120,
   },
   {
     id: 'volcano_warrior',
@@ -229,6 +265,10 @@ export const COMPANIONS: Companion[] = [
     description: '在火山中修炼的狂战士，力量惊人',
     areaId: 'volcano',
     minReputationLevel: 3,
+    bondId: 'dragon_pact',
+    stars: 1,
+    starExp: 0,
+    starExpToNext: 250,
   },
 ];
 
@@ -616,4 +656,102 @@ export const EXPEDITION_EVENTS: ExpeditionEvent[] = [
     rewards: [{ type: 'exp', min: 60, max: 120 }],
     icon: '🏋️',
   },
+];
+
+export const BONDS: Bond[] = [
+  {
+    id: 'human_brotherhood',
+    name: '人类之谊',
+    description: '人类伙伴间的信任羁绊，攻守兼备',
+    icon: '🤝',
+    memberIds: ['novice_warrior', 'holy_priest'],
+    bonusPerStar: [
+      { type: 'attack', value: 2 },
+      { type: 'defense', value: 2 },
+    ],
+  },
+  {
+    id: 'forest_sentinels',
+    name: '森林守望',
+    description: '精灵伙伴守望相助，提升攻击与速度',
+    icon: '🌲',
+    memberIds: ['forest_archer', 'forest_ranger'],
+    bonusPerStar: [
+      { type: 'attack', value: 3 },
+      { type: 'speed', value: 1 },
+    ],
+  },
+  {
+    id: 'underground_forge',
+    name: '地底熔炉',
+    description: '矮人伙伴同生共死，大幅提升防御',
+    icon: '⚒️',
+    memberIds: ['dwarf_blacksmith', 'cave_explorer'],
+    bonusPerStar: [
+      { type: 'defense', value: 3 },
+      { type: 'hp', value: 5 },
+    ],
+  },
+  {
+    id: 'arcane_council',
+    name: '奥术议会',
+    description: '法系伙伴的共鸣，极大提升攻击',
+    icon: '🔮',
+    memberIds: ['dark_mage', 'ruins_scholar'],
+    bonusPerStar: [
+      { type: 'attack', value: 4 },
+      { type: 'luck', value: 1 },
+    ],
+  },
+  {
+    id: 'dragon_pact',
+    name: '龙之契约',
+    description: '与龙族缔结的誓约，全属性提升',
+    icon: '🐉',
+    memberIds: ['dragon_knight', 'volcano_warrior'],
+    bonusPerStar: [
+      { type: 'attack', value: 3 },
+      { type: 'defense', value: 3 },
+      { type: 'hp', value: 5 },
+    ],
+  },
+];
+
+export const STAR_UP_CONFIGS: StarUpConfig[] = [
+  {
+    rarity: 'common',
+    maxStars: 5,
+    starExpToNext: [50, 100, 180, 300, 500],
+    attackMultiplier: [1, 1.15, 1.35, 1.6, 2.0, 2.5],
+    defenseMultiplier: [1, 1.15, 1.35, 1.6, 2.0, 2.5],
+  },
+  {
+    rarity: 'rare',
+    maxStars: 5,
+    starExpToNext: [120, 240, 420, 700, 1100],
+    attackMultiplier: [1, 1.2, 1.45, 1.75, 2.2, 2.8],
+    defenseMultiplier: [1, 1.2, 1.45, 1.75, 2.2, 2.8],
+  },
+  {
+    rarity: 'epic',
+    maxStars: 5,
+    starExpToNext: [250, 500, 900, 1500, 2500],
+    attackMultiplier: [1, 1.25, 1.55, 1.95, 2.5, 3.2],
+    defenseMultiplier: [1, 1.25, 1.55, 1.95, 2.5, 3.2],
+  },
+  {
+    rarity: 'legendary',
+    maxStars: 5,
+    starExpToNext: [500, 1000, 1800, 3000, 5000],
+    attackMultiplier: [1, 1.3, 1.65, 2.15, 2.8, 3.6],
+    defenseMultiplier: [1, 1.3, 1.65, 2.15, 2.8, 3.6],
+  },
+];
+
+export const FORMATION_SLOT_CONFIG = [
+  { index: 0, unlockLevel: 1 },
+  { index: 1, unlockLevel: 5 },
+  { index: 2, unlockLevel: 15 },
+  { index: 3, unlockLevel: 30 },
+  { index: 4, unlockLevel: 50 },
 ];

@@ -37,6 +37,39 @@ export interface Companion {
   description: string;
   areaId?: string;
   minReputationLevel?: number;
+  bondId?: string;
+  stars: number;
+  starExp: number;
+  starExpToNext: number;
+}
+
+export interface Bond {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  memberIds: string[];
+  bonusPerStar: { type: 'attack' | 'defense' | 'hp' | 'speed' | 'luck'; value: number }[];
+}
+
+export interface FormationSlot {
+  index: number;
+  companionId: string | null;
+  unlocked: boolean;
+  unlockLevel: number;
+}
+
+export interface Formation {
+  slots: FormationSlot[];
+  activeBondIds: string[];
+}
+
+export interface StarUpConfig {
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  maxStars: number;
+  starExpToNext: number[];
+  attackMultiplier: number[];
+  defenseMultiplier: number[];
 }
 
 export interface MapArea {

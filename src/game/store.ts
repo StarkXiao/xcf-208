@@ -13,6 +13,8 @@ import type {
   ActiveExpedition,
   ExpeditionLoot,
   ExpeditionPhase,
+  Formation,
+  FormationSlot,
 } from './types';
 import {
   INITIAL_STATS,
@@ -24,6 +26,9 @@ import {
   SHOP_ITEMS,
   EXPEDITION_MISSIONS,
   EXPEDITION_EVENTS,
+  BONDS,
+  STAR_UP_CONFIGS,
+  FORMATION_SLOT_CONFIG,
 } from './data';
 
 interface GameState {
@@ -31,6 +36,7 @@ interface GameState {
   activeTab: GameTab;
   player: Player;
   ownedCompanions: Companion[];
+  formation: Formation;
   mapAreas: MapArea[];
   currentAreaId: string;
   battleLogs: BattleLog[];
@@ -94,6 +100,15 @@ interface GameState {
   getDiscountedCompanionCost: (companion: Companion) => number;
   canRecruitCompanion: (companion: Companion) => boolean;
 
+  addCompanionStarExp: (companionId: string, exp: number) => void;
+  getCompanionEffectiveAttack: (companion: Companion) => number;
+  getCompanionEffectiveDefense: (companion: Companion) => number;
+  getActiveBonds: () => string[];
+  getBondBonus: () => { attack: number; defense: number; hp: number; speed: number; luck: number };
+  setFormationSlot: (slotIndex: number, companionId: string | null) => void;
+  getFormationCompanions: () => Companion[];
+  getUnlockedFormationSlots: () => number;
+
   activeExpedition: ActiveExpedition | null;
   startExpedition: (missionId: string, companionIds: string[]) => void;
   advanceExpeditionStage: () => void;
@@ -129,6 +144,32 @@ function initAreaReputations(): AreaReputation[] {
   }));
 }
 
+function initFormation(playerLevel: number): Formation {
+  const slots: FormationSlot[] = FORMATION_SLOT_CONFIG.map((cfg) => ({
+    index: cfg.index,
+    companionId: null,
+    unlocked: playerLevel >= cfg.unlockLevel,
+    unlockLevel: cfg.unlockLevel,
+  }));
+  return { slots, activeBondIds: [] };
+}
+
+function getStarUpConfig(rarity: Companion['rarity']) {
+  return STAR_UP_CONFIGS.find((c) => c.rarity === rarity) || STAR_UP_CONFIGS[0];
+}
+
+function computeEffectiveAttack(companion: Companion): number {
+  const config = getStarUpConfig(companion.rarity);
+  const multiplier = config.attackMultiplier[companion.stars] || config.attackMultiplier[config.attackMultiplier.length - 1];
+  return Math.floor(companion.attack * multiplier * companion.level);
+}
+
+function computeEffectiveDefense(companion: Companion): number {
+  const config = getStarUpConfig(companion.rarity);
+  const multiplier = config.defenseMultiplier[companion.stars] || config.defenseMultiplier[config.defenseMultiplier.length - 1];
+  return Math.floor(companion.defense * multiplier * companion.level);
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -144,6 +185,7 @@ export const useGameStore = create<GameState>()(
         totalRebirthBonus: 0,
       },
       ownedCompanions: [],
+      formation: initFormation(1),
       mapAreas: MAP_AREAS.map((area) => ({ ...area })),
       currentAreaId: 'forest',
       battleLogs: [],
@@ -208,13 +250,24 @@ export const useGameStore = create<GameState>()(
           expToNext = Math.floor(expToNext * 1.15);
           get().addBattleLog(`🎉 升级了！当前等级：${level}`, 'levelup');
 
-          const area = state.mapAreas.find((a) => a.id === state.currentAreaId);
-          if (area) {
-            state.mapAreas.forEach((a) => {
-              if (!a.unlocked && a.minLevel <= level) {
-                get().unlockMapArea(a.id);
-              }
-            });
+          state.mapAreas.forEach((a) => {
+            if (!a.unlocked && a.minLevel <= level) {
+              get().unlockMapArea(a.id);
+            }
+          });
+
+          const newFormation = { ...state.formation };
+          let formationChanged = false;
+          newFormation.slots = newFormation.slots.map((slot) => {
+            const cfg = FORMATION_SLOT_CONFIG.find((c) => c.index === slot.index);
+            if (cfg && !slot.unlocked && level >= cfg.unlockLevel) {
+              formationChanged = true;
+              return { ...slot, unlocked: true };
+            }
+            return slot;
+          });
+          if (formationChanged) {
+            set({ formation: newFormation });
           }
         }
 
@@ -352,19 +405,153 @@ export const useGameStore = create<GameState>()(
         const discountedCost = get().getDiscountedCompanionCost(companion);
         if (state.player.stats.gold < discountedCost) return false;
 
-        set((state) => ({
-          player: {
-            ...state.player,
-            stats: {
-              ...state.player.stats,
-              gold: state.player.stats.gold - discountedCost,
+        const config = getStarUpConfig(companion.rarity);
+        const newCompanion: Companion = {
+          ...companion,
+          stars: 1,
+          starExp: 0,
+          starExpToNext: config.starExpToNext[0],
+        };
+
+        set((state) => {
+          const newFormation = { ...state.formation };
+          const emptySlot = newFormation.slots.find((s) => s.unlocked && s.companionId === null);
+          if (emptySlot) {
+            newFormation.slots = newFormation.slots.map((s) =>
+              s.index === emptySlot.index ? { ...s, companionId: companionId } : s
+            );
+          }
+
+          return {
+            player: {
+              ...state.player,
+              stats: {
+                ...state.player.stats,
+                gold: state.player.stats.gold - discountedCost,
+              },
             },
-          },
-          ownedCompanions: [...state.ownedCompanions, { ...companion }],
-        }));
+            ownedCompanions: [...state.ownedCompanions, newCompanion],
+            formation: newFormation,
+          };
+        });
 
         get().addBattleLog(`🤝 招募了新伙伴：${companion.name}！`, 'event');
         return true;
+      },
+
+      addCompanionStarExp: (companionId, exp) => {
+        set((state) => {
+          const newCompanions = state.ownedCompanions.map((c) => {
+            if (c.id !== companionId) return c;
+            const config = getStarUpConfig(c.rarity);
+            let newStars = c.stars;
+            let newStarExp = c.starExp + exp;
+            let newStarExpToNext = c.starExpToNext;
+
+            while (newStars < config.maxStars && newStarExp >= newStarExpToNext) {
+              newStarExp -= newStarExpToNext;
+              newStars += 1;
+              if (newStars < config.maxStars) {
+                newStarExpToNext = config.starExpToNext[newStars - 1];
+              }
+            }
+
+            if (newStars > c.stars) {
+              get().addBattleLog(`⭐ ${c.name} 升至 ${newStars} 星！`, 'levelup');
+            }
+
+            return { ...c, stars: newStars, starExp: newStarExp, starExpToNext: newStarExpToNext };
+          });
+          return { ownedCompanions: newCompanions };
+        });
+      },
+
+      getCompanionEffectiveAttack: (companion) => {
+        return computeEffectiveAttack(companion);
+      },
+
+      getCompanionEffectiveDefense: (companion) => {
+        return computeEffectiveDefense(companion);
+      },
+
+      getActiveBonds: () => {
+        const state = get();
+        const formationIds = state.formation.slots
+          .filter((s) => s.unlocked && s.companionId !== null)
+          .map((s) => s.companionId!);
+
+        return BONDS
+          .filter((bond) => bond.memberIds.every((id) => formationIds.includes(id)))
+          .map((b) => b.id);
+      },
+
+      getBondBonus: () => {
+        const state = get();
+        const activeBondIds = state.formation.activeBondIds;
+        const bonus = { attack: 0, defense: 0, hp: 0, speed: 0, luck: 0 };
+
+        activeBondIds.forEach((bondId) => {
+          const bond = BONDS.find((b) => b.id === bondId);
+          if (!bond) return;
+
+          const memberIds = bond.memberIds;
+          const formationIds = state.formation.slots
+            .filter((s) => s.unlocked && s.companionId !== null)
+            .map((s) => s.companionId!);
+
+          if (!memberIds.every((id) => formationIds.includes(id))) return;
+
+          const members = state.ownedCompanions.filter((c) => memberIds.includes(c.id));
+          const minStars = members.length > 0 ? Math.min(...members.map((m) => m.stars)) : 0;
+
+          bond.bonusPerStar.forEach((b) => {
+            bonus[b.type] += b.value * minStars;
+          });
+        });
+
+        return bonus;
+      },
+
+      setFormationSlot: (slotIndex, companionId) => {
+        set((state) => {
+          const newSlots = state.formation.slots.map((s) => {
+            if (s.index !== slotIndex) return s;
+            return { ...s, companionId };
+          });
+
+          if (companionId !== null) {
+            newSlots.forEach((s, i) => {
+              if (s.index !== slotIndex && s.companionId === companionId) {
+                newSlots[i] = { ...s, companionId: null };
+              }
+            });
+          }
+
+          const formationIds = newSlots
+            .filter((s) => s.unlocked && s.companionId !== null)
+            .map((s) => s.companionId!);
+
+          const activeBondIds = BONDS
+            .filter((bond) => bond.memberIds.every((id) => formationIds.includes(id)))
+            .map((b) => b.id);
+
+          return { formation: { slots: newSlots, activeBondIds } };
+        });
+      },
+
+      getFormationCompanions: () => {
+        const state = get();
+        const ids = state.formation.slots
+          .filter((s) => s.unlocked && s.companionId !== null)
+          .map((s) => s.companionId!);
+        return ids
+          .map((id) => state.ownedCompanions.find((c) => c.id === id))
+          .filter((c): c is Companion => c !== undefined);
+      },
+
+      getUnlockedFormationSlots: () => {
+        const state = get();
+        return state.formation.slots.filter((s) => s.unlocked).length;
       },
 
       addBattleLog: (message, type) => {
@@ -538,6 +725,7 @@ export const useGameStore = create<GameState>()(
             totalRebirthBonus: state.player.totalRebirthBonus + bonusIds.length,
           },
           ownedCompanions: [],
+          formation: initFormation(1),
           mapAreas: MAP_AREAS.map((area) => ({ ...area })),
           currentAreaId: 'forest',
           battleLogs: [],
@@ -557,21 +745,25 @@ export const useGameStore = create<GameState>()(
       calculateDamage: () => {
         const state = get();
         const baseAttack = state.player.stats.attack;
-        const companionAttack = state.ownedCompanions.reduce(
-          (sum, c) => sum + c.attack * c.level,
+        const formationCompanions = get().getFormationCompanions();
+        const companionAttack = formationCompanions.reduce(
+          (sum, c) => sum + computeEffectiveAttack(c),
           0
         );
-        return baseAttack + companionAttack;
+        const bondBonus = get().getBondBonus();
+        return baseAttack + companionAttack + bondBonus.attack;
       },
 
       calculateDefense: () => {
         const state = get();
         const baseDefense = state.player.stats.defense;
-        const companionDefense = state.ownedCompanions.reduce(
-          (sum, c) => sum + c.defense * c.level,
+        const formationCompanions = get().getFormationCompanions();
+        const companionDefense = formationCompanions.reduce(
+          (sum, c) => sum + computeEffectiveDefense(c),
           0
         );
-        return baseDefense + companionDefense;
+        const bondBonus = get().getBondBonus();
+        return baseDefense + companionDefense + bondBonus.defense;
       },
 
       calculateGoldBonus: () => {
@@ -587,21 +779,25 @@ export const useGameStore = create<GameState>()(
       getTotalAttack: () => {
         const state = get();
         const playerAttack = state.player.stats.attack;
-        const companionAttack = state.ownedCompanions.reduce(
-          (sum, c) => sum + c.attack * c.level,
+        const formationCompanions = get().getFormationCompanions();
+        const companionAttack = formationCompanions.reduce(
+          (sum, c) => sum + computeEffectiveAttack(c),
           0
         );
-        return playerAttack + companionAttack;
+        const bondBonus = get().getBondBonus();
+        return playerAttack + companionAttack + bondBonus.attack;
       },
 
       getTotalDefense: () => {
         const state = get();
         const playerDefense = state.player.stats.defense;
-        const companionDefense = state.ownedCompanions.reduce(
-          (sum, c) => sum + c.defense * c.level,
+        const formationCompanions = get().getFormationCompanions();
+        const companionDefense = formationCompanions.reduce(
+          (sum, c) => sum + computeEffectiveDefense(c),
           0
         );
-        return playerDefense + companionDefense;
+        const bondBonus = get().getBondBonus();
+        return playerDefense + companionDefense + bondBonus.defense;
       },
 
       addAreaReputation: (areaId, points) => {
@@ -730,8 +926,6 @@ export const useGameStore = create<GameState>()(
 
         if (item.effect.type === 'exp') {
           get().addExp(item.effect.value);
-        } else if (item.effect.type === 'gold') {
-          // already handled in set
         }
 
         get().addBattleLog(`🛒 购买了 ${item.name}！`, 'event');
@@ -750,7 +944,15 @@ export const useGameStore = create<GameState>()(
           return { exp: 0, gold: 0 };
         }
 
-        const killsPerSecond = 0.3;
+        const formationCompanions = get().getFormationCompanions();
+        const companionPowerBonus = 1 + formationCompanions.reduce(
+          (sum, c) => sum + (computeEffectiveAttack(c) + computeEffectiveDefense(c)) * 0.001,
+          0
+        );
+        const bondBonus = get().getBondBonus();
+        const bondPowerBonus = 1 + (bondBonus.attack + bondBonus.defense) * 0.002;
+
+        const killsPerSecond = 0.3 * companionPowerBonus * bondPowerBonus;
         const totalKills = Math.floor(offlineSeconds * killsPerSecond);
         const avgMonster = currentArea.monsters[0];
         const dropBonus = get().getAreaDropBonus(state.currentAreaId);
@@ -774,6 +976,14 @@ export const useGameStore = create<GameState>()(
             `📦 离线收益：+${rewards.exp} 经验, +${rewards.gold} 金币`,
             'system'
           );
+
+          const formationCompanions = get().getFormationCompanions();
+          formationCompanions.forEach((c) => {
+            const starExp = Math.floor(rewards.exp * 0.1);
+            if (starExp > 0) {
+              get().addCompanionStarExp(c.id, starExp);
+            }
+          });
         }
         get().updateLastOnlineTime();
       },
@@ -787,8 +997,9 @@ export const useGameStore = create<GameState>()(
         const playerPower = state.player.stats.attack + state.player.stats.defense;
         const companionPower = state.ownedCompanions
           .filter((c) => companionIds.includes(c.id))
-          .reduce((sum, c) => sum + (c.attack + c.defense) * c.level, 0);
-        return playerPower + companionPower;
+          .reduce((sum, c) => sum + computeEffectiveAttack(c) + computeEffectiveDefense(c), 0);
+        const bondBonus = get().getBondBonus();
+        return playerPower + companionPower + bondBonus.attack + bondBonus.defense;
       },
 
       startExpedition: (missionId, companionIds) => {
@@ -991,6 +1202,13 @@ export const useGameStore = create<GameState>()(
           get().addAreaReputation(mission.areaId, loot.reputation);
         }
 
+        expedition.selectedCompanionIds.forEach((cid) => {
+          const starExp = Math.floor(loot.exp * 0.05);
+          if (starExp > 0) {
+            get().addCompanionStarExp(cid, starExp);
+          }
+        });
+
         get().addBattleLog(
           `🏁 远征完成！获得 ${loot.exp} 经验, ${loot.gold} 金币${loot.soulOrbs > 0 ? `, ${loot.soulOrbs} 魂珠` : ''}`,
           'system'
@@ -1021,12 +1239,23 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'isekai-idle-game',
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
           state.areaReputations = initAreaReputations();
           state.purchasedShopItems = [];
+        }
+        if (version < 3) {
+          const ownedCompanions = (state.ownedCompanions as Companion[]) || [];
+          state.ownedCompanions = ownedCompanions.map((c: Companion) => ({
+            ...c,
+            stars: c.stars || 1,
+            starExp: c.starExp || 0,
+            starExpToNext: c.starExpToNext || getStarUpConfig(c.rarity).starExpToNext[0],
+            bondId: c.bondId || COMPANIONS.find((cc) => cc.id === c.id)?.bondId,
+          }));
+          state.formation = initFormation(1);
         }
         return state as unknown as GameState;
       },

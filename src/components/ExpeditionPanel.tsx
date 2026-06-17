@@ -32,6 +32,10 @@ export default function ExpeditionPanel() {
 
   const maxCompanions = 4;
 
+  const formationCompanionIds = useGameStore.getState().formation.slots
+    .filter((s) => s.unlocked && s.companionId !== null)
+    .map((s) => s.companionId!);
+
   const toggleCompanion = (id: string) => {
     if (selectedCompanionIds.includes(id)) {
       setSelectedCompanionIds(selectedCompanionIds.filter((cid) => cid !== id));
@@ -42,7 +46,7 @@ export default function ExpeditionPanel() {
 
   const handleStartExpedition = () => {
     if (!selectedMission) return;
-    startExpedition(selectedMission.id, selectedCompanionIds);
+    startExpedition(selectedMission.id, selectedCompanionIds.length > 0 ? selectedCompanionIds : formationCompanionIds);
     setSelectedMission(null);
     setSelectedCompanionIds([]);
   };
@@ -367,13 +371,15 @@ export default function ExpeditionPanel() {
 
         <div className="formation-companions">
           <h4>🤝 选择出征伙伴（最多{maxCompanions}人）</h4>
-          <p className="formation-hint">已选 {selectedCompanionIds.length}/{maxCompanions}</p>
+          <p className="formation-hint">已选 {selectedCompanionIds.length}/{maxCompanions}（未选择时默认使用编队伙伴）</p>
           {ownedCompanions.length === 0 ? (
             <p className="no-companions-hint">暂无伙伴，可先在伙伴面板招募</p>
           ) : (
             <div className="formation-companion-grid">
               {ownedCompanions.map((comp) => {
                 const isSelected = selectedCompanionIds.includes(comp.id);
+                const effectiveAtk = useGameStore.getState().getCompanionEffectiveAttack(comp);
+                const effectiveDef = useGameStore.getState().getCompanionEffectiveDefense(comp);
                 return (
                   <button
                     key={comp.id}
@@ -388,9 +394,9 @@ export default function ExpeditionPanel() {
                       {comp.name[0]}
                     </div>
                     <div className="formation-comp-info">
-                      <span className="formation-comp-name">{comp.name}</span>
+                      <span className="formation-comp-name">{comp.name} {'★'.repeat(Math.min(comp.stars, 5))}</span>
                       <span className="formation-comp-stats">
-                        ⚔️{comp.attack * comp.level} 🛡️{comp.defense * comp.level}
+                        ⚔️{effectiveAtk} 🛡️{effectiveDef}
                       </span>
                     </div>
                     {isSelected && <span className="formation-check">✓</span>}

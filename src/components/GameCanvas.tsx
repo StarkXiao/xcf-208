@@ -47,9 +47,10 @@ export default function GameCanvas() {
     isAutoBattle,
     triggerRandomEvent,
     player,
-    ownedCompanions,
+    getFormationCompanions,
     getAreaDropBonus,
     addAreaReputation,
+    addCompanionStarExp,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -154,10 +155,11 @@ export default function GameCanvas() {
       const playerBobY = Math.sin(timestamp * 0.003) * 3;
       drawPlayer(ctx, playerX, playerYRef.current + playerBobY);
 
-      ownedCompanions.forEach((companion, index) => {
+      const formationCompanions = useGameStore.getState().getFormationCompanions();
+      formationCompanions.forEach((companion, index) => {
         const compX = playerX - 40 - index * 30;
         const compY = groundY - 40 + Math.sin(timestamp * 0.003 + index) * 3;
-        drawCompanion(ctx, compX, compY, companion.rarity);
+        drawCompanion(ctx, compX, compY, companion.rarity, companion.stars);
       });
 
       if (currentMonster) {
@@ -245,7 +247,13 @@ export default function GameCanvas() {
             const repGain = Math.max(1, Math.floor(currentMonster.expReward / 10));
             addAreaReputation(currentAreaId, repGain);
             addBattleLog(`击杀了 ${currentMonster.name}！获得 ${expReward} 经验, ${goldReward} 金币, ${repGain} 声望`, 'exp');
-            
+
+            const fc = useGameStore.getState().getFormationCompanions();
+            fc.forEach((c) => {
+              const starExp = Math.max(1, Math.floor(expReward * 0.08));
+              addCompanionStarExp(c.id, starExp);
+            });
+
             eventTriggerTimerRef.current += 1;
             if (eventTriggerTimerRef.current >= 5 && Math.random() < 0.3) {
               eventTriggerTimerRef.current = 0;
@@ -389,7 +397,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.restore();
 }
 
-function drawCompanion(ctx: CanvasRenderingContext2D, x: number, y: number, rarity: string) {
+function drawCompanion(ctx: CanvasRenderingContext2D, x: number, y: number, rarity: string, stars: number) {
   const colors: Record<string, string> = {
     common: '#9ca3af',
     rare: '#3b82f6',
@@ -415,6 +423,14 @@ function drawCompanion(ctx: CanvasRenderingContext2D, x: number, y: number, rari
   ctx.arc(0, -15, 25, 0, Math.PI * 2);
   ctx.stroke();
   ctx.globalAlpha = 1;
+
+  if (stars > 1) {
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    const starText = '★'.repeat(Math.min(stars, 5));
+    ctx.fillText(starText, 0, 15);
+  }
 
   ctx.restore();
 }

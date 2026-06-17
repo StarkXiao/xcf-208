@@ -103,6 +103,7 @@ export default function GameScreen() {
         totalRebirthBonus: state.player.totalRebirthBonus + selectedRebirthBonuses.length,
       },
       ownedCompanions: [],
+      formation: { slots: useGameStore.getState().formation.slots.map((s) => ({ ...s, companionId: null })), activeBondIds: [] },
       rebirthBonuses: newBonuses,
     }));
   };
