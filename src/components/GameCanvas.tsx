@@ -88,6 +88,7 @@ export default function GameCanvas() {
     getAlchemyBuffSoulOrbBonus,
     consumeBattleBuff,
     tickAlchemyBuffs,
+    encounterMonsterCodex,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -99,6 +100,7 @@ export default function GameCanvas() {
     if (!monster) return;
     
     setCurrentMonster(monster);
+    encounterMonsterCodex(monster.id, monster.tier);
     
     if (monster.tier !== 'normal') {
       const tierName = MONSTER_TIER_NAMES[monster.tier];

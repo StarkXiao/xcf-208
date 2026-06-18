@@ -618,6 +618,7 @@ interface GameState {
   totalSoulOrbsEarned: number;
 
   unlockMonsterCodex: (monsterId: string, tier?: MonsterTier) => void;
+  encounterMonsterCodex: (monsterId: string, tier?: MonsterTier) => void;
   getMonsterCodexEntry: (monsterId: string) => MonsterCodexEntry;
   getMonsterCodexProgress: () => { total: number; unlocked: number; percentage: number };
 
@@ -1046,6 +1047,10 @@ export const useGameStore = create<GameState>()(
             skillPoints,
           },
         }));
+
+        if (level !== state.player.stats.level) {
+          get().checkAchievements();
+        }
       },
 
       addGold: (amount) => {
@@ -1167,6 +1172,7 @@ export const useGameStore = create<GameState>()(
         if (area) {
           get().addBattleLog(`🗺️ 解锁了新地图：${area.name}！`, 'system');
         }
+        get().checkAchievements();
       },
 
       buyCompanion: (companionId) => {
@@ -1210,6 +1216,8 @@ export const useGameStore = create<GameState>()(
         });
 
         get().addBattleLog(`🤝 招募了新伙伴：${companion.name}！`, 'event');
+        get().unlockCodexEntry(companionId);
+        get().checkAchievements();
         return true;
       },
 
@@ -3648,6 +3656,7 @@ export const useGameStore = create<GameState>()(
 
         get().unlockCodexEntry(companionId);
         get().addBattleLog(`✨ 合成了新伙伴：${companion.name}！`, 'event');
+        get().checkAchievements();
         return true;
       },
 
@@ -3802,6 +3811,7 @@ export const useGameStore = create<GameState>()(
           `🎲 ${pool.name} ${count}连抽完成！`,
           'event'
         );
+        get().checkAchievements();
         return true;
       },
 
@@ -6349,6 +6359,33 @@ export const useGameStore = create<GameState>()(
               firstDefeatedAt: e.firstDefeatedAt || now,
               killCount: e.killCount + 1,
               maxTierDefeated: newMaxTier,
+            };
+          }),
+        }));
+
+        get().checkAchievements();
+      },
+
+      encounterMonsterCodex: (monsterId, tier) => {
+        const state = get();
+        const entry = state.monsterCodex.find((e) => e.monsterId === monsterId);
+        if (!entry || entry.unlocked) return;
+
+        const now = Date.now();
+        const newTier: MonsterTier | null = tier || null;
+
+        set((s) => ({
+          monsterCodex: s.monsterCodex.map((e) => {
+            if (e.monsterId !== monsterId) return e;
+            return {
+              ...e,
+              unlocked: true,
+              unlockedAt: now,
+              firstDefeatedAt: null,
+              killCount: 0,
+              maxTierDefeated: newTier && (!e.maxTierDefeated || (tier && ['normal', 'elite', 'boss'].indexOf(tier) > ['normal', 'elite', 'boss'].indexOf(e.maxTierDefeated)))
+                ? newTier
+                : e.maxTierDefeated,
             };
           }),
         }));
