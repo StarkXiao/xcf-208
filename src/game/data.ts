@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement, RelicDungeonBuff, RelicDungeonBoss, RelicDungeonDifficulty } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement, RelicDungeonBuff, RelicDungeonBoss, RelicDungeonDifficulty, SeasonChallengeSeason, SeasonChallengeLeaderboardEntry } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -8421,4 +8421,118 @@ export const ACHIEVEMENTS: Achievement[] = [
       { type: 'luck', value: 5 },
     ],
   },
+];
+
+export const SEASON_CHALLENGE_SEASONS: SeasonChallengeSeason[] = [
+  {
+    id: 'season_1',
+    name: '焰火纪元',
+    description: '烈焰灼烧大地，勇者们踏上征途，在火与灰烬中书写新的传说',
+    icon: '🔥',
+    theme: 'flame',
+    color: '#ef4444',
+    totalWeeks: 4,
+    stages: [
+      {
+        id: 's1_stage_1',
+        name: '初燃之火',
+        description: '赛季初始阶段，踏上冒险之路',
+        weekNumber: 1,
+        unlockScore: 0,
+        icon: '🕯️',
+        tasks: [
+          { id: 's1_t1_1', name: '怪物猎人', description: '击杀30只怪物', type: 'kill', target: 30, scoreReward: 50, rewards: [{ type: 'gold', value: 500 }, { type: 'exp', value: 300 }], icon: '⚔️' },
+          { id: 's1_t1_2', name: '财富积累', description: '累计获得2000金币', type: 'collect', target: 2000, scoreReward: 60, rewards: [{ type: 'gold', value: 800 }, { type: 'exp', value: 400 }], icon: '💰' },
+          { id: 's1_t1_3', name: '新兵训练', description: '达到15级', type: 'level', target: 15, scoreReward: 80, rewards: [{ type: 'soulOrbs', value: 3 }, { type: 'attack', value: 2 }], icon: '📈' },
+          { id: 's1_t1_4', name: '初次探索', description: '在2个不同区域战斗', type: 'explore', target: 2, scoreReward: 40, rewards: [{ type: 'gold', value: 300 }, { type: 'exp', value: 200 }], icon: '🗺️' },
+          { id: 's1_t1_5', name: '精英猎手', description: '击杀5只精英怪物', type: 'battle', target: 5, scoreReward: 70, rewards: [{ type: 'soulOrbs', value: 2 }, { type: 'defense', value: 2 }], icon: '🛡️' },
+        ],
+      },
+      {
+        id: 's1_stage_2',
+        name: '燎原之势',
+        description: '战火蔓延，更大的挑战正在逼近',
+        weekNumber: 2,
+        unlockScore: 200,
+        icon: '🔥',
+        tasks: [
+          { id: 's1_t2_1', name: '讨伐精英', description: '击杀15只精英怪物', type: 'battle', target: 15, scoreReward: 100, rewards: [{ type: 'soulOrbs', value: 5 }, { type: 'attack', value: 3 }], icon: '💎' },
+          { id: 's1_t2_2', name: '首领挑战', description: '击败3只首领怪物', type: 'boss', target: 3, scoreReward: 120, rewards: [{ type: 'soulOrbs', value: 8 }, { type: 'gold', value: 2000 }], icon: '👑' },
+          { id: 's1_t2_3', name: '委托达人', description: '完成5次委托', type: 'commission', target: 5, scoreReward: 80, rewards: [{ type: 'gold', value: 1000 }, { type: 'exp', value: 500 }], icon: '📜' },
+          { id: 's1_t2_4', name: '同伴之力', description: '招募3位伙伴', type: 'social', target: 3, scoreReward: 90, rewards: [{ type: 'soulOrbs', value: 3 }, { type: 'hp', value: 30 }], icon: '🤝' },
+          { id: 's1_t2_5', name: '勇者进阶', description: '达到30级', type: 'level', target: 30, scoreReward: 110, rewards: [{ type: 'soulOrbs', value: 5 }, { type: 'attack', value: 5 }], icon: '📈' },
+        ],
+      },
+      {
+        id: 's1_stage_3',
+        name: '烈焰试炼',
+        description: '烈焰洗礼，唯有真正的勇者方能通过',
+        weekNumber: 3,
+        unlockScore: 500,
+        icon: '☄️',
+        tasks: [
+          { id: 's1_t3_1', name: '首领终结者', description: '击败8只首领怪物', type: 'boss', target: 8, scoreReward: 150, rewards: [{ type: 'soulOrbs', value: 12 }, { type: 'attack', value: 5 }], icon: '👑' },
+          { id: 's1_t3_2', name: '远征先锋', description: '完成3次远征', type: 'expedition', target: 3, scoreReward: 100, rewards: [{ type: 'gold', value: 3000 }, { type: 'exp', value: 1500 }], icon: '🏕️' },
+          { id: 's1_t3_3', name: '公会精英', description: '通关5个公会节点', type: 'guild', target: 5, scoreReward: 120, rewards: [{ type: 'soulOrbs', value: 6 }, { type: 'defense', value: 5 }], icon: '🏰' },
+          { id: 's1_t3_4', name: '炼金术士', description: '成功炼金5次', type: 'alchemy', target: 5, scoreReward: 80, rewards: [{ type: 'gold', value: 1500 }, { type: 'exp', value: 800 }], icon: '⚗️' },
+          { id: 's1_t3_5', name: '传说挑战', description: '达到50级', type: 'level', target: 50, scoreReward: 200, rewards: [{ type: 'soulOrbs', value: 15 }, { type: 'attack', value: 10 }, { type: 'hp', value: 50 }], icon: '🏆' },
+        ],
+      },
+      {
+        id: 's1_stage_4',
+        name: '涅槃重生',
+        description: '火之尽头，涅槃之际，最终试炼已经来临',
+        weekNumber: 4,
+        unlockScore: 900,
+        icon: '🌀',
+        tasks: [
+          { id: 's1_t4_1', name: '终极猎杀', description: '击杀15只首领怪物', type: 'boss', target: 15, scoreReward: 250, rewards: [{ type: 'soulOrbs', value: 20 }, { type: 'attack', value: 10 }, { type: 'defense', value: 8 }], icon: '👑' },
+          { id: 's1_t4_2', name: '万兽之敌', description: '击杀300只怪物', type: 'kill', target: 300, scoreReward: 180, rewards: [{ type: 'soulOrbs', value: 10 }, { type: 'gold', value: 5000 }], icon: '⚔️' },
+          { id: 's1_t4_3', name: '征服者', description: '解锁全部4个区域', type: 'area', target: 4, scoreReward: 200, rewards: [{ type: 'soulOrbs', value: 15 }, { type: 'speed', value: 5 }], icon: '🏔️' },
+          { id: 's1_t4_4', name: '财富之主', description: '累计获得50000金币', type: 'collect', target: 50000, scoreReward: 160, rewards: [{ type: 'soulOrbs', value: 8 }, { type: 'luck', value: 5 }], icon: '💰' },
+          { id: 's1_t4_5', name: '焰火至尊', description: '完成所有其他阶段任务', type: 'battle', target: 1, scoreReward: 300, rewards: [{ type: 'soulOrbs', value: 30 }, { type: 'attack', value: 15 }, { type: 'defense', value: 15 }, { type: 'hp', value: 100 }], icon: '🌟' },
+        ],
+      },
+    ],
+    limitedPartners: [
+      {
+        companionId: 'season_flame_knight',
+        seasonId: 'season_1',
+        unlockScore: 300,
+        bonusStats: [{ stat: 'attack', value: 5 }, { stat: 'hp', value: 30 }],
+        description: '焰火骑士 - 在烈焰中诞生的守护者，为赛季勇者赋予攻击和生命加成',
+      },
+      {
+        companionId: 'season_phoenix_maiden',
+        seasonId: 'season_1',
+        unlockScore: 700,
+        bonusStats: [{ stat: 'attack', value: 8 }, { stat: 'speed', value: 3 }],
+        description: '凤凰少女 - 浴火重生的神秘少女，为赛季勇者赋予攻击和速度加成',
+      },
+    ],
+    crossWeekRewards: [
+      { weekNumber: 1, minScore: 150, title: '第一周奖励', icon: '🎁', rewards: [{ type: 'gold', value: 1000 }, { type: 'exp', value: 500 }] },
+      { weekNumber: 2, minScore: 400, title: '第二周奖励', icon: '🎊', rewards: [{ type: 'gold', value: 3000 }, { type: 'soulOrbs', value: 5 }, { type: 'exp', value: 1500 }] },
+      { weekNumber: 3, minScore: 700, title: '第三周奖励', icon: '🎉', rewards: [{ type: 'gold', value: 5000 }, { type: 'soulOrbs', value: 10 }, { type: 'attack', value: 5 }] },
+      { weekNumber: 4, minScore: 1000, title: '最终周奖励', icon: '🏆', rewards: [{ type: 'gold', value: 10000 }, { type: 'soulOrbs', value: 20 }, { type: 'attack', value: 10 }, { type: 'defense', value: 8 }] },
+    ],
+  },
+];
+
+export const SEASON_CHALLENGE_SIMULATED_LEADERBOARD: SeasonChallengeLeaderboardEntry[] = [
+  { rank: 1, name: '烈焰战神', score: 2800, title: '至尊王者', avatarColor: '#fbbf24' },
+  { rank: 2, name: '龙语者', score: 2450, title: '赛季霸主', avatarColor: '#f59e0b' },
+  { rank: 3, name: '暗影猎手', score: 2200, title: '荣耀战神', avatarColor: '#fb923c' },
+  { rank: 4, name: '风暴骑士', score: 1950, title: '前十强', avatarColor: '#a78bfa' },
+  { rank: 5, name: '冰霜法师', score: 1800, title: '前十强', avatarColor: '#60a5fa' },
+  { rank: 6, name: '铁壁守护', score: 1600, title: '前十强', avatarColor: '#34d399' },
+  { rank: 7, name: '翠风游侠', score: 1400, title: '前十强', avatarColor: '#22d3ee' },
+  { rank: 8, name: '星辰旅人', score: 1250, title: '前十强', avatarColor: '#e879f9' },
+  { rank: 9, name: '深渊行者', score: 1100, title: '前十强', avatarColor: '#f472b6' },
+  { rank: 10, name: '黎明剑圣', score: 980, title: '前十强', avatarColor: '#fb7185' },
+  { rank: 11, name: '幽月刺客', score: 850, title: '荣耀勇士', avatarColor: '#c084fc' },
+  { rank: 12, name: '雷霆使者', score: 720, title: '荣耀勇士', avatarColor: '#818cf8' },
+  { rank: 13, name: '圣光祭司', score: 600, title: '荣耀勇士', avatarColor: '#38bdf8' },
+  { rank: 14, name: '荒野猎人', score: 480, title: '精英挑战者', avatarColor: '#2dd4bf' },
+  { rank: 15, name: '岩石守卫', score: 350, title: '精英挑战者', avatarColor: '#4ade80' },
 ];

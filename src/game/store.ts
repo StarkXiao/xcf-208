@@ -99,6 +99,10 @@ import type {
   RelicDungeonShopItem,
   RelicDungeonSettlement,
   RelicDungeonReplayEvent,
+  SeasonChallengeState,
+  SeasonChallengeTaskProgress,
+  SeasonChallengeHistoryEntry,
+  SeasonChallengeLeaderboardEntry,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES } from './types';
 import {
@@ -158,6 +162,8 @@ import {
   RELIC_DUNGEON_DIFFICULTY_CONFIG,
   RELIC_DUNGEON_ROOM_DISTRIBUTION,
   RELIC_DUNGEON_ROOM_NAMES,
+  SEASON_CHALLENGE_SEASONS,
+  SEASON_CHALLENGE_SIMULATED_LEADERBOARD,
 } from './data';
 
 interface GameState {
@@ -684,6 +690,22 @@ interface GameState {
   generateRelicDungeonShop: () => RelicDungeonShopItem[];
   buyRelicDungeonShopItem: (itemId: string) => boolean;
   getBossForFloor: (floor: number, difficulty: RelicDungeonDifficulty) => typeof RELIC_DUNGEON_BOSSES[0] | null;
+
+  seasonChallenge: SeasonChallengeState;
+  getCurrentSeason: () => typeof SEASON_CHALLENGE_SEASONS[0] | undefined;
+  getSeasonTaskProgress: (taskId: string) => SeasonChallengeTaskProgress;
+  isStageUnlocked: (stageId: string) => boolean;
+  claimSeasonTaskReward: (taskId: string) => boolean;
+  canClaimSeasonTaskReward: (taskId: string) => boolean;
+  getSeasonLeaderboard: () => SeasonChallengeLeaderboardEntry[];
+  getPlayerSeasonRank: () => number;
+  isLimitedPartnerUnlocked: (companionId: string) => boolean;
+  canClaimCrossWeekReward: (weekNumber: number) => boolean;
+  claimCrossWeekReward: (weekNumber: number) => boolean;
+  getSeasonHistory: () => SeasonChallengeHistoryEntry[];
+  setSeasonChallengeTab: (tab: SeasonChallengeState['activeTab']) => void;
+  addSeasonScore: (score: number) => void;
+  updateSeasonTaskProgress: (type: string, value: number) => void;
 }
 
 let logIdCounter = 0;
@@ -1017,6 +1039,25 @@ export const useGameStore = create<GameState>()(
       alchemyActiveTab: 'recipes',
       craftingInProgress: false,
       lastCraftTime: 0,
+
+      seasonChallenge: {
+        currentSeasonId: SEASON_CHALLENGE_SEASONS[0]?.id || null,
+        seasonScore: 0,
+        taskProgresses: SEASON_CHALLENGE_SEASONS.flatMap((s) =>
+          s.stages.flatMap((st) =>
+            st.tasks.map((t) => ({
+              taskId: t.id,
+              progress: 0,
+              completed: false,
+              claimed: false,
+            }))
+          )
+        ),
+        leaderboard: SEASON_CHALLENGE_SIMULATED_LEADERBOARD,
+        crossWeekRewardClaimed: [],
+        history: [],
+        activeTab: 'tasks',
+      },
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -7689,10 +7730,203 @@ export const useGameStore = create<GameState>()(
         if (ratio >= 0.4 && available[1]) return available[1];
         return available[0];
       },
+
+      getCurrentSeason: () => {
+        const state = get();
+        const seasonId = state.seasonChallenge.currentSeasonId;
+        return SEASON_CHALLENGE_SEASONS.find((s) => s.id === seasonId);
+      },
+
+      getSeasonTaskProgress: (taskId) => {
+        const state = get();
+        return state.seasonChallenge.taskProgresses.find((t) => t.taskId === taskId) || {
+          taskId,
+          progress: 0,
+          completed: false,
+          claimed: false,
+        };
+      },
+
+      isStageUnlocked: (stageId) => {
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return false;
+        const stage = season.stages.find((st) => st.id === stageId);
+        if (!stage) return false;
+        return state.seasonChallenge.seasonScore >= stage.unlockScore;
+      },
+
+      claimSeasonTaskReward: (taskId) => {
+        const state = get();
+        const taskProgress = state.seasonChallenge.taskProgresses.find((t) => t.taskId === taskId);
+        if (!taskProgress || !taskProgress.completed || taskProgress.claimed) return false;
+
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return false;
+
+        const task = season.stages.flatMap((st) => st.tasks).find((t) => t.id === taskId);
+        if (!task) return false;
+
+        task.rewards.forEach((reward) => {
+          switch (reward.type) {
+            case 'gold': get().addGold(reward.value); break;
+            case 'exp': get().addExp(reward.value); break;
+            case 'soulOrbs': get().addSoulOrbs(reward.value); break;
+            case 'attack': get().upgradeStat('attack', 0); break;
+            case 'defense': get().upgradeStat('defense', 0); break;
+            case 'hp': get().healHp(reward.value); break;
+            default: break;
+          }
+        });
+
+        set((state) => ({
+          seasonChallenge: {
+            ...state.seasonChallenge,
+            seasonScore: state.seasonChallenge.seasonScore + task.scoreReward,
+            taskProgresses: state.seasonChallenge.taskProgresses.map((t) =>
+              t.taskId === taskId ? { ...t, claimed: true } : t
+            ),
+          },
+        }));
+
+        return true;
+      },
+
+      canClaimSeasonTaskReward: (taskId) => {
+        const state = get();
+        const taskProgress = state.seasonChallenge.taskProgresses.find((t) => t.taskId === taskId);
+        return !!taskProgress && taskProgress.completed && !taskProgress.claimed;
+      },
+
+      getSeasonLeaderboard: () => {
+        const state = get();
+        const playerEntry: SeasonChallengeLeaderboardEntry = {
+          rank: 0,
+          name: state.player.name || '勇者',
+          score: state.seasonChallenge.seasonScore,
+          title: '',
+          avatarColor: '#3b82f6',
+        };
+
+        const allEntries = [...state.seasonChallenge.leaderboard, playerEntry]
+          .sort((a, b) => b.score - a.score)
+          .map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+          }));
+
+        return allEntries;
+      },
+
+      getPlayerSeasonRank: () => {
+        const leaderboard = get().getSeasonLeaderboard();
+        const state = get();
+        const playerEntry = leaderboard.find((e) => e.name === (state.player.name || '勇者'));
+        return playerEntry?.rank || leaderboard.length;
+      },
+
+      isLimitedPartnerUnlocked: (companionId) => {
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return false;
+        const partner = season.limitedPartners.find((p) => p.companionId === companionId);
+        if (!partner) return false;
+        return state.seasonChallenge.seasonScore >= partner.unlockScore;
+      },
+
+      canClaimCrossWeekReward: (weekNumber) => {
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return false;
+        const reward = season.crossWeekRewards.find((r) => r.weekNumber === weekNumber);
+        if (!reward) return false;
+        const rewardKey = `week_${weekNumber}`;
+        if (state.seasonChallenge.crossWeekRewardClaimed.includes(rewardKey)) return false;
+        return state.seasonChallenge.seasonScore >= reward.minScore;
+      },
+
+      claimCrossWeekReward: (weekNumber) => {
+        if (!get().canClaimCrossWeekReward(weekNumber)) return false;
+
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return false;
+        const reward = season.crossWeekRewards.find((r) => r.weekNumber === weekNumber);
+        if (!reward) return false;
+
+        reward.rewards.forEach((r) => {
+          switch (r.type) {
+            case 'gold': get().addGold(r.value); break;
+            case 'exp': get().addExp(r.value); break;
+            case 'soulOrbs': get().addSoulOrbs(r.value); break;
+            default: break;
+          }
+        });
+
+        set((state) => ({
+          seasonChallenge: {
+            ...state.seasonChallenge,
+            crossWeekRewardClaimed: [...state.seasonChallenge.crossWeekRewardClaimed, `week_${weekNumber}`],
+          },
+        }));
+
+        return true;
+      },
+
+      getSeasonHistory: () => {
+        return get().seasonChallenge.history;
+      },
+
+      setSeasonChallengeTab: (tab) => {
+        set((state) => ({
+          seasonChallenge: {
+            ...state.seasonChallenge,
+            activeTab: tab,
+          },
+        }));
+      },
+
+      addSeasonScore: (score) => {
+        set((state) => ({
+          seasonChallenge: {
+            ...state.seasonChallenge,
+            seasonScore: state.seasonChallenge.seasonScore + score,
+          },
+        }));
+      },
+
+      updateSeasonTaskProgress: (type, value) => {
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return;
+
+        const tasksToUpdate = season.stages
+          .flatMap((st) => st.tasks)
+          .filter((t) => t.type === type);
+
+        if (tasksToUpdate.length === 0) return;
+
+        set((state) => ({
+          seasonChallenge: {
+            ...state.seasonChallenge,
+            taskProgresses: state.seasonChallenge.taskProgresses.map((tp) => {
+              const task = tasksToUpdate.find((t) => t.id === tp.taskId);
+              if (!task || tp.completed) return tp;
+              const newProgress = tp.progress + value;
+              const completed = newProgress >= task.target;
+              return {
+                ...tp,
+                progress: Math.min(newProgress, task.target),
+                completed,
+              };
+            }),
+          },
+        }));
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 12,
+      version: 13,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -7796,6 +8030,26 @@ export const useGameStore = create<GameState>()(
           state.achievementProgresses = initAchievementProgresses();
           state.totalGoldEarned = 0;
           state.totalSoulOrbsEarned = 0;
+        }
+        if (version < 13) {
+          state.seasonChallenge = {
+            currentSeasonId: SEASON_CHALLENGE_SEASONS[0]?.id || null,
+            seasonScore: 0,
+            taskProgresses: SEASON_CHALLENGE_SEASONS.flatMap((s) =>
+              s.stages.flatMap((st) =>
+                st.tasks.map((t) => ({
+                  taskId: t.id,
+                  progress: 0,
+                  completed: false,
+                  claimed: false,
+                }))
+              )
+            ),
+            leaderboard: SEASON_CHALLENGE_SIMULATED_LEADERBOARD,
+            crossWeekRewardClaimed: [],
+            history: [],
+            activeTab: 'tasks',
+          };
         }
         return state as unknown as GameState;
       },

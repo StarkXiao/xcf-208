@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon' | 'season';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1975,4 +1975,149 @@ export const RELIC_DUNGEON_RANK_COLORS: Record<RelicDungeonSettlement['rank'], s
   B: '#3b82f6',
   C: '#22c55e',
   D: '#9ca3af',
+};
+
+export type SeasonChallengeTab = 'tasks' | 'leaderboard' | 'partners' | 'rewards' | 'history';
+
+export type SeasonTaskType = 'kill' | 'collect' | 'explore' | 'battle' | 'social' | 'boss' | 'level' | 'area' | 'commission' | 'expedition' | 'guild' | 'alchemy';
+
+export interface SeasonChallengeTask {
+  id: string;
+  name: string;
+  description: string;
+  type: SeasonTaskType;
+  target: number;
+  scoreReward: number;
+  rewards: StarReward[];
+  icon: string;
+}
+
+export interface SeasonChallengeStage {
+  id: string;
+  name: string;
+  description: string;
+  weekNumber: number;
+  tasks: SeasonChallengeTask[];
+  unlockScore: number;
+  icon: string;
+}
+
+export interface SeasonChallengeTaskProgress {
+  taskId: string;
+  progress: number;
+  completed: boolean;
+  claimed: boolean;
+}
+
+export interface SeasonChallengeLeaderboardEntry {
+  rank: number;
+  name: string;
+  score: number;
+  title: string;
+  avatarColor: string;
+}
+
+export interface SeasonChallengeLimitedPartner {
+  companionId: string;
+  seasonId: string;
+  unlockScore: number;
+  bonusStats: { stat: 'attack' | 'defense' | 'hp' | 'speed' | 'luck'; value: number }[];
+  description: string;
+}
+
+export interface SeasonChallengeCrossWeekReward {
+  weekNumber: number;
+  minScore: number;
+  rewards: StarReward[];
+  title: string;
+  icon: string;
+}
+
+export interface SeasonChallengeSeason {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  theme: string;
+  color: string;
+  totalWeeks: number;
+  stages: SeasonChallengeStage[];
+  limitedPartners: SeasonChallengeLimitedPartner[];
+  crossWeekRewards: SeasonChallengeCrossWeekReward[];
+}
+
+export interface SeasonChallengeHistoryEntry {
+  seasonId: string;
+  seasonName: string;
+  icon: string;
+  finalScore: number;
+  finalRank: number;
+  totalParticipants: number;
+  limitedPartnersUnlocked: string[];
+  stagesCompleted: number;
+  completedAt: number;
+}
+
+export interface SeasonChallengeState {
+  currentSeasonId: string | null;
+  seasonScore: number;
+  taskProgresses: SeasonChallengeTaskProgress[];
+  leaderboard: SeasonChallengeLeaderboardEntry[];
+  crossWeekRewardClaimed: string[];
+  history: SeasonChallengeHistoryEntry[];
+  activeTab: SeasonChallengeTab;
+}
+
+export const SEASON_TASK_TYPE_NAMES: Record<SeasonTaskType, string> = {
+  kill: '击杀',
+  collect: '收集',
+  explore: '探索',
+  battle: '战斗',
+  social: '社交',
+  boss: '首领',
+  level: '等级',
+  area: '区域',
+  commission: '委托',
+  expedition: '远征',
+  guild: '公会',
+  alchemy: '炼金',
+};
+
+export const SEASON_TASK_TYPE_ICONS: Record<SeasonTaskType, string> = {
+  kill: '⚔️',
+  collect: '💰',
+  explore: '🗺️',
+  battle: '🛡️',
+  social: '🤝',
+  boss: '👑',
+  level: '📈',
+  area: '🏔️',
+  commission: '📜',
+  expedition: '🏕️',
+  guild: '🏰',
+  alchemy: '⚗️',
+};
+
+export const SEASON_RANK_TITLES: Record<number, string> = {
+  1: '至尊王者',
+  2: '赛季霸主',
+  3: '荣耀战神',
+};
+
+export function getSeasonRankTitle(rank: number): string {
+  if (rank <= 3) return SEASON_RANK_TITLES[rank] || `前${rank}名`;
+  if (rank <= 10) return `前十强`;
+  if (rank <= 50) return `荣耀勇士`;
+  if (rank <= 100) return `精英挑战者`;
+  return `参赛者`;
+}
+
+export const SEASON_RANK_COLORS: Record<string, string> = {
+  '至尊王者': '#fbbf24',
+  '赛季霸主': '#f59e0b',
+  '荣耀战神': '#fb923c',
+  '前十强': '#a78bfa',
+  '荣耀勇士': '#60a5fa',
+  '精英挑战者': '#34d399',
+  '参赛者': '#9ca3af',
 };
