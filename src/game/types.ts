@@ -436,7 +436,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions';
+export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions' | 'trade' | 'blackmarket';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1122,6 +1122,119 @@ export interface InventoryMaterial {
 export interface CommissionDailyRefresh {
   lastRefreshTime: number;
   commissions: Commission[];
+}
+
+export type TradeItemRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type TradeItemCategory = 'material' | 'consumable' | 'equipment' | 'companion_shard' | 'rare_resource';
+
+export interface TradeItem {
+  id: string;
+  name: string;
+  description: string;
+  category: TradeItemCategory;
+  rarity: TradeItemRarity;
+  basePrice: number;
+  currency: 'gold' | 'soulOrbs';
+  icon: string;
+  minPlayerLevel: number;
+  maxStockPerRefresh: number;
+  weight: number;
+  areaId?: string;
+  minReputationLevel?: number;
+  isBlackMarketOnly?: boolean;
+  requiredTags?: string[];
+  effect?: {
+    type: 'hp' | 'mp' | 'attack' | 'defense' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs';
+    value: number;
+  };
+  materialId?: string;
+  equipmentBaseId?: string;
+  companionId?: string;
+}
+
+export interface TradeInventoryItem {
+  itemId: string;
+  currentStock: number;
+  currentPrice: number;
+  priceModifier: number;
+  lastPriceChange: number;
+}
+
+export interface TradeInventory {
+  areaId: string;
+  items: TradeInventoryItem[];
+  lastRefreshTime: number;
+  refreshCount: number;
+}
+
+export interface PriceFluctuationConfig {
+  minModifier: number;
+  maxModifier: number;
+  volatility: number;
+  meanReversionRate: number;
+  eventImpactMultiplier: number;
+  areaDemandMultiplier: number;
+}
+
+export type TradeEventType =
+  | 'merchant_arrival'
+  | 'caravan_attack'
+  | 'festival'
+  | 'drought'
+  | 'war'
+  | 'plague'
+  | 'discovery'
+  | 'bubble'
+  | 'crash';
+
+export interface TradeEvent {
+  id: string;
+  type: TradeEventType;
+  title: string;
+  description: string;
+  durationSeconds: number;
+  priceModifiers: Record<string, number>;
+  categoryModifiers: Record<TradeItemCategory, number>;
+  rarityModifiers: Record<TradeItemRarity, number>;
+  icon: string;
+  isPositive: boolean;
+}
+
+export interface ActiveTradeEvent {
+  eventId: string;
+  startTime: number;
+  endTime: number;
+}
+
+export interface TradeRecord {
+  id: number;
+  itemId: string;
+  itemName: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  currency: 'gold' | 'soulOrbs';
+  timestamp: number;
+  areaId: string;
+}
+
+export interface PlayerTradeInventory {
+  materials: Record<string, number>;
+  consumables: Record<string, number>;
+}
+
+export type TradeTab = 'market' | 'blackmarket' | 'inventory' | 'history';
+
+export interface BlackMarketConfig {
+  unlockLevel: number;
+  priceDiscountRange: { min: number; max: number };
+  pricePremiumRange: { min: number; max: number };
+  rareItemChance: number;
+  legendaryItemChance: number;
+  refreshCost: number;
+  refreshCurrency: 'gold' | 'soulOrbs';
+  riskEventChance: number;
 }
 
 declare module './types' {

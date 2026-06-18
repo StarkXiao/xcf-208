@@ -11,6 +11,8 @@ import GuildPanel from './GuildPanel';
 import EquipmentPanel from './EquipmentPanel';
 import { ChapterPanel } from './ChapterPanel';
 import CommissionPanel from './CommissionPanel';
+import TradeMarketPanel from './TradeMarketPanel';
+import BlackMarketPanel from './BlackMarketPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -78,6 +80,8 @@ export default function GameScreen() {
     { id: 'stats' as const, label: '📊 属性', icon: '📊' },
     { id: 'companions' as const, label: '🤝 伙伴', icon: '🤝' },
     { id: 'commissions' as const, label: '📜 委托', icon: '📜' },
+    { id: 'trade' as const, label: '🏪 交易行', icon: '🏪' },
+    { id: 'blackmarket' as const, label: '🌑 黑市', icon: '🌑' },
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
     { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'equipment' as const, label: '⚒️ 装备', icon: '⚒️' },
@@ -696,6 +700,10 @@ export default function GameScreen() {
         return <CompanionsPanel />;
       case 'commissions':
         return <CommissionPanel />;
+      case 'trade':
+        return <TradeMarketPanel />;
+      case 'blackmarket':
+        return <BlackMarketPanel />;
       case 'expedition':
         return <ExpeditionPanel />;
       case 'guild':

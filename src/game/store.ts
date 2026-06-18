@@ -68,6 +68,15 @@ import type {
   CommissionRewardResult,
   InventoryMaterial,
   RareMaterial,
+  TradeItem,
+  TradeInventory,
+  TradeInventoryItem,
+  TradeRecord,
+  ActiveTradeEvent,
+  TradeEvent,
+  TradeItemRarity,
+  TradeItemCategory,
+  BlackMarketConfig,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -117,6 +126,17 @@ import {
   COMMISSION_RARITY_COLORS,
   COMMISSION_RARITY_NAMES,
   COMMISSION_TYPES,
+  TRADE_ITEMS,
+  TRADE_RARITY_COLORS,
+  TRADE_RARITY_NAMES,
+  TRADE_CATEGORY_NAMES,
+  TRADE_CATEGORY_ICONS,
+  PRICE_FLUCTUATION_CONFIG,
+  TRADE_REFRESH_INTERVAL,
+  TRADE_ITEMS_PER_REFRESH,
+  BLACK_MARKET_ITEMS_PER_REFRESH,
+  BLACK_MARKET_CONFIG,
+  TRADE_EVENTS,
 } from './data';
 
 interface GameState {
@@ -473,6 +493,36 @@ interface GameState {
   getMaterialInfo: (materialId: string) => RareMaterial | undefined;
   getActiveCommissionCount: () => number;
   canStartCommission: () => boolean;
+
+  tradeInventories: TradeInventory[];
+  blackMarketInventory: TradeInventory | null;
+  tradeRecords: TradeRecord[];
+  activeTradeEvents: ActiveTradeEvent[];
+  lastTradeEventCheck: number;
+
+  initTradeInventories: () => TradeInventory[];
+  getTradeInventory: (areaId: string) => TradeInventory | undefined;
+  getTradeItemStock: (itemId: string, areaId: string) => number;
+  getTradeItemPrice: (itemId: string, areaId: string) => number;
+  getAvailableTradeItems: (areaId: string) => { item: TradeItem; inventory: TradeInventoryItem }[];
+  shouldRefreshTrade: (areaId: string) => boolean;
+  refreshTradeInventory: (areaId: string, triggerType?: 'timer' | 'event' | 'manual') => void;
+  calculatePriceModifier: (item: TradeItem, areaId: string) => number;
+  buyTradeItem: (itemId: string, areaId: string, quantity?: number) => boolean;
+  sellTradeItem: (itemId: string, areaId: string, quantity?: number) => boolean;
+  addTradeRecord: (record: Omit<TradeRecord, 'id' | 'timestamp'>) => void;
+
+  isBlackMarketUnlocked: () => boolean;
+  getBlackMarketInventory: () => TradeInventory | null;
+  shouldRefreshBlackMarket: () => boolean;
+  refreshBlackMarket: () => boolean;
+  buyBlackMarketItem: (itemId: string, quantity?: number) => boolean;
+  getBlackMarketItems: () => { item: TradeItem; inventory: TradeInventoryItem }[];
+
+  checkTradeEvents: () => void;
+  getActiveTradeEvents: () => TradeEvent[];
+  getTradeEventPriceModifier: (item: TradeItem) => number;
+  triggerRandomTradeEvent: () => void;
 }
 
 let logIdCounter = 0;
@@ -657,6 +707,17 @@ function initChapterProgresses(): ChapterProgress[] {
   });
 }
 
+let tradeRecordIdCounter = 0;
+
+function initTradeInventories(): TradeInventory[] {
+  return MAP_AREAS.map((area) => ({
+    areaId: area.id,
+    items: [],
+    lastRefreshTime: 0,
+    refreshCount: 0,
+  }));
+}
+
 function initFormation(playerLevel: number): Formation {
   const slots: FormationSlot[] = FORMATION_SLOT_CONFIG.map((cfg) => ({
     index: cfg.index,
@@ -755,6 +816,12 @@ export const useGameStore = create<GameState>()(
       activeCommissions: [],
       materialInventory: [],
       lastCommissionRefresh: 0,
+
+      tradeInventories: initTradeInventories(),
+      blackMarketInventory: null,
+      tradeRecords: [],
+      activeTradeEvents: [],
+      lastTradeEventCheck: 0,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -6187,10 +6254,633 @@ export const useGameStore = create<GameState>()(
         const state = get();
         return state.getActiveCommissionCount() < COMMISSION_MAX_ACTIVE;
       },
+
+      initTradeInventories: () => initTradeInventories(),
+
+      getTradeInventory: (areaId) => {
+        return get().tradeInventories.find((inv) => inv.areaId === areaId);
+      },
+
+      getTradeItemStock: (itemId, areaId) => {
+        const inventory = get().getTradeInventory(areaId);
+        const invItem = inventory?.items.find((i) => i.itemId === itemId);
+        return invItem?.currentStock ?? 0;
+      },
+
+      getTradeItemPrice: (itemId, areaId) => {
+        const inventory = get().getTradeInventory(areaId);
+        const invItem = inventory?.items.find((i) => i.itemId === itemId);
+        return invItem?.currentPrice ?? 0;
+      },
+
+      getAvailableTradeItems: (areaId) => {
+        const state = get();
+        const inventory = state.getTradeInventory(areaId);
+        if (!inventory) return [];
+
+        return inventory.items
+          .filter((invItem) => invItem.currentStock > 0)
+          .map((invItem) => {
+            const item = TRADE_ITEMS.find((t) => t.id === invItem.itemId);
+            return item ? { item, inventory: invItem } : null;
+          })
+          .filter((v): v is { item: TradeItem; inventory: TradeInventoryItem } => v !== null);
+      },
+
+      shouldRefreshTrade: (areaId) => {
+        const inventory = get().getTradeInventory(areaId);
+        if (!inventory || inventory.items.length === 0) return true;
+        return Date.now() - inventory.lastRefreshTime > TRADE_REFRESH_INTERVAL * 1000;
+      },
+
+      calculatePriceModifier: (item, areaId) => {
+        const state = get();
+        const config = PRICE_FLUCTUATION_CONFIG;
+
+        let baseModifier = 1.0;
+
+        const eventModifier = state.getTradeEventPriceModifier(item);
+        baseModifier += eventModifier - 1;
+
+        const areaLevel = state.mapAreas.find((a) => a.id === areaId)?.minLevel || 1;
+        const playerLevel = state.player.stats.level;
+        const levelRatio = playerLevel / Math.max(1, areaLevel);
+        const demandModifier = 1 + (levelRatio - 1) * config.areaDemandMultiplier;
+
+        const randomFactor = 1 + (Math.random() - 0.5) * config.volatility;
+
+        const meanReversion = 1 - config.meanReversionRate * 0.5;
+
+        let finalModifier = baseModifier * demandModifier * randomFactor * meanReversion;
+        finalModifier = Math.max(config.minModifier, Math.min(config.maxModifier, finalModifier));
+
+        return finalModifier;
+      },
+
+      refreshTradeInventory: (areaId, triggerType = 'manual') => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        const repLevel = state.getAreaReputationLevel(areaId);
+        const consequenceTags = state.consequenceTags;
+
+        const eligibleItems = TRADE_ITEMS.filter((item) => {
+          if (item.isBlackMarketOnly) return false;
+          if (item.minPlayerLevel > playerLevel) return false;
+          if (item.areaId && item.areaId !== areaId) {
+            return false;
+          }
+          if (item.minReputationLevel && item.minReputationLevel > repLevel) return false;
+          if (item.requiredTags && !item.requiredTags.every((tag) => consequenceTags.includes(tag))) return false;
+          return true;
+        });
+
+        const selectedItems: TradeInventoryItem[] = [];
+        const itemCount = Math.min(TRADE_ITEMS_PER_REFRESH, eligibleItems.length);
+
+        const totalWeight = eligibleItems.reduce((sum, item) => sum + item.weight, 0);
+
+        for (let i = 0; i < itemCount; i++) {
+          const remaining = eligibleItems.filter((item) => !selectedItems.some((si) => si.itemId === item.id));
+          if (remaining.length === 0) break;
+
+          let roll = Math.random() * totalWeight;
+          let selected = remaining[0];
+
+          for (const item of remaining) {
+            roll -= item.weight;
+            if (roll <= 0) {
+              selected = item;
+              break;
+            }
+          }
+
+          const priceModifier = state.calculatePriceModifier(selected, areaId);
+          const currentPrice = Math.max(1, Math.floor(selected.basePrice * priceModifier));
+          const stock = Math.max(1, Math.floor(Math.random() * selected.maxStockPerRefresh) + 1);
+
+          selectedItems.push({
+            itemId: selected.id,
+            currentStock: stock,
+            currentPrice,
+            priceModifier,
+            lastPriceChange: Date.now(),
+          });
+        }
+
+        set((s) => ({
+          tradeInventories: s.tradeInventories.map((inv) =>
+            inv.areaId === areaId
+              ? {
+                  ...inv,
+                  items: selectedItems,
+                  lastRefreshTime: Date.now(),
+                  refreshCount: inv.refreshCount + 1,
+                }
+              : inv
+          ),
+        }));
+
+        state.addBattleLog(`🔄 交易行商品已刷新`, 'system');
+      },
+
+      buyTradeItem: (itemId, areaId, quantity = 1) => {
+        const state = get();
+        const item = TRADE_ITEMS.find((i) => i.id === itemId);
+        if (!item) return false;
+
+        const stock = state.getTradeItemStock(itemId, areaId);
+        if (stock < quantity) return false;
+
+        const unitPrice = state.getTradeItemPrice(itemId, areaId);
+        const totalCost = unitPrice * quantity;
+
+        if (item.currency === 'gold' && state.player.stats.gold < totalCost) return false;
+        if (item.currency === 'soulOrbs' && state.player.stats.soulOrbs < totalCost) return false;
+
+        set((s) => {
+          const newStats = { ...s.player.stats };
+          if (item.currency === 'gold') {
+            newStats.gold -= totalCost;
+          } else {
+            newStats.soulOrbs -= totalCost;
+          }
+
+          return {
+            player: { ...s.player, stats: newStats },
+            tradeInventories: s.tradeInventories.map((inv) =>
+              inv.areaId === areaId
+                ? {
+                    ...inv,
+                    items: inv.items.map((invItem) =>
+                      invItem.itemId === itemId
+                        ? { ...invItem, currentStock: invItem.currentStock - quantity }
+                        : invItem
+                    ),
+                  }
+                : inv
+            ),
+          };
+        });
+
+        if (item.effect) {
+          const effect = item.effect;
+          const totalValue = effect.value * quantity;
+          switch (effect.type) {
+            case 'hp':
+              get().healHp(totalValue);
+              break;
+            case 'mp':
+              get().healMp(totalValue);
+              break;
+            case 'attack':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, attack: s.player.stats.attack + totalValue },
+                },
+              }));
+              break;
+            case 'defense':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, defense: s.player.stats.defense + totalValue },
+                },
+              }));
+              break;
+            case 'speed':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, speed: s.player.stats.speed + totalValue },
+                },
+              }));
+              break;
+            case 'luck':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, luck: s.player.stats.luck + totalValue },
+                },
+              }));
+              break;
+            case 'exp':
+              get().addExp(totalValue);
+              break;
+            case 'gold':
+              get().addGold(totalValue);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(totalValue);
+              break;
+          }
+        }
+
+        if (item.materialId) {
+          get().addMaterial(item.materialId, quantity);
+        }
+
+        get().addTradeRecord({
+          itemId,
+          itemName: item.name,
+          type: 'buy',
+          quantity,
+          unitPrice,
+          totalPrice: totalCost,
+          currency: item.currency,
+          areaId,
+        });
+
+        get().addBattleLog(
+          `💰 购买了 ${quantity} 个 ${item.name}，花费 ${totalCost} ${item.currency === 'gold' ? '金币' : '魂珠'}`,
+          'event'
+        );
+
+        return true;
+      },
+
+      sellTradeItem: (itemId, areaId, quantity = 1) => {
+        const state = get();
+        const item = TRADE_ITEMS.find((i) => i.id === itemId);
+        if (!item || !item.materialId) return false;
+
+        const materialCount = state.getMaterialCount(item.materialId);
+        if (materialCount < quantity) return false;
+
+        const sellPrice = Math.floor(item.basePrice * 0.5);
+        const totalGold = sellPrice * quantity;
+
+        set((s) => ({
+          materialInventory: s.materialInventory
+            .map((m) =>
+              m.materialId === item.materialId ? { ...m, count: m.count - quantity } : m
+            )
+            .filter((m) => m.count > 0),
+        }));
+
+        get().addGold(totalGold);
+
+        get().addTradeRecord({
+          itemId,
+          itemName: item.name,
+          type: 'sell',
+          quantity,
+          unitPrice: sellPrice,
+          totalPrice: totalGold,
+          currency: 'gold',
+          areaId,
+        });
+
+        get().addBattleLog(
+          `💰 出售了 ${quantity} 个 ${item.name}，获得 ${totalGold} 金币`,
+          'gold'
+        );
+
+        return true;
+      },
+
+      addTradeRecord: (record) => {
+        tradeRecordIdCounter += 1;
+        const newRecord: TradeRecord = {
+          ...record,
+          id: tradeRecordIdCounter,
+          timestamp: Date.now(),
+        };
+        set((state) => ({
+          tradeRecords: [newRecord, ...state.tradeRecords].slice(0, 50),
+        }));
+      },
+
+      isBlackMarketUnlocked: () => {
+        return get().player.stats.level >= BLACK_MARKET_CONFIG.unlockLevel;
+      },
+
+      getBlackMarketInventory: () => {
+        return get().blackMarketInventory;
+      },
+
+      shouldRefreshBlackMarket: () => {
+        const state = get();
+        const inventory = state.blackMarketInventory;
+        if (!inventory || inventory.items.length === 0) return true;
+        return Date.now() - inventory.lastRefreshTime > TRADE_REFRESH_INTERVAL * 1000 * 2;
+      },
+
+      refreshBlackMarket: () => {
+        const state = get();
+        if (!state.isBlackMarketUnlocked()) return false;
+
+        const playerLevel = state.player.stats.level;
+        const consequenceTags = state.consequenceTags;
+
+        const cost = BLACK_MARKET_CONFIG.refreshCost;
+        const currency = BLACK_MARKET_CONFIG.refreshCurrency;
+
+        if (state.blackMarketInventory && state.blackMarketInventory.items.length > 0) {
+          if (currency === 'gold' && state.player.stats.gold < cost) return false;
+          if (currency === 'soulOrbs' && state.player.stats.soulOrbs < cost) return false;
+
+          set((s) => {
+            const newStats = { ...s.player.stats };
+            if (currency === 'gold') {
+              newStats.gold -= cost;
+            } else {
+              newStats.soulOrbs -= cost;
+            }
+            return { player: { ...s.player, stats: newStats } };
+          });
+        }
+
+        const eligibleItems = TRADE_ITEMS.filter((item) => {
+          if (item.minPlayerLevel > playerLevel) return false;
+          if (item.requiredTags && !item.requiredTags.every((tag) => consequenceTags.includes(tag))) return false;
+          return true;
+        });
+
+        const selectedItems: TradeInventoryItem[] = [];
+        const itemCount = Math.min(BLACK_MARKET_ITEMS_PER_REFRESH, eligibleItems.length);
+
+        const weightedItems = eligibleItems.map((item) => {
+          let weight = item.weight;
+          if (item.rarity === 'rare') weight *= BLACK_MARKET_CONFIG.rareItemChance * 3;
+          if (item.rarity === 'epic') weight *= BLACK_MARKET_CONFIG.rareItemChance * 2;
+          if (item.rarity === 'legendary') weight *= BLACK_MARKET_CONFIG.legendaryItemChance * 10;
+          return { item, weight };
+        });
+
+        const totalWeight = weightedItems.reduce((sum, w) => sum + w.weight, 0);
+
+        for (let i = 0; i < itemCount; i++) {
+          const remaining = weightedItems.filter((w) => !selectedItems.some((si) => si.itemId === w.item.id));
+          if (remaining.length === 0) break;
+
+          let roll = Math.random() * totalWeight;
+          let selected = remaining[0].item;
+
+          for (const w of remaining) {
+            roll -= w.weight;
+            if (roll <= 0) {
+              selected = w.item;
+              break;
+            }
+          }
+
+          const isDiscount = Math.random() < 0.4;
+          let priceMultiplier: number;
+          if (isDiscount) {
+            priceMultiplier =
+              BLACK_MARKET_CONFIG.priceDiscountRange.min +
+              Math.random() * (BLACK_MARKET_CONFIG.priceDiscountRange.max - BLACK_MARKET_CONFIG.priceDiscountRange.min);
+          } else {
+            priceMultiplier =
+              BLACK_MARKET_CONFIG.pricePremiumRange.min +
+              Math.random() * (BLACK_MARKET_CONFIG.pricePremiumRange.max - BLACK_MARKET_CONFIG.pricePremiumRange.min);
+          }
+
+          const eventModifier = state.getTradeEventPriceModifier(selected);
+          const finalPrice = Math.max(1, Math.floor(selected.basePrice * priceMultiplier * eventModifier));
+          const stock = Math.max(1, Math.floor(Math.random() * Math.max(1, selected.maxStockPerRefresh * 0.5)) + 1);
+
+          selectedItems.push({
+            itemId: selected.id,
+            currentStock: stock,
+            currentPrice: finalPrice,
+            priceModifier: priceMultiplier,
+            lastPriceChange: Date.now(),
+          });
+        }
+
+        set({
+          blackMarketInventory: {
+            areaId: 'blackmarket',
+            items: selectedItems,
+            lastRefreshTime: Date.now(),
+            refreshCount: (state.blackMarketInventory?.refreshCount || 0) + 1,
+          },
+        });
+
+        get().addBattleLog(`🌑 黑市商品已刷新`, 'system');
+        return true;
+      },
+
+      getBlackMarketItems: () => {
+        const state = get();
+        const inventory = state.blackMarketInventory;
+        if (!inventory) return [];
+
+        return inventory.items
+          .filter((invItem) => invItem.currentStock > 0)
+          .map((invItem) => {
+            const item = TRADE_ITEMS.find((t) => t.id === invItem.itemId);
+            return item ? { item, inventory: invItem } : null;
+          })
+          .filter((v): v is { item: TradeItem; inventory: TradeInventoryItem } => v !== null);
+      },
+
+      buyBlackMarketItem: (itemId, quantity = 1) => {
+        const state = get();
+        if (!state.isBlackMarketUnlocked()) return false;
+
+        const inventory = state.blackMarketInventory;
+        if (!inventory) return false;
+
+        const item = TRADE_ITEMS.find((i) => i.id === itemId);
+        if (!item) return false;
+
+        const invItem = inventory.items.find((i) => i.itemId === itemId);
+        if (!invItem || invItem.currentStock < quantity) return false;
+
+        const totalCost = invItem.currentPrice * quantity;
+
+        if (item.currency === 'gold' && state.player.stats.gold < totalCost) return false;
+        if (item.currency === 'soulOrbs' && state.player.stats.soulOrbs < totalCost) return false;
+
+        set((s) => {
+          const newStats = { ...s.player.stats };
+          if (item.currency === 'gold') {
+            newStats.gold -= totalCost;
+          } else {
+            newStats.soulOrbs -= totalCost;
+          }
+
+          const newBmInventory = s.blackMarketInventory
+            ? {
+                ...s.blackMarketInventory,
+                items: s.blackMarketInventory.items.map((inv) =>
+                  inv.itemId === itemId ? { ...inv, currentStock: inv.currentStock - quantity } : inv
+                ),
+              }
+            : null;
+
+          return {
+            player: { ...s.player, stats: newStats },
+            blackMarketInventory: newBmInventory,
+          };
+        });
+
+        if (item.effect) {
+          const effect = item.effect;
+          const totalValue = effect.value * quantity;
+          switch (effect.type) {
+            case 'hp':
+              get().healHp(totalValue);
+              break;
+            case 'mp':
+              get().healMp(totalValue);
+              break;
+            case 'attack':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, attack: s.player.stats.attack + totalValue },
+                },
+              }));
+              break;
+            case 'defense':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, defense: s.player.stats.defense + totalValue },
+                },
+              }));
+              break;
+            case 'speed':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, speed: s.player.stats.speed + totalValue },
+                },
+              }));
+              break;
+            case 'luck':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, luck: s.player.stats.luck + totalValue },
+                },
+              }));
+              break;
+            case 'exp':
+              get().addExp(totalValue);
+              break;
+            case 'gold':
+              get().addGold(totalValue);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(totalValue);
+              break;
+          }
+        }
+
+        if (item.materialId) {
+          get().addMaterial(item.materialId, quantity);
+        }
+
+        get().addTradeRecord({
+          itemId,
+          itemName: item.name,
+          type: 'buy',
+          quantity,
+          unitPrice: invItem.currentPrice,
+          totalPrice: totalCost,
+          currency: item.currency,
+          areaId: 'blackmarket',
+        });
+
+        get().addBattleLog(
+          `🌑 从黑市购买了 ${quantity} 个 ${item.name}，花费 ${totalCost} ${item.currency === 'gold' ? '金币' : '魂珠'}`,
+          'event'
+        );
+
+        return true;
+      },
+
+      checkTradeEvents: () => {
+        const state = get();
+        const now = Date.now();
+
+        const activeEvents = state.activeTradeEvents.filter(
+          (e) => e.endTime > now
+        );
+
+        const expiredEvents = state.activeTradeEvents.filter(
+          (e) => e.endTime <= now
+        );
+
+        if (expiredEvents.length > 0) {
+          expiredEvents.forEach((e) => {
+            const event = TRADE_EVENTS.find((ev) => ev.id === e.eventId);
+            if (event) {
+              state.addBattleLog(`📈 市场事件结束：${event.title}`, 'system');
+            }
+          });
+        }
+
+        const eventChance = 0.02;
+        if (Math.random() < eventChance && activeEvents.length < 3) {
+          get().triggerRandomTradeEvent();
+        }
+
+        set({
+          activeTradeEvents: activeEvents,
+          lastTradeEventCheck: now,
+        });
+      },
+
+      triggerRandomTradeEvent: () => {
+        const state = get();
+        const randomIndex = Math.floor(Math.random() * TRADE_EVENTS.length);
+        const event = TRADE_EVENTS[randomIndex];
+
+        const startTime = Date.now();
+        const endTime = startTime + event.durationSeconds * 1000;
+
+        const newActiveEvent: ActiveTradeEvent = {
+          eventId: event.id,
+          startTime,
+          endTime,
+        };
+
+        set((s) => ({
+          activeTradeEvents: [...s.activeTradeEvents, newActiveEvent],
+        }));
+
+        state.addBattleLog(
+          `${event.isPositive ? '📈' : '📉'} 市场事件：${event.title} - ${event.description}`,
+          'system'
+        );
+      },
+
+      getActiveTradeEvents: () => {
+        const state = get();
+        const now = Date.now();
+        return state.activeTradeEvents
+          .filter((e) => e.endTime > now)
+          .map((e) => TRADE_EVENTS.find((ev) => ev.id === e.eventId))
+          .filter((e): e is TradeEvent => e !== undefined);
+      },
+
+      getTradeEventPriceModifier: (item) => {
+        const state = get();
+        let modifier = 1.0;
+
+        state.activeTradeEvents.forEach((activeEvent) => {
+          const event = TRADE_EVENTS.find((e) => e.id === activeEvent.eventId);
+          if (!event) return;
+
+          const categoryMod = event.categoryModifiers[item.category] || 0;
+          const rarityMod = event.rarityModifiers[item.rarity] || 0;
+          const itemMod = event.priceModifiers[item.id] || 0;
+
+          modifier += categoryMod + rarityMod + itemMod;
+        });
+
+        return Math.max(0.1, modifier);
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 10,
+      version: 11,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -6278,6 +6968,19 @@ export const useGameStore = create<GameState>()(
           state.lastDailyRewardDate = null;
           state.guildActiveTab = 'map';
           state.guildFormation = [];
+        }
+        if (version < 10) {
+          state.availableCommissions = [];
+          state.activeCommissions = [];
+          state.materialInventory = [];
+          state.lastCommissionRefresh = 0;
+        }
+        if (version < 11) {
+          state.tradeInventories = initTradeInventories();
+          state.blackMarketInventory = null;
+          state.tradeRecords = [];
+          state.activeTradeEvents = [];
+          state.lastTradeEventCheck = 0;
         }
         return state as unknown as GameState;
       },
