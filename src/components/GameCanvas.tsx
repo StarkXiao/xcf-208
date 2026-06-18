@@ -76,6 +76,9 @@ export default function GameCanvas() {
     generateEquipmentDrop,
     addEquipmentToInventory,
     addEquipmentForgeExp,
+    tryDropRelic,
+    addRelic,
+    addRelicShards,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -251,6 +254,18 @@ export default function GameCanvas() {
         addEquipmentToInventory(equipDrop);
         const rarityName = equipDrop.rarity === 'common' ? '普通' : equipDrop.rarity === 'rare' ? '稀有' : equipDrop.rarity === 'epic' ? '史诗' : '传说';
         addBattleLog(`🛡️ 掉落装备：${equipDrop.name}（${rarityName}）`, 'drop');
+      }
+
+      const relicDrop = tryDropRelic(currentMonster.tier, currentAreaId);
+      if (relicDrop.relic) {
+        addRelic(relicDrop.relic);
+      }
+      if (relicDrop.shards) {
+        addRelicShards(relicDrop.shards.relicId, relicDrop.shards.count);
+        const relicInfo = useGameStore.getState().getRelic(relicDrop.shards.relicId);
+        if (relicInfo) {
+          addBattleLog(`✨ 获得神器碎片：${relicInfo.name} x${relicDrop.shards.count}`, 'drop');
+        }
       }
 
       const fc = useGameStore.getState().getFormationCompanions();

@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1218,3 +1218,132 @@ export interface MaterialInventoryItem {
   materialId: string;
   count: number;
 }
+
+export type RelicRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
+
+export type RelicElement = 'fire' | 'water' | 'earth' | 'wind' | 'light' | 'dark';
+
+export type RelicCategory = 'weapon' | 'armor' | 'accessory' | 'treasure' | 'rune';
+
+export interface RelicStatBonus {
+  stat: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'goldBonus' | 'expBonus' | 'soulOrbBonus';
+  value: number;
+  isPercent: boolean;
+}
+
+export interface Relic {
+  id: string;
+  name: string;
+  description: string;
+  lore: string;
+  icon: string;
+  rarity: RelicRarity;
+  element: RelicElement;
+  category: RelicCategory;
+  baseStats: RelicStatBonus[];
+  awakenedStats: RelicStatBonus[];
+  compatibleCompanionIds: string[];
+  compatibleClasses: string[];
+  compatibleRaces: string[];
+  dropAreas: string[];
+  dropMonsterTiers: MonsterTier[];
+  dropChance: number;
+  requiredPlayerLevel: number;
+  awakenCost: { shards: number; soulOrbs: number };
+}
+
+export interface OwnedRelic {
+  relicId: string;
+  level: number;
+  awakened: boolean;
+  equippedBy: string | null;
+  shards: number;
+  acquiredAt: number;
+}
+
+export interface RelicSet {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  relicIds: string[];
+  setBonuses: {
+    count: number;
+    effects: RelicStatBonus[];
+  }[];
+}
+
+export interface RelicCodexEntry {
+  relicId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  levelReached: number;
+  awakened: boolean;
+}
+
+export const RELIC_RARITY_NAMES: Record<RelicRarity, string> = {
+  common: '凡品',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+  mythic: '神话',
+};
+
+export const RELIC_RARITY_COLORS: Record<RelicRarity, string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#8b5cf6',
+  legendary: '#f59e0b',
+  mythic: '#ef4444',
+};
+
+export const RELIC_RARITY_STAR_COUNTS: Record<RelicRarity, number> = {
+  common: 1,
+  rare: 2,
+  epic: 3,
+  legendary: 4,
+  mythic: 5,
+};
+
+export const RELIC_ELEMENT_NAMES: Record<RelicElement, string> = {
+  fire: '火',
+  water: '水',
+  earth: '土',
+  wind: '风',
+  light: '光',
+  dark: '暗',
+};
+
+export const RELIC_ELEMENT_ICONS: Record<RelicElement, string> = {
+  fire: '🔥',
+  water: '💧',
+  earth: '🪨',
+  wind: '🌪️',
+  light: '✨',
+  dark: '🌑',
+};
+
+export const RELIC_ELEMENT_COLORS: Record<RelicElement, string> = {
+  fire: '#ef4444',
+  water: '#3b82f6',
+  earth: '#a16207',
+  wind: '#22c55e',
+  light: '#fbbf24',
+  dark: '#7c3aed',
+};
+
+export const RELIC_CATEGORY_NAMES: Record<RelicCategory, string> = {
+  weapon: '神兵',
+  armor: '宝甲',
+  accessory: '灵饰',
+  treasure: '异宝',
+  rune: '符文',
+};
+
+export const RELIC_CATEGORY_ICONS: Record<RelicCategory, string> = {
+  weapon: '⚔️',
+  armor: '🛡️',
+  accessory: '💍',
+  treasure: '🏺',
+  rune: '📜',
+};

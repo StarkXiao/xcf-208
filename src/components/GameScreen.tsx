@@ -9,6 +9,7 @@ import ExpeditionPanel from './ExpeditionPanel';
 import TalentPanel from './TalentPanel';
 import GuildPanel from './GuildPanel';
 import EquipmentPanel from './EquipmentPanel';
+import RelicPanel from './RelicPanel';
 import { ChapterPanel } from './ChapterPanel';
 import CommissionPanel from './CommissionPanel';
 import TradeMarketPanel from './TradeMarketPanel';
@@ -86,6 +87,7 @@ export default function GameScreen() {
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
     { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'equipment' as const, label: '⚒️ 装备', icon: '⚒️' },
+    { id: 'relics' as const, label: '🏆 神器', icon: '🏆' },
     { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
     { id: 'skilltree' as const, label: '🌳 技能树', icon: '🌳' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
@@ -712,6 +714,8 @@ export default function GameScreen() {
         return <GuildPanel />;
       case 'equipment':
         return <EquipmentPanel />;
+      case 'relics':
+        return <RelicPanel />;
       case 'talents':
         return <TalentPanel />;
       case 'skilltree':

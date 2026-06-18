@@ -60,8 +60,13 @@ import type {
   TradeEvent,
   TradeInventoryItem,
   TradeRecord,
+  Relic,
+  OwnedRelic,
+  RelicCodexEntry,
+  RelicSet,
+  RelicStatBonus,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_RARITY_COLORS, RELIC_RARITY_STAR_COUNTS, RELIC_ELEMENT_NAMES, RELIC_ELEMENT_ICONS, RELIC_ELEMENT_COLORS, RELIC_CATEGORY_NAMES, RELIC_CATEGORY_ICONS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -89,6 +94,13 @@ import {
   PROFESSION_SPECS,
   CHAPTERS,
   RARE_MATERIALS,
+  RELICS,
+  RELIC_SETS,
+  RELIC_LEVEL_EXP,
+  RELIC_MAX_LEVEL,
+  RELIC_LEVEL_STAT_MULTIPLIER,
+  RELIC_DROP_CONFIG,
+  RELIC_COMPAT_BONUS,
 } from './data';
 
 interface GameState {
@@ -431,6 +443,34 @@ interface GameState {
     firstClearRewards: string[];
     rebirthChallengeRewards: string[];
   };
+
+  ownedRelics: OwnedRelic[];
+  relicCodex: RelicCodexEntry[];
+
+  getRelic: (relicId: string) => Relic | undefined;
+  getOwnedRelic: (relicId: string) => OwnedRelic | undefined;
+  getRelicSet: (setId: string) => RelicSet | undefined;
+  getActiveRelicSets: () => RelicSet[];
+  getRelicCodexEntry: (relicId: string) => RelicCodexEntry;
+  getRelicCodexProgress: () => { total: number; unlocked: number; percentage: number };
+  getRelicLevel: (relicId: string) => number;
+  getRelicExpToNext: (relicId: string) => { current: number; next: number };
+  getRelicStatBonus: (relicId: string, includeAwakened: boolean) => RelicStatBonus[];
+  getEquippedRelics: (companionId: string | null) => OwnedRelic[];
+  getRelicTotalStats: (companionId: string | null) => { flat: Partial<Record<string, number>>; percent: Partial<Record<string, number>> };
+  getRelicSetBonus: (companionId: string | null) => RelicStatBonus[];
+  isRelicCompatible: (relicId: string, companionId: string | null) => boolean;
+  getCompatibleBonusMultiplier: (relicId: string, companionId: string | null) => number;
+
+  addRelic: (relicId: string) => boolean;
+  addRelicShards: (relicId: string, count: number) => void;
+  upgradeRelic: (relicId: string, exp: number) => boolean;
+  awakenRelic: (relicId: string) => boolean;
+  equipRelic: (relicId: string, companionId: string | null) => boolean;
+  unequipRelic: (relicId: string) => boolean;
+  synthesizeRelic: (relicId: string) => boolean;
+  tryDropRelic: (monsterTier: MonsterTier, areaId: string) => { relic: string | null; shards: { relicId: string; count: number } | null };
+  getDroppableRelics: (monsterTier: MonsterTier, areaId: string, playerLevel: number) => Relic[];
 }
 
 let logIdCounter = 0;
@@ -544,6 +584,57 @@ function initFormation(playerLevel: number): Formation {
   return { slots, activeBondIds: [] };
 }
 
+function initRelicCodex(): RelicCodexEntry[] {
+  return RELICS.map((r) => ({
+    relicId: r.id,
+    unlocked: false,
+    unlockedAt: null,
+    levelReached: 0,
+    awakened: false,
+  }));
+}
+
+function getRelicLevelFromExp(exp: number): { level: number; currentExp: number; nextExp: number } {
+  let level = 0;
+  let remaining = exp;
+  for (let i = 0; i < RELIC_MAX_LEVEL; i++) {
+    const needed = RELIC_LEVEL_EXP[i + 1] - RELIC_LEVEL_EXP[i];
+    if (remaining >= needed) {
+      level = i + 1;
+      remaining -= needed;
+    } else {
+      return {
+        level,
+        currentExp: remaining,
+        nextExp: needed,
+      };
+    }
+  }
+  return {
+    level: RELIC_MAX_LEVEL,
+    currentExp: 0,
+    nextExp: 0,
+  };
+}
+
+function getRelicTotalExp(level: number): number {
+  if (level >= RELIC_MAX_LEVEL) return RELIC_LEVEL_EXP[RELIC_MAX_LEVEL];
+  return RELIC_LEVEL_EXP[level];
+}
+
+function mergeRelicStats(stats: RelicStatBonus[], multiplier = 1): { flat: Partial<Record<string, number>>; percent: Partial<Record<string, number>> } {
+  const flat: Partial<Record<string, number>> = {};
+  const percent: Partial<Record<string, number>> = {};
+  stats.forEach((s) => {
+    if (s.isPercent) {
+      percent[s.stat] = (percent[s.stat] || 0) + s.value * multiplier;
+    } else {
+      flat[s.stat] = (flat[s.stat] || 0) + s.value * multiplier;
+    }
+  });
+  return { flat, percent };
+}
+
 function getStarUpConfig(rarity: Companion['rarity']) {
   return STAR_UP_CONFIGS.find((c) => c.rarity === rarity) || STAR_UP_CONFIGS[0];
 }
@@ -624,6 +715,8 @@ export const useGameStore = create<GameState>()(
       currentDialogue: null,
       blackMarketInventory: [],
       tradeRecords: [],
+      ownedRelics: [],
+      relicCodex: initRelicCodex(),
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1355,6 +1448,7 @@ export const useGameStore = create<GameState>()(
           companionCodex: initCompanionCodex(),
           recruitPullCounters: initRecruitCounters(),
           lastRecruitResults: null,
+          ownedRelics: [],
         });
 
         return true;
@@ -4143,10 +4237,344 @@ export const useGameStore = create<GameState>()(
         firstClearRewards: [],
         rebirthChallengeRewards: [],
       }),
+
+      getRelic: (relicId) => RELICS.find((r) => r.id === relicId),
+
+      getOwnedRelic: (relicId) => get().ownedRelics.find((r) => r.relicId === relicId),
+
+      getRelicSet: (setId) => RELIC_SETS.find((s) => s.id === setId),
+
+      getActiveRelicSets: () => {
+        const state = get();
+        const equippedRelicIds = state.ownedRelics
+          .filter((r) => r.equippedBy !== null)
+          .map((r) => r.relicId);
+        return RELIC_SETS.filter((set) =>
+          set.relicIds.some((id) => equippedRelicIds.includes(id))
+        );
+      },
+
+      getRelicCodexEntry: (relicId) => {
+        const entry = get().relicCodex.find((e) => e.relicId === relicId);
+        return entry || { relicId, unlocked: false, unlockedAt: null, levelReached: 0, awakened: false };
+      },
+
+      getRelicCodexProgress: () => {
+        const codex = get().relicCodex;
+        const total = codex.length;
+        const unlocked = codex.filter((e) => e.unlocked).length;
+        return {
+          total,
+          unlocked,
+          percentage: total > 0 ? unlocked / total : 0,
+        };
+      },
+
+      getRelicLevel: (relicId) => {
+        const owned = get().getOwnedRelic(relicId);
+        return owned?.level || 0;
+      },
+
+      getRelicExpToNext: (relicId) => {
+        const owned = get().getOwnedRelic(relicId);
+        if (!owned) return { current: 0, next: RELIC_LEVEL_EXP[1] };
+        const totalExp = getRelicTotalExp(owned.level);
+        const expNeededForNext = owned.level < RELIC_MAX_LEVEL ? RELIC_LEVEL_EXP[owned.level + 1] - totalExp : 0;
+        return { current: 0, next: expNeededForNext };
+      },
+
+      getRelicStatBonus: (relicId, includeAwakened) => {
+        const relic = get().getRelic(relicId);
+        const owned = get().getOwnedRelic(relicId);
+        if (!relic) return [];
+
+        const level = owned?.level || 0;
+        const awakened = owned?.awakened || false;
+        const levelMultiplier = 1 + level * RELIC_LEVEL_STAT_MULTIPLIER;
+
+        const stats: RelicStatBonus[] = relic.baseStats.map((s) => ({
+          ...s,
+          value: s.isPercent ? s.value * levelMultiplier : Math.floor(s.value * levelMultiplier),
+        }));
+
+        if (includeAwakened && awakened) {
+          relic.awakenedStats.forEach((s) => {
+            stats.push({
+              ...s,
+              value: s.isPercent ? s.value * levelMultiplier : Math.floor(s.value * levelMultiplier),
+            });
+          });
+        }
+
+        return stats;
+      },
+
+      getEquippedRelics: (companionId) => {
+        return get().ownedRelics.filter((r) => r.equippedBy === companionId);
+      },
+
+      getRelicTotalStats: (companionId) => {
+        const state = get();
+        const equipped = state.getEquippedRelics(companionId);
+        const allStats: RelicStatBonus[] = [];
+
+        equipped.forEach((owned) => {
+          const compatMultiplier = state.getCompatibleBonusMultiplier(owned.relicId, companionId);
+          const stats = state.getRelicStatBonus(owned.relicId, true);
+          stats.forEach((s) => {
+            allStats.push({
+              ...s,
+              value: s.isPercent ? s.value * compatMultiplier : Math.floor(s.value * compatMultiplier),
+            });
+          });
+        });
+
+        const setBonus = state.getRelicSetBonus(companionId);
+        setBonus.forEach((s) => allStats.push(s));
+
+        return mergeRelicStats(allStats);
+      },
+
+      getRelicSetBonus: (companionId) => {
+        const state = get();
+        const equippedRelicIds = state.ownedRelics
+          .filter((r) => r.equippedBy === companionId)
+          .map((r) => r.relicId);
+
+        const bonuses: RelicStatBonus[] = [];
+        RELIC_SETS.forEach((set) => {
+          const equippedCount = set.relicIds.filter((id) => equippedRelicIds.includes(id)).length;
+          set.setBonuses.forEach((sb) => {
+            if (equippedCount >= sb.count) {
+              sb.effects.forEach((e) => bonuses.push(e));
+            }
+          });
+        });
+
+        return bonuses;
+      },
+
+      isRelicCompatible: (relicId, companionId) => {
+        const relic = get().getRelic(relicId);
+        if (!relic || !companionId) return true;
+
+        const companion = get().ownedCompanions.find((c) => c.id === companionId);
+        if (!companion) return false;
+
+        if (relic.compatibleCompanionIds.length > 0 && relic.compatibleCompanionIds.includes(companionId)) {
+          return true;
+        }
+        if (relic.compatibleClasses.length > 0 && relic.compatibleClasses.includes(companion.class)) {
+          return true;
+        }
+        if (relic.compatibleRaces.length > 0 && relic.compatibleRaces.includes(companion.race)) {
+          return true;
+        }
+        return relic.compatibleCompanionIds.length === 0 && relic.compatibleClasses.length === 0 && relic.compatibleRaces.length === 0;
+      },
+
+      getCompatibleBonusMultiplier: (relicId, companionId) => {
+        if (!companionId) return 1;
+        return get().isRelicCompatible(relicId, companionId) ? 1 + RELIC_COMPAT_BONUS : 1;
+      },
+
+      addRelic: (relicId) => {
+        const state = get();
+        const relic = state.getRelic(relicId);
+        if (!relic) return false;
+
+        const existing = state.getOwnedRelic(relicId);
+        if (existing) {
+          const shardsToAdd = Math.max(5, Math.floor(relic.awakenCost.shards / 3));
+          state.addRelicShards(relicId, shardsToAdd);
+          get().addBattleLog(`✨ 获得神器碎片：${relic.name} x${shardsToAdd}`, 'drop');
+          return false;
+        }
+
+        const newOwned: OwnedRelic = {
+          relicId,
+          level: 1,
+          awakened: false,
+          equippedBy: null,
+          shards: 0,
+          acquiredAt: Date.now(),
+        };
+
+        set((s) => ({
+          ownedRelics: [...s.ownedRelics, newOwned],
+          relicCodex: s.relicCodex.map((e) =>
+            e.relicId === relicId
+              ? { ...e, unlocked: true, unlockedAt: Date.now(), levelReached: Math.max(e.levelReached, 1) }
+              : e
+          ),
+        }));
+
+        get().addBattleLog(`🏆 获得神器：${relic.icon} ${relic.name}（${RELIC_RARITY_NAMES[relic.rarity]}）`, 'drop');
+        return true;
+      },
+
+      addRelicShards: (relicId, count) => {
+        set((state) => ({
+          ownedRelics: state.ownedRelics.map((r) =>
+            r.relicId === relicId ? { ...r, shards: r.shards + count } : r
+          ),
+        }));
+      },
+
+      upgradeRelic: (relicId, exp) => {
+        const state = get();
+        const owned = state.getOwnedRelic(relicId);
+        const relic = state.getRelic(relicId);
+        if (!owned || !relic || owned.level >= RELIC_MAX_LEVEL) return false;
+
+        const currentTotalExp = getRelicTotalExp(owned.level);
+        const newTotalExp = currentTotalExp + exp;
+        const { level } = getRelicLevelFromExp(newTotalExp);
+
+        if (level > owned.level) {
+          set((s) => ({
+            ownedRelics: s.ownedRelics.map((r) =>
+              r.relicId === relicId ? { ...r, level } : r
+            ),
+            relicCodex: s.relicCodex.map((e) =>
+              e.relicId === relicId ? { ...e, levelReached: Math.max(e.levelReached, level) } : e
+            ),
+          }));
+          get().addBattleLog(`⬆️ ${relic.name} 升至 Lv.${level}！`, 'levelup');
+        } else {
+          set((s) => ({
+            ownedRelics: s.ownedRelics.map((r) =>
+              r.relicId === relicId ? r : r
+            ),
+          }));
+        }
+
+        return true;
+      },
+
+      awakenRelic: (relicId) => {
+        const state = get();
+        const owned = state.getOwnedRelic(relicId);
+        const relic = state.getRelic(relicId);
+        if (!owned || !relic || owned.awakened) return false;
+        if (owned.shards < relic.awakenCost.shards) return false;
+        if (state.player.stats.soulOrbs < relic.awakenCost.soulOrbs) return false;
+        if (owned.level < RELIC_MAX_LEVEL) return false;
+
+        set((s) => ({
+          ownedRelics: s.ownedRelics.map((r) =>
+            r.relicId === relicId
+              ? { ...r, awakened: true, shards: r.shards - relic.awakenCost.shards }
+              : r
+          ),
+          player: {
+            ...s.player,
+            stats: {
+              ...s.player.stats,
+              soulOrbs: s.player.stats.soulOrbs - relic.awakenCost.soulOrbs,
+            },
+          },
+          relicCodex: s.relicCodex.map((e) =>
+            e.relicId === relicId ? { ...e, awakened: true } : e
+          ),
+        }));
+
+        get().addBattleLog(`🌟 ${relic.name} 觉醒成功！解锁隐藏属性！`, 'system');
+        return true;
+      },
+
+      equipRelic: (relicId, companionId) => {
+        const state = get();
+        const owned = state.getOwnedRelic(relicId);
+        const relic = state.getRelic(relicId);
+        if (!owned || !relic) return false;
+        if (companionId && !state.ownedCompanions.find((c) => c.id === companionId)) return false;
+
+        set((s) => ({
+          ownedRelics: s.ownedRelics.map((r) =>
+            r.relicId === relicId ? { ...r, equippedBy: companionId } : r
+          ),
+        }));
+
+        if (companionId) {
+          const companion = state.ownedCompanions.find((c) => c.id === companionId);
+          get().addBattleLog(`📿 ${relic.name} 装备给 ${companion?.name || '伙伴'}`, 'system');
+        } else {
+          get().addBattleLog(`📿 ${relic.name} 已卸下`, 'system');
+        }
+        return true;
+      },
+
+      unequipRelic: (relicId) => get().equipRelic(relicId, null),
+
+      synthesizeRelic: (relicId) => {
+        const state = get();
+        const relic = state.getRelic(relicId);
+        const owned = state.getOwnedRelic(relicId);
+        if (!relic || owned) return false;
+
+        const shardsNeeded = relic.awakenCost.shards * 2;
+        const shardEntry = state.ownedRelics.find((r) => r.relicId === relicId);
+        if (!shardEntry || shardEntry.shards < shardsNeeded) return false;
+
+        set((s) => ({
+          ownedRelics: s.ownedRelics.map((r) =>
+            r.relicId === relicId ? { ...r, shards: r.shards - shardsNeeded } : r
+          ),
+        }));
+
+        return state.addRelic(relicId);
+      },
+
+      getDroppableRelics: (monsterTier, areaId, playerLevel) => {
+        return RELICS.filter((r) => {
+          if (r.requiredPlayerLevel > playerLevel) return false;
+          if (!r.dropAreas.includes(areaId)) return false;
+          if (!r.dropMonsterTiers.includes(monsterTier)) return false;
+          return true;
+        });
+      },
+
+      tryDropRelic: (monsterTier, areaId) => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        const dropConfig = RELIC_DROP_CONFIG[monsterTier];
+        if (!dropConfig) return { relic: null, shards: null };
+
+        const droppable = state.getDroppableRelics(monsterTier, areaId, playerLevel);
+        if (droppable.length === 0) return { relic: null, shards: null };
+
+        const totalWeight = droppable.reduce((sum, r) => sum + r.dropChance, 0);
+        const roll = Math.random() * totalWeight;
+
+        let accumulated = 0;
+        let selectedRelic: Relic | null = null;
+        for (const r of droppable) {
+          accumulated += r.dropChance * dropConfig.dropChanceMultiplier;
+          if (roll <= accumulated) {
+            selectedRelic = r;
+            break;
+          }
+        }
+
+        if (selectedRelic && Math.random() < 0.3 * dropConfig.dropChanceMultiplier) {
+          return { relic: selectedRelic.id, shards: null };
+        }
+
+        if (Math.random() < dropConfig.shardDropChance) {
+          const shardRelic = droppable[Math.floor(Math.random() * droppable.length)];
+          const shardCount = Math.floor(
+            Math.random() * (dropConfig.maxShards - dropConfig.minShards + 1) + dropConfig.minShards
+          );
+          return { relic: null, shards: { relicId: shardRelic.id, count: shardCount } };
+        }
+
+        return { relic: null, shards: null };
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 8,
+      version: 9,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -4218,6 +4646,10 @@ export const useGameStore = create<GameState>()(
               bossKills: Math.floor(ownedCompanions.length * 0.2),
             };
           }
+        }
+        if (version < 9) {
+          state.ownedRelics = [];
+          state.relicCodex = initRelicCodex();
         }
         return state as unknown as GameState;
       },
