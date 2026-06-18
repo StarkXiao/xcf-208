@@ -705,7 +705,8 @@ interface GameState {
   getSeasonHistory: () => SeasonChallengeHistoryEntry[];
   setSeasonChallengeTab: (tab: SeasonChallengeState['activeTab']) => void;
   addSeasonScore: (score: number) => void;
-  updateSeasonTaskProgress: (type: string, value: number) => void;
+  updateSeasonTaskProgress: (type: string, value: number, mode?: 'add' | 'set') => void;
+  syncSeasonChallengeProgress: () => void;
 }
 
 let logIdCounter = 0;
@@ -1125,6 +1126,7 @@ export const useGameStore = create<GameState>()(
 
         let { exp, expToNext, level } = state.player.stats;
         let skillPoints = state.player.skillPoints;
+        const startLevel = level;
         exp += actualExp;
 
         while (exp >= expToNext) {
@@ -1168,7 +1170,8 @@ export const useGameStore = create<GameState>()(
           },
         }));
 
-        if (level !== state.player.stats.level) {
+        if (level !== startLevel) {
+          get().updateSeasonTaskProgress('level', level, 'set');
           get().checkAchievements();
         }
       },
@@ -1186,6 +1189,9 @@ export const useGameStore = create<GameState>()(
           },
           totalGoldEarned: state.totalGoldEarned + actualGold,
         }));
+        if (actualGold > 0) {
+          get().updateSeasonTaskProgress('collect', actualGold);
+        }
       },
 
       addSoulOrbs: (amount) => {
@@ -1292,6 +1298,8 @@ export const useGameStore = create<GameState>()(
         if (area) {
           get().addBattleLog(`🗺️ 解锁了新地图：${area.name}！`, 'system');
         }
+        const unlockedCount = get().mapAreas.filter((a) => a.unlocked).length;
+        get().updateSeasonTaskProgress('area', unlockedCount, 'set');
         get().checkAchievements();
       },
 
@@ -1337,6 +1345,8 @@ export const useGameStore = create<GameState>()(
 
         get().addBattleLog(`🤝 招募了新伙伴：${companion.name}！`, 'event');
         get().unlockCodexEntry(companionId);
+        const companionCount = get().ownedCompanions.length;
+        get().updateSeasonTaskProgress('social', companionCount, 'set');
         get().checkAchievements();
         return true;
       },
@@ -2918,6 +2928,8 @@ export const useGameStore = create<GameState>()(
           });
         }
 
+        get().updateSeasonTaskProgress('expedition', 1);
+
         set({ activeExpedition: null });
         return loot;
       },
@@ -4080,6 +4092,39 @@ export const useGameStore = create<GameState>()(
 
           return { monsterKillStats: newStats };
         });
+
+        if (monsterTier === 'normal') {
+          get().updateSeasonTaskProgress('kill', 1);
+        } else if (monsterTier === 'elite') {
+          get().updateSeasonTaskProgress('battle', 1);
+        } else if (monsterTier === 'boss') {
+          get().updateSeasonTaskProgress('boss', 1);
+        }
+
+        if (areaId) {
+          const state = get();
+          const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+          if (season) {
+            const exploreTasks = season.stages.flatMap((st) => st.tasks).filter((t) => t.type === 'explore');
+            if (exploreTasks.length > 0) {
+              const foughtAreas = new Set<string>();
+              const killStats = state.monsterKillStats;
+              Object.keys(killStats.killsByArea).forEach((aid) => {
+                const areaKills = killStats.killsByArea[aid];
+                if (areaKills.normal > 0 || areaKills.elite > 0 || areaKills.boss > 0) {
+                  foughtAreas.add(aid);
+                }
+              });
+              const areaCount = foughtAreas.size;
+              exploreTasks.forEach((task) => {
+                const tp = state.seasonChallenge.taskProgresses.find((t) => t.taskId === task.id);
+                if (tp && !tp.completed && areaCount > tp.progress) {
+                  get().updateSeasonTaskProgress('explore', areaCount - tp.progress);
+                }
+              });
+            }
+          }
+        }
 
         if (monsterId) {
           get().unlockMonsterCodex(monsterId, monsterTier);
@@ -7769,13 +7814,73 @@ export const useGameStore = create<GameState>()(
 
         task.rewards.forEach((reward) => {
           switch (reward.type) {
-            case 'gold': get().addGold(reward.value); break;
-            case 'exp': get().addExp(reward.value); break;
-            case 'soulOrbs': get().addSoulOrbs(reward.value); break;
-            case 'attack': get().upgradeStat('attack', 0); break;
-            case 'defense': get().upgradeStat('defense', 0); break;
-            case 'hp': get().healHp(reward.value); break;
-            default: break;
+            case 'gold':
+              get().addGold(reward.value);
+              break;
+            case 'exp':
+              get().addExp(reward.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(reward.value);
+              break;
+            case 'attack':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    attack: state.player.stats.attack + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'defense':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    defense: state.player.stats.defense + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'hp':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    maxHp: state.player.stats.maxHp + reward.value,
+                    hp: state.player.stats.hp + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'speed':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    speed: state.player.stats.speed + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'luck':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    luck: state.player.stats.luck + reward.value,
+                  },
+                },
+              }));
+              break;
+            default:
+              break;
           }
         });
 
@@ -7856,10 +7961,73 @@ export const useGameStore = create<GameState>()(
 
         reward.rewards.forEach((r) => {
           switch (r.type) {
-            case 'gold': get().addGold(r.value); break;
-            case 'exp': get().addExp(r.value); break;
-            case 'soulOrbs': get().addSoulOrbs(r.value); break;
-            default: break;
+            case 'gold':
+              get().addGold(r.value);
+              break;
+            case 'exp':
+              get().addExp(r.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(r.value);
+              break;
+            case 'attack':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    attack: state.player.stats.attack + r.value,
+                  },
+                },
+              }));
+              break;
+            case 'defense':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    defense: state.player.stats.defense + r.value,
+                  },
+                },
+              }));
+              break;
+            case 'hp':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    maxHp: state.player.stats.maxHp + r.value,
+                    hp: state.player.stats.hp + r.value,
+                  },
+                },
+              }));
+              break;
+            case 'speed':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    speed: state.player.stats.speed + r.value,
+                  },
+                },
+              }));
+              break;
+            case 'luck':
+              set((state) => ({
+                player: {
+                  ...state.player,
+                  stats: {
+                    ...state.player.stats,
+                    luck: state.player.stats.luck + r.value,
+                  },
+                },
+              }));
+              break;
+            default:
+              break;
           }
         });
 
@@ -7895,7 +8063,7 @@ export const useGameStore = create<GameState>()(
         }));
       },
 
-      updateSeasonTaskProgress: (type, value) => {
+      updateSeasonTaskProgress: (type, value, mode = 'add') => {
         const state = get();
         const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
         if (!season) return;
@@ -7912,16 +8080,65 @@ export const useGameStore = create<GameState>()(
             taskProgresses: state.seasonChallenge.taskProgresses.map((tp) => {
               const task = tasksToUpdate.find((t) => t.id === tp.taskId);
               if (!task || tp.completed) return tp;
-              const newProgress = tp.progress + value;
+              const newProgress = mode === 'set' ? value : tp.progress + value;
               const completed = newProgress >= task.target;
               return {
                 ...tp,
-                progress: Math.min(newProgress, task.target),
+                progress: Math.min(Math.max(newProgress, 0), task.target),
                 completed,
               };
             }),
           },
         }));
+      },
+
+      syncSeasonChallengeProgress: () => {
+        const state = get();
+        const season = SEASON_CHALLENGE_SEASONS.find((s) => s.id === state.seasonChallenge.currentSeasonId);
+        if (!season) return;
+
+        const playerLevel = state.player.stats.level;
+        if (playerLevel > 0) {
+          get().updateSeasonTaskProgress('level', playerLevel, 'set');
+        }
+
+        const unlockedAreas = state.mapAreas.filter((a) => a.unlocked).length;
+        if (unlockedAreas > 0) {
+          get().updateSeasonTaskProgress('area', unlockedAreas, 'set');
+        }
+
+        const companionCount = state.ownedCompanions.length;
+        if (companionCount > 0) {
+          get().updateSeasonTaskProgress('social', companionCount, 'set');
+        }
+
+        const killStats = state.monsterKillStats;
+        const foughtAreas = new Set<string>();
+        Object.keys(killStats.killsByArea).forEach((aid) => {
+          const areaKills = killStats.killsByArea[aid];
+          if (areaKills.normal > 0 || areaKills.elite > 0 || areaKills.boss > 0) {
+            foughtAreas.add(aid);
+          }
+        });
+        if (foughtAreas.size > 0) {
+          get().updateSeasonTaskProgress('explore', foughtAreas.size, 'set');
+        }
+
+        if (killStats.normalKills > 0) {
+          get().updateSeasonTaskProgress('kill', killStats.normalKills, 'set');
+        }
+
+        if (killStats.eliteKills > 0) {
+          get().updateSeasonTaskProgress('battle', killStats.eliteKills, 'set');
+        }
+
+        if (killStats.bossKills > 0) {
+          get().updateSeasonTaskProgress('boss', killStats.bossKills, 'set');
+        }
+
+        if (state.totalGoldEarned > 0) {
+          get().updateSeasonTaskProgress('collect', state.totalGoldEarned, 'set');
+        }
       },
     }),
     {

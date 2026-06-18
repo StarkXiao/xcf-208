@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useGameStore } from '../game/store';
 import {
   SEASON_TASK_TYPE_NAMES,
@@ -49,9 +49,14 @@ export default function SeasonChallengePanel() {
     canClaimCrossWeekReward,
     claimCrossWeekReward,
     setSeasonChallengeTab,
+    syncSeasonChallengeProgress,
   } = useGameStore();
 
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    syncSeasonChallengeProgress();
+  }, [syncSeasonChallengeProgress]);
 
   const season = getCurrentSeason();
   const leaderboard = useMemo(() => getSeasonLeaderboard(), [getSeasonLeaderboard, seasonChallenge.seasonScore]);
