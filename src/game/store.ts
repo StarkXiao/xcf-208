@@ -65,6 +65,12 @@ import type {
   RelicCodexEntry,
   RelicSet,
   RelicStatBonus,
+  Building,
+  OwnedBuilding,
+  MerchantEvent,
+  ActiveMerchantEvent,
+  OfflineTownRewards,
+  TownTab,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES } from './types';
 import {
@@ -101,6 +107,11 @@ import {
   RELIC_LEVEL_STAT_MULTIPLIER,
   RELIC_DROP_CONFIG,
   RELIC_COMPAT_BONUS,
+  BUILDINGS,
+  MERCHANT_EVENTS,
+  TOWN_MERCHANT_EVENT_BASE_CHANCE,
+  TOWN_MAX_OFFLINE_HOURS,
+  TOWN_OFFLINE_EFFICIENCY,
 } from './data';
 
 interface GameState {
@@ -471,6 +482,48 @@ interface GameState {
   synthesizeRelic: (relicId: string) => boolean;
   tryDropRelic: (monsterTier: MonsterTier, areaId: string) => { relic: string | null; shards: { relicId: string; count: number } | null };
   getDroppableRelics: (monsterTier: MonsterTier, areaId: string, playerLevel: number) => Relic[];
+
+  ownedBuildings: OwnedBuilding[];
+  activeMerchantEvents: ActiveMerchantEvent[];
+  townActiveTab: TownTab;
+  lastTownProductionTime: number;
+
+  getBuilding: (buildingId: string) => Building | undefined;
+  getOwnedBuilding: (buildingId: string) => OwnedBuilding | undefined;
+  getBuildingLevel: (buildingId: string) => number;
+  getBuildingProduction: (buildingId: string) => { rate: number; currency: string; capacity: number };
+  getBuildingUpgradeCost: (buildingId: string) => { cost: number; currency: string } | null;
+  canUpgradeBuilding: (buildingId: string) => boolean;
+  upgradeBuilding: (buildingId: string) => boolean;
+  collectBuildingResources: (buildingId: string) => { gold: number; exp: number; soulOrbs: number };
+  collectAllBuildingResources: () => { gold: number; exp: number; soulOrbs: number };
+  getBuildingCurrentResources: (buildingId: string) => number;
+  getTotalBuildingProduction: () => { goldPerMinute: number; expPerMinute: number; soulOrbsPerMinute: number };
+  getUnlockedBuildings: () => Building[];
+  isBuildingUnlocked: (buildingId: string) => boolean;
+
+  getStationedCompanions: (buildingId: string) => Companion[];
+  getAvailableCompanionsForStation: () => Companion[];
+  getStationBonus: (buildingId: string) => number;
+  canStationCompanion: (buildingId: string, companionId: string) => boolean;
+  stationCompanion: (buildingId: string, companionId: string) => boolean;
+  unstationCompanion: (buildingId: string, companionId: string) => boolean;
+  getBuildingStationSlots: (buildingId: string) => number;
+  getWarehouseCapacityBonus: () => number;
+
+  getActiveMerchantEvents: () => ActiveMerchantEvent[];
+  getMerchantEvent: (eventId: string) => MerchantEvent | undefined;
+  getMerchantItemStock: (eventId: string, itemId: string) => number;
+  canBuyMerchantItem: (eventId: string, itemId: string) => boolean;
+  buyMerchantItem: (eventId: string, itemId: string) => boolean;
+  checkMerchantEvents: () => void;
+  getMerchantEventChance: () => number;
+
+  calculateOfflineTownRewards: () => OfflineTownRewards;
+  collectOfflineTownRewards: () => void;
+  updateTownProduction: () => void;
+
+  setTownActiveTab: (tab: TownTab) => void;
 }
 
 let logIdCounter = 0;
@@ -4571,6 +4624,625 @@ export const useGameStore = create<GameState>()(
 
         return { relic: null, shards: null };
       },
+
+      ownedBuildings: [],
+      activeMerchantEvents: [],
+      townActiveTab: 'overview',
+      lastTownProductionTime: Date.now(),
+
+      getBuilding: (buildingId) => BUILDINGS.find((b) => b.id === buildingId),
+
+      getOwnedBuilding: (buildingId) => {
+        const state = get();
+        return state.ownedBuildings.find((b) => b.buildingId === buildingId);
+      },
+
+      getBuildingLevel: (buildingId) => {
+        const state = get();
+        const owned = state.ownedBuildings.find((b) => b.buildingId === buildingId);
+        return owned?.level || 0;
+      },
+
+      getBuildingProduction: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        const level = state.getBuildingLevel(buildingId);
+        if (!building || level === 0) {
+          return { rate: 0, currency: 'gold', capacity: 0 };
+        }
+        const levelConfig = building.levels[level - 1];
+        const stationBonus = state.getStationBonus(buildingId);
+        const warehouseBonus = state.getWarehouseCapacityBonus();
+        return {
+          rate: Math.floor(levelConfig.productionRate * (1 + stationBonus)),
+          currency: levelConfig.productionCurrency,
+          capacity: Math.floor(levelConfig.capacity * (1 + warehouseBonus)),
+        };
+      },
+
+      getWarehouseCapacityBonus: () => {
+        const state = get();
+        const warehouse = state.ownedBuildings.find((b) => b.buildingId === 'warehouse');
+        if (!warehouse || warehouse.level === 0) return 0;
+        return warehouse.level * 0.05;
+      },
+
+      getBuildingUpgradeCost: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        const currentLevel = state.getBuildingLevel(buildingId);
+        if (!building) return null;
+        if (currentLevel >= building.maxLevel) return null;
+        const nextLevelConfig = building.levels[currentLevel];
+        return { cost: nextLevelConfig.upgradeCost, currency: nextLevelConfig.upgradeCurrency };
+      },
+
+      canUpgradeBuilding: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        if (!building) return false;
+        if (!state.isBuildingUnlocked(buildingId)) return false;
+        const cost = state.getBuildingUpgradeCost(buildingId);
+        if (!cost) return false;
+        if (cost.currency === 'gold') {
+          return state.player.stats.gold >= cost.cost;
+        } else {
+          return state.player.stats.soulOrbs >= cost.cost;
+        }
+      },
+
+      upgradeBuilding: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        if (!building) return false;
+        if (!state.canUpgradeBuilding(buildingId)) return false;
+
+        const cost = state.getBuildingUpgradeCost(buildingId);
+        if (!cost) return false;
+
+        const currentLevel = state.getBuildingLevel(buildingId);
+
+        if (cost.currency === 'gold') {
+          set((s) => ({
+            player: {
+              ...s.player,
+              stats: { ...s.player.stats, gold: s.player.stats.gold - cost.cost },
+            },
+          }));
+        } else {
+          set((s) => ({
+            player: {
+              ...s.player,
+              stats: { ...s.player.stats, soulOrbs: s.player.stats.soulOrbs - cost.cost },
+            },
+          }));
+        }
+
+        if (currentLevel === 0) {
+          set((s) => ({
+            ownedBuildings: [
+              ...s.ownedBuildings,
+              {
+                buildingId,
+                level: 1,
+                currentResources: 0,
+                lastCollectTime: Date.now(),
+                stationedCompanionIds: [],
+              },
+            ],
+          }));
+          get().addBattleLog(`🏗️ 建造了 ${building.name}！`, 'system');
+        } else {
+          set((s) => ({
+            ownedBuildings: s.ownedBuildings.map((b) =>
+              b.buildingId === buildingId ? { ...b, level: b.level + 1 } : b
+            ),
+          }));
+          get().addBattleLog(`⬆️ ${building.name} 升级到 ${currentLevel + 1} 级！`, 'system');
+        }
+
+        return true;
+      },
+
+      getBuildingCurrentResources: (buildingId) => {
+        const state = get();
+        const owned = state.getOwnedBuilding(buildingId);
+        const production = state.getBuildingProduction(buildingId);
+        if (!owned || production.rate === 0) return 0;
+
+        const now = Date.now();
+        const elapsedMs = now - owned.lastCollectTime;
+        const elapsedMinutes = elapsedMs / 60000;
+        const produced = production.rate * elapsedMinutes;
+
+        return Math.min(produced, production.capacity);
+      },
+
+      collectBuildingResources: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        const owned = state.getOwnedBuilding(buildingId);
+        if (!building || !owned) return { gold: 0, exp: 0, soulOrbs: 0 };
+
+        const resources = state.getBuildingCurrentResources(buildingId);
+        const production = state.getBuildingProduction(buildingId);
+
+        if (resources <= 0) return { gold: 0, exp: 0, soulOrbs: 0 };
+
+        const result = { gold: 0, exp: 0, soulOrbs: 0 };
+
+        if (production.currency === 'gold') {
+          result.gold = Math.floor(resources);
+          get().addGold(Math.floor(resources));
+        } else if (production.currency === 'exp') {
+          result.exp = Math.floor(resources);
+          get().addExp(Math.floor(resources));
+        } else if (production.currency === 'soulOrbs') {
+          result.soulOrbs = Math.floor(resources);
+          get().addSoulOrbs(Math.floor(resources));
+        }
+
+        set((s) => ({
+          ownedBuildings: s.ownedBuildings.map((b) =>
+            b.buildingId === buildingId ? { ...b, lastCollectTime: Date.now() } : b
+          ),
+        }));
+
+        get().addBattleLog(
+          `💰 从 ${building.name} 收集了 ${Math.floor(resources)} ${
+            production.currency === 'gold' ? '金币' : production.currency === 'exp' ? '经验' : '魂珠'
+          }`,
+          'gold'
+        );
+
+        return result;
+      },
+
+      collectAllBuildingResources: () => {
+        const state = get();
+        let totalGold = 0;
+        let totalExp = 0;
+        let totalSoulOrbs = 0;
+
+        state.ownedBuildings.forEach((owned) => {
+          const result = state.collectBuildingResources(owned.buildingId);
+          totalGold += result.gold;
+          totalExp += result.exp;
+          totalSoulOrbs += result.soulOrbs;
+        });
+
+        return { gold: totalGold, exp: totalExp, soulOrbs: totalSoulOrbs };
+      },
+
+      getTotalBuildingProduction: () => {
+        const state = get();
+        let goldPerMinute = 0;
+        let expPerMinute = 0;
+        let soulOrbsPerMinute = 0;
+
+        state.ownedBuildings.forEach((owned) => {
+          const production = state.getBuildingProduction(owned.buildingId);
+          if (production.currency === 'gold') {
+            goldPerMinute += production.rate;
+          } else if (production.currency === 'exp') {
+            expPerMinute += production.rate;
+          } else if (production.currency === 'soulOrbs') {
+            soulOrbsPerMinute += production.rate;
+          }
+        });
+
+        return { goldPerMinute, expPerMinute, soulOrbsPerMinute };
+      },
+
+      getUnlockedBuildings: () => {
+        const state = get();
+        const playerLevel = state.player.stats.level;
+        return BUILDINGS.filter((b) => b.unlockLevel <= playerLevel);
+      },
+
+      isBuildingUnlocked: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        if (!building) return false;
+        return state.player.stats.level >= building.unlockLevel;
+      },
+
+      getStationedCompanions: (buildingId) => {
+        const state = get();
+        const owned = state.getOwnedBuilding(buildingId);
+        if (!owned) return [];
+        return owned.stationedCompanionIds
+          .map((id) => state.ownedCompanions.find((c) => c.id === id))
+          .filter((c): c is Companion => c !== undefined);
+      },
+
+      getAvailableCompanionsForStation: () => {
+        const state = get();
+        const stationedIds = new Set<string>();
+        state.ownedBuildings.forEach((b) => {
+          b.stationedCompanionIds.forEach((id) => stationedIds.add(id));
+        });
+        return state.ownedCompanions.filter((c) => !stationedIds.has(c.id));
+      },
+
+      getStationBonus: (buildingId) => {
+        const state = get();
+        const companions = state.getStationedCompanions(buildingId);
+        if (companions.length === 0) return 0;
+
+        let totalBonus = 0;
+        companions.forEach((c) => {
+          const rarityBonus: Record<string, number> = {
+            common: 0.05,
+            rare: 0.1,
+            epic: 0.2,
+            legendary: 0.35,
+          };
+          const levelBonus = c.level * 0.005;
+          const starBonus = c.stars * 0.02;
+          totalBonus += (rarityBonus[c.rarity] || 0.05) + levelBonus + starBonus;
+        });
+
+        return totalBonus;
+      },
+
+      canStationCompanion: (buildingId, companionId) => {
+        const state = get();
+        const owned = state.getOwnedBuilding(buildingId);
+        if (!owned || owned.level === 0) return false;
+        const slots = state.getBuildingStationSlots(buildingId);
+        if (owned.stationedCompanionIds.length >= slots) return false;
+        if (owned.stationedCompanionIds.includes(companionId)) return false;
+        const available = state.getAvailableCompanionsForStation();
+        return available.some((c) => c.id === companionId);
+      },
+
+      stationCompanion: (buildingId, companionId) => {
+        const state = get();
+        if (!state.canStationCompanion(buildingId, companionId)) return false;
+
+        set((s) => ({
+          ownedBuildings: s.ownedBuildings.map((b) =>
+            b.buildingId === buildingId
+              ? { ...b, stationedCompanionIds: [...b.stationedCompanionIds, companionId] }
+              : b
+          ),
+        }));
+
+        const companion = state.ownedCompanions.find((c) => c.id === companionId);
+        const building = state.getBuilding(buildingId);
+        if (companion && building) {
+          get().addBattleLog(`👥 ${companion.name} 驻守到了 ${building.name}`, 'system');
+        }
+
+        return true;
+      },
+
+      unstationCompanion: (buildingId, companionId) => {
+        const state = get();
+        const owned = state.getOwnedBuilding(buildingId);
+        if (!owned) return false;
+        if (!owned.stationedCompanionIds.includes(companionId)) return false;
+
+        set((s) => ({
+          ownedBuildings: s.ownedBuildings.map((b) =>
+            b.buildingId === buildingId
+              ? {
+                  ...b,
+                  stationedCompanionIds: b.stationedCompanionIds.filter((id) => id !== companionId),
+                }
+              : b
+          ),
+        }));
+
+        const companion = state.ownedCompanions.find((c) => c.id === companionId);
+        const building = state.getBuilding(buildingId);
+        if (companion && building) {
+          get().addBattleLog(`👤 ${companion.name} 离开了 ${building.name}`, 'system');
+        }
+
+        return true;
+      },
+
+      getBuildingStationSlots: (buildingId) => {
+        const state = get();
+        const building = state.getBuilding(buildingId);
+        const level = state.getBuildingLevel(buildingId);
+        if (!building || level === 0) return 0;
+        const levelConfig = building.levels[level - 1];
+        return levelConfig.stationSlots;
+      },
+
+      getActiveMerchantEvents: () => {
+        const state = get();
+        const now = Date.now();
+        return state.activeMerchantEvents.filter((e) => e.endTime > now);
+      },
+
+      getMerchantEvent: (eventId) => MERCHANT_EVENTS.find((e) => e.id === eventId),
+
+      getMerchantItemStock: (eventId, itemId) => {
+        const state = get();
+        const event = state.getMerchantEvent(eventId);
+        const activeEvent = state.activeMerchantEvents.find((e) => e.eventId === eventId);
+        if (!event || !activeEvent) return 0;
+        const item = event.items.find((i) => i.id === itemId);
+        if (!item) return 0;
+        const purchased = activeEvent.purchasedItems[itemId] || 0;
+        return Math.max(0, (item.stock || 1) - purchased);
+      },
+
+      canBuyMerchantItem: (eventId, itemId) => {
+        const state = get();
+        const event = state.getMerchantEvent(eventId);
+        if (!event) return false;
+        const stock = state.getMerchantItemStock(eventId, itemId);
+        if (stock <= 0) return false;
+        const item = event.items.find((i) => i.id === itemId);
+        if (!item) return false;
+        if (item.priceCurrency === 'gold') {
+          return state.player.stats.gold >= item.price;
+        } else {
+          return state.player.stats.soulOrbs >= item.price;
+        }
+      },
+
+      buyMerchantItem: (eventId, itemId) => {
+        const state = get();
+        const event = state.getMerchantEvent(eventId);
+        if (!event) return false;
+        if (!state.canBuyMerchantItem(eventId, itemId)) return false;
+
+        const item = event.items.find((i) => i.id === itemId);
+        if (!item) return false;
+
+        if (item.priceCurrency === 'gold') {
+          set((s) => ({
+            player: {
+              ...s.player,
+              stats: { ...s.player.stats, gold: s.player.stats.gold - item.price },
+            },
+          }));
+        } else {
+          set((s) => ({
+            player: {
+              ...s.player,
+              stats: { ...s.player.stats, soulOrbs: s.player.stats.soulOrbs - item.price },
+            },
+          }));
+        }
+
+        set((s) => ({
+          activeMerchantEvents: s.activeMerchantEvents.map((e) =>
+            e.eventId === eventId
+              ? {
+                  ...e,
+                  purchasedItems: {
+                    ...e.purchasedItems,
+                    [itemId]: (e.purchasedItems[itemId] || 0) + 1,
+                  },
+                }
+              : e
+          ),
+        }));
+
+        switch (item.rewardType) {
+          case 'gold':
+            get().addGold(item.rewardValue);
+            break;
+          case 'exp':
+            get().addExp(item.rewardValue);
+            break;
+          case 'soulOrbs':
+            get().addSoulOrbs(item.rewardValue);
+            break;
+          case 'attack':
+            set((s) => ({
+              player: {
+                ...s.player,
+                stats: { ...s.player.stats, attack: s.player.stats.attack + item.rewardValue },
+              },
+            }));
+            break;
+          case 'defense':
+            set((s) => ({
+              player: {
+                ...s.player,
+                stats: { ...s.player.stats, defense: s.player.stats.defense + item.rewardValue },
+              },
+            }));
+            break;
+          case 'hp':
+            set((s) => ({
+              player: {
+                ...s.player,
+                stats: {
+                  ...s.player.stats,
+                  maxHp: s.player.stats.maxHp + item.rewardValue,
+                  hp: s.player.stats.hp + item.rewardValue,
+                },
+              },
+            }));
+            break;
+        }
+
+        get().addBattleLog(`🛒 从 ${event.merchantName} 购买了 ${item.name}`, 'system');
+        return true;
+      },
+
+      checkMerchantEvents: () => {
+        const state = get();
+        const now = Date.now();
+
+        set((s) => ({
+          activeMerchantEvents: s.activeMerchantEvents.filter((e) => e.endTime > now),
+        }));
+
+        const activeEvents = state.getActiveMerchantEvents();
+        if (activeEvents.length >= 3) return;
+
+        const chance = state.getMerchantEventChance();
+        if (Math.random() > chance) return;
+
+        const availableEvents = MERCHANT_EVENTS.filter(
+          (e) => !state.activeMerchantEvents.some((ae) => ae.eventId === e.id)
+        );
+
+        if (availableEvents.length === 0) return;
+
+        const weightedEvents = availableEvents.map((e) => {
+          const rarityWeights: Record<string, number> = {
+            common: 40,
+            rare: 25,
+            epic: 10,
+            legendary: 3,
+          };
+          return { event: e, weight: rarityWeights[e.rarity] || 10 };
+        });
+
+        const totalWeight = weightedEvents.reduce((sum, w) => sum + w.weight, 0);
+        let roll = Math.random() * totalWeight;
+        let selectedEvent = weightedEvents[0].event;
+
+        for (const w of weightedEvents) {
+          roll -= w.weight;
+          if (roll <= 0) {
+            selectedEvent = w.event;
+            break;
+          }
+        }
+
+        const newEvent: ActiveMerchantEvent = {
+          eventId: selectedEvent.id,
+          startTime: now,
+          endTime: now + selectedEvent.durationSeconds * 1000,
+          purchasedItems: {},
+        };
+
+        set((s) => ({
+          activeMerchantEvents: [...s.activeMerchantEvents, newEvent],
+        }));
+
+        get().addBattleLog(`🎪 ${selectedEvent.title}！`, 'event');
+      },
+
+      getMerchantEventChance: () => {
+        const state = get();
+        let chance = TOWN_MERCHANT_EVENT_BASE_CHANCE;
+
+        const tavern = state.ownedBuildings.find((b) => b.buildingId === 'tavern');
+        if (tavern && tavern.level > 0) {
+          chance += tavern.level * 0.005;
+        }
+
+        const market = state.ownedBuildings.find((b) => b.buildingId === 'market');
+        if (market && market.level > 0) {
+          chance += market.level * 0.008;
+        }
+
+        return Math.min(chance, 0.5);
+      },
+
+      calculateOfflineTownRewards: () => {
+        const state = get();
+        const now = Date.now();
+        const offlineMs = now - state.lastOnlineTime;
+        const offlineMinutes = Math.min(
+          offlineMs / 60000,
+          TOWN_MAX_OFFLINE_HOURS * 60
+        );
+
+        let totalGold = 0;
+        let totalExp = 0;
+        let totalSoulOrbs = 0;
+        const buildingRewards: OfflineTownRewards['breakdown']['buildingRewards'] = [];
+
+        state.ownedBuildings.forEach((owned) => {
+          const building = state.getBuilding(owned.buildingId);
+          const production = state.getBuildingProduction(owned.buildingId);
+          if (!building || production.rate === 0) return;
+
+          const produced = production.rate * offlineMinutes * TOWN_OFFLINE_EFFICIENCY;
+          const capped = Math.min(produced, production.capacity);
+
+          const reward = Math.floor(capped);
+          if (reward <= 0) return;
+
+          const buildingReward = {
+            buildingId: owned.buildingId,
+            name: building.name,
+            gold: 0,
+            exp: 0,
+            soulOrbs: 0,
+          };
+
+          if (production.currency === 'gold') {
+            buildingReward.gold = reward;
+            totalGold += reward;
+          } else if (production.currency === 'exp') {
+            buildingReward.exp = reward;
+            totalExp += reward;
+          } else if (production.currency === 'soulOrbs') {
+            buildingReward.soulOrbs = reward;
+            totalSoulOrbs += reward;
+          }
+
+          buildingRewards.push(buildingReward);
+        });
+
+        let stationBonus = 0;
+        state.ownedBuildings.forEach((owned) => {
+          if (owned.stationedCompanionIds.length > 0) {
+            stationBonus += state.getStationBonus(owned.buildingId);
+          }
+        });
+
+        return {
+          gold: totalGold,
+          exp: totalExp,
+          soulOrbs: totalSoulOrbs,
+          breakdown: {
+            buildingRewards,
+            stationBonus,
+            totalOfflineMinutes: Math.floor(offlineMinutes),
+          },
+        };
+      },
+
+      collectOfflineTownRewards: () => {
+        const state = get();
+        const rewards = state.calculateOfflineTownRewards();
+
+        if (rewards.gold > 0) {
+          get().addGold(rewards.gold);
+        }
+        if (rewards.exp > 0) {
+          get().addExp(rewards.exp);
+        }
+        if (rewards.soulOrbs > 0) {
+          get().addSoulOrbs(rewards.soulOrbs);
+        }
+
+        set((s) => ({
+          ownedBuildings: s.ownedBuildings.map((b) => ({
+            ...b,
+            lastCollectTime: Date.now(),
+          })),
+        }));
+
+        get().addBattleLog(
+          `🏘️ 城镇离线收益：💰 ${rewards.gold} ⭐ ${rewards.exp} 💎 ${rewards.soulOrbs}`,
+          'system'
+        );
+      },
+
+      updateTownProduction: () => {
+        const state = get();
+        set({ lastTownProductionTime: Date.now() });
+        state.checkMerchantEvents();
+      },
+
+      setTownActiveTab: (tab) => set({ townActiveTab: tab }),
     }),
     {
       name: 'isekai-idle-game',

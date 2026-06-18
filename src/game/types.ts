@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1347,3 +1347,90 @@ export const RELIC_CATEGORY_ICONS: Record<RelicCategory, string> = {
   treasure: '🏺',
   rune: '📜',
 };
+
+export type BuildingType = 'gold_mine' | 'lumber_mill' | 'stone_quarry' | 'farm' | 'tavern' | 'forge' | 'warehouse' | 'market' | 'barracks' | 'temple';
+
+export interface BuildingLevelConfig {
+  level: number;
+  upgradeCost: number;
+  upgradeCurrency: 'gold' | 'soulOrbs';
+  productionRate: number;
+  productionCurrency: 'gold' | 'exp' | 'soulOrbs';
+  capacity: number;
+  defenseBonus?: number;
+  attackBonus?: number;
+  stationSlots: number;
+}
+
+export interface Building {
+  id: string;
+  type: BuildingType;
+  name: string;
+  description: string;
+  icon: string;
+  bgColor: string;
+  maxLevel: number;
+  unlockLevel: number;
+  levels: BuildingLevelConfig[];
+}
+
+export interface OwnedBuilding {
+  buildingId: string;
+  level: number;
+  currentResources: number;
+  lastCollectTime: number;
+  stationedCompanionIds: string[];
+}
+
+export interface MerchantEvent {
+  id: string;
+  title: string;
+  description: string;
+  merchantName: string;
+  merchantAvatar: string;
+  type: 'buy' | 'sell' | 'trade' | 'special';
+  items: MerchantItem[];
+  durationSeconds: number;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  icon: string;
+}
+
+export interface MerchantItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  price: number;
+  priceCurrency: 'gold' | 'soulOrbs';
+  rewardType: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'material';
+  rewardValue: number;
+  stock?: number;
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+  materialId?: string;
+}
+
+export interface ActiveMerchantEvent {
+  eventId: string;
+  startTime: number;
+  endTime: number;
+  purchasedItems: Record<string, number>;
+}
+
+export interface StationBonus {
+  type: 'production' | 'defense' | 'attack' | 'capacity';
+  value: number;
+  isPercent: boolean;
+}
+
+export interface OfflineTownRewards {
+  gold: number;
+  exp: number;
+  soulOrbs: number;
+  breakdown: {
+    buildingRewards: { buildingId: string; name: string; gold: number; exp: number; soulOrbs: number }[];
+    stationBonus: number;
+    totalOfflineMinutes: number;
+  };
+}
+
+export type TownTab = 'buildings' | 'merchant' | 'station' | 'overview';
