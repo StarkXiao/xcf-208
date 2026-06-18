@@ -134,11 +134,6 @@ import {
   ALCHEMY_RECIPES,
   POTIONS,
   ALCHEMY_LEVEL_CONFIGS,
-  ALCHEMY_RARITY_COLORS,
-  ALCHEMY_RARITY_NAMES,
-  POTION_TYPE_NAMES,
-  POTION_TYPE_ICONS,
-  BUFF_DURATION_NAMES,
   ALCHEMY_CRAFT_FAIL_REFUND_RATE,
   ALCHEMY_BATTLE_BUFF_DURATION,
   ALCHEMY_EXP_PER_CRAFT,
@@ -5928,7 +5923,6 @@ export const useGameStore = create<GameState>()(
       },
 
       craftPotion: (recipeId) => {
-        const state = get();
         const recipe = ALCHEMY_RECIPES.find(r => r.id === recipeId);
         if (!recipe || !get().canCraftPotion(recipeId)) {
           return { success: false, potionId: null, count: 0 };

@@ -80,7 +80,6 @@ export default function GameCanvas() {
     tryDropRelic,
     addRelic,
     addRelicShards,
-    getActiveAlchemyBonus,
     getAlchemyBuffDamageReduction,
     getAlchemyBuffCritRate,
     getAlchemyBuffCritDamage,

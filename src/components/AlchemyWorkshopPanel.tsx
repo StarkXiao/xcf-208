@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../game/store';
-import { ALCHEMY_RECIPES, POTIONS, ALCHEMY_LEVEL_CONFIGS, RARE_MATERIALS, ALCHEMY_RARITY_COLORS, ALCHEMY_RARITY_NAMES, POTION_TYPE_NAMES, POTION_TYPE_ICONS, BUFF_DURATION_NAMES } from '../game/data';
-import type { AlchemyTab, AlchemyRecipe, Potion, AlchemyPotionEffect } from '../game/types';
+import { ALCHEMY_RECIPES, POTIONS, RARE_MATERIALS, ALCHEMY_RARITY_COLORS, ALCHEMY_RARITY_NAMES, POTION_TYPE_NAMES, POTION_TYPE_ICONS, BUFF_DURATION_NAMES } from '../game/data';
+import type { AlchemyTab, AlchemyRecipe, AlchemyPotionEffect } from '../game/types';
 
 function EffectText({ effect, multiplier = 1 }: { effect: AlchemyPotionEffect; multiplier?: number }) {
   const value = effect.isPercent ? effect.value * multiplier : Math.floor(effect.value * multiplier);
@@ -160,7 +160,7 @@ export default function AlchemyWorkshopPanel() {
     unlockedRecipeIds, alchemyActiveTab, setAlchemyActiveTab,
     getAlchemyLevelConfig, getAlchemyExpToNext,
     craftPotion, usePotion, usePotionInCombat, sellPotion,
-    tickAlchemyBuffs, materialInventory, getMaterialCount,
+    tickAlchemyBuffs, materialInventory,
   } = useGameStore();
 
   const [craftResult, setCraftResult] = useState<{ success: boolean; name: string; count: number } | null>(null);
