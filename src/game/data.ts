@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -5526,4 +5526,206 @@ export const TRADE_EVENTS: TradeEvent[] = [
     icon: '📉',
     isPositive: true,
   },
+];
+
+export const SKILL_TREE_BRANCHES: SkillTreeBranch[] = [
+  { id: 'offense', name: '进攻', description: '强化攻击、暴击与伤害输出', icon: '⚔️', color: '#ef4444' },
+  { id: 'defense', name: '防御', description: '提升防御、生命与生存能力', icon: '🛡️', color: '#3b82f6' },
+  { id: 'utility', name: '辅助', description: '增强速度、幸运与资源获取', icon: '✨', color: '#22c55e' },
+  { id: 'special', name: '专精', description: '职业专属强力技能，需要转生后解锁', icon: '🌟', color: '#f59e0b' },
+];
+
+export const SKILL_TREE_NODES: SkillTreeNode[] = [
+  { id: 'off_atk_1', name: '锐利之刃', description: '每级提升 2% 攻击力', branch: 'offense', rarity: 'common', maxLevel: 10, pointCostPerLevel: 1, effects: [{ type: 'attack', value: 0.02, isPercent: true }], icon: '🗡️', row: 1, col: 1 },
+  { id: 'off_atk_2', name: '破甲打击', description: '每级提升 3% 攻击力', branch: 'offense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'attack', value: 0.03, isPercent: true }], prerequisiteIds: ['off_atk_1'], icon: '⚔️', row: 2, col: 1 },
+  { id: 'off_crit_1', name: '弱点洞察', description: '每级提升 2% 暴击率', branch: 'offense', rarity: 'common', maxLevel: 5, pointCostPerLevel: 1, effects: [{ type: 'critRate', value: 0.02, isPercent: true }], icon: '🎯', row: 1, col: 2 },
+  { id: 'off_crit_2', name: '暴击精通', description: '每级提升 8% 暴击伤害', branch: 'offense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'critDamage', value: 0.08, isPercent: true }], prerequisiteIds: ['off_crit_1'], icon: '💥', row: 2, col: 2 },
+  { id: 'off_skill_1', name: '技能强化', description: '每级提升 5% 技能伤害', branch: 'offense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'skillDamage', value: 0.05, isPercent: true }], prerequisiteIds: ['off_atk_2'], icon: '🔥', row: 3, col: 1 },
+  { id: 'off_atk_3', name: '毁灭之力', description: '每级提升 5% 攻击力', branch: 'offense', rarity: 'epic', maxLevel: 3, pointCostPerLevel: 3, effects: [{ type: 'attack', value: 0.05, isPercent: true }], prerequisiteIds: ['off_atk_2', 'off_crit_2'], icon: '⚡', row: 3, col: 2 },
+  { id: 'off_comp_1', name: '协同攻击', description: '每级提升伙伴 3% 攻击力', branch: 'offense', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'companionAttack', value: 0.03, isPercent: true }], prerequisiteIds: ['off_atk_3'], icon: '🤝', row: 4, col: 1 },
+
+  { id: 'def_def_1', name: '坚韧体质', description: '每级提升 2% 防御力', branch: 'defense', rarity: 'common', maxLevel: 10, pointCostPerLevel: 1, effects: [{ type: 'defense', value: 0.02, isPercent: true }], icon: '🛡️', row: 1, col: 1 },
+  { id: 'def_hp_1', name: '生命强化', description: '每级提升 3% 生命值', branch: 'defense', rarity: 'common', maxLevel: 10, pointCostPerLevel: 1, effects: [{ type: 'hp', value: 0.03, isPercent: true }], icon: '❤️', row: 1, col: 2 },
+  { id: 'def_def_2', name: '铁壁', description: '每级提升 3% 防御力', branch: 'defense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'defense', value: 0.03, isPercent: true }], prerequisiteIds: ['def_def_1'], icon: '🏰', row: 2, col: 1 },
+  { id: 'def_hp_2', name: '生命之泉', description: '每级提升 5% 生命值', branch: 'defense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'hp', value: 0.05, isPercent: true }], prerequisiteIds: ['def_hp_1'], icon: '💚', row: 2, col: 2 },
+  { id: 'def_dodge_1', name: '闪避本能', description: '每级提升 1.5% 闪避率', branch: 'defense', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'dodge', value: 0.015, isPercent: true }], prerequisiteIds: ['def_def_2'], icon: '💨', row: 3, col: 1 },
+  { id: 'def_comp_1', name: '守护契约', description: '每级提升伙伴 3% 防御力', branch: 'defense', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'companionDefense', value: 0.03, isPercent: true }], prerequisiteIds: ['def_def_2', 'def_hp_2'], icon: '🤝', row: 3, col: 2 },
+  { id: 'def_hp_3', name: '不灭之躯', description: '每级提升 8% 生命值', branch: 'defense', rarity: 'epic', maxLevel: 3, pointCostPerLevel: 3, effects: [{ type: 'hp', value: 0.08, isPercent: true }], prerequisiteIds: ['def_hp_2', 'def_dodge_1'], icon: '🛡️', row: 4, col: 1 },
+
+  { id: 'util_spd_1', name: '迅捷步伐', description: '每级提升 2% 速度', branch: 'utility', rarity: 'common', maxLevel: 10, pointCostPerLevel: 1, effects: [{ type: 'speed', value: 0.02, isPercent: true }], icon: '👟', row: 1, col: 1 },
+  { id: 'util_lck_1', name: '幸运星', description: '每级提升 2% 幸运', branch: 'utility', rarity: 'common', maxLevel: 10, pointCostPerLevel: 1, effects: [{ type: 'luck', value: 0.02, isPercent: true }], icon: '🍀', row: 1, col: 2 },
+  { id: 'util_exp_1', name: '领悟之力', description: '每级提升 5% 经验获取', branch: 'utility', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'exp', value: 0.05, isPercent: true }], icon: '📖', row: 2, col: 1 },
+  { id: 'util_gold_1', name: '财运亨通', description: '每级提升 5% 金币获取', branch: 'utility', rarity: 'rare', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'gold', value: 0.05, isPercent: true }], icon: '💰', row: 2, col: 2 },
+  { id: 'util_soul_1', name: '灵魂亲和', description: '每级提升 5% 魂珠获取', branch: 'utility', rarity: 'epic', maxLevel: 3, pointCostPerLevel: 3, effects: [{ type: 'soulOrbs', value: 0.05, isPercent: true }], prerequisiteIds: ['util_exp_1', 'util_gold_1'], icon: '💎', row: 3, col: 1 },
+  { id: 'util_comp_1', name: '伙伴羁绊', description: '每级提升伙伴 3% 生命值', branch: 'utility', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 2, effects: [{ type: 'companionHp', value: 0.03, isPercent: true }], prerequisiteIds: ['util_lck_1'], icon: '💛', row: 3, col: 2 },
+
+  { id: 'spc_war_1', name: '战意高昂', description: '每级提升 4% 攻击力（战士专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'attack', value: 0.04, isPercent: true }], classRestriction: ['战士'], minPlayerLevel: 20, icon: '⚔️', row: 1, col: 1 },
+  { id: 'spc_mage_1', name: '奥术共鸣', description: '每级提升 4% 技能伤害（法师专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'skillDamage', value: 0.04, isPercent: true }], classRestriction: ['法师'], minPlayerLevel: 20, icon: '🔮', row: 1, col: 1 },
+  { id: 'spc_rogue_1', name: '暗影之舞', description: '每级提升 3% 暴击率和 5% 闪避率（盗贼专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'critRate', value: 0.03, isPercent: true }, { type: 'dodge', value: 0.05, isPercent: true }], classRestriction: ['盗贼'], minPlayerLevel: 20, icon: '🌑', row: 1, col: 1 },
+  { id: 'spc_priest_1', name: '神圣庇佑', description: '每级提升 4% 防御和 4% 生命（牧师专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'defense', value: 0.04, isPercent: true }, { type: 'hp', value: 0.04, isPercent: true }], classRestriction: ['牧师'], minPlayerLevel: 20, icon: '✨', row: 1, col: 1 },
+  { id: 'spc_archer_1', name: '鹰眼', description: '每级提升 4% 攻击和 3% 暴击率（弓箭手专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'attack', value: 0.04, isPercent: true }, { type: 'critRate', value: 0.03, isPercent: true }], classRestriction: ['弓箭手'], minPlayerLevel: 20, icon: '🏹', row: 1, col: 1 },
+  { id: 'spc_knight_1', name: '圣盾守护', description: '每级提升 5% 防御和 5% 生命（骑士专属）', branch: 'special', rarity: 'epic', maxLevel: 5, pointCostPerLevel: 3, effects: [{ type: 'defense', value: 0.05, isPercent: true }, { type: 'hp', value: 0.05, isPercent: true }], classRestriction: ['骑士'], minPlayerLevel: 20, icon: '⚜️', row: 1, col: 1 },
+
+  { id: 'spc_war_2', name: '狂战之魂', description: '每级提升 6% 攻击力', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'attack', value: 0.06, isPercent: true }], prerequisiteIds: ['spc_war_1'], classRestriction: ['战士'], minPlayerLevel: 40, icon: '💀', row: 2, col: 1 },
+  { id: 'spc_mage_2', name: '元素主宰', description: '每级提升 8% 技能伤害', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'skillDamage', value: 0.08, isPercent: true }], prerequisiteIds: ['spc_mage_1'], classRestriction: ['法师'], minPlayerLevel: 40, icon: '🌀', row: 2, col: 1 },
+  { id: 'spc_rogue_2', name: '影之化身', description: '每级提升 5% 暴击率和 8% 暴击伤害', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'critRate', value: 0.05, isPercent: true }, { type: 'critDamage', value: 0.08, isPercent: true }], prerequisiteIds: ['spc_rogue_1'], classRestriction: ['盗贼'], minPlayerLevel: 40, icon: '👤', row: 2, col: 1 },
+  { id: 'spc_priest_2', name: '神恩如海', description: '每级提升 6% 生命和 4% 魂珠获取', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'hp', value: 0.06, isPercent: true }, { type: 'soulOrbs', value: 0.04, isPercent: true }], prerequisiteIds: ['spc_priest_1'], classRestriction: ['牧师'], minPlayerLevel: 40, icon: '🕊️', row: 2, col: 1 },
+  { id: 'spc_archer_2', name: '穿云箭', description: '每级提升 6% 攻击和 5% 暴击伤害', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'attack', value: 0.06, isPercent: true }, { type: 'critDamage', value: 0.05, isPercent: true }], prerequisiteIds: ['spc_archer_1'], classRestriction: ['弓箭手'], minPlayerLevel: 40, icon: '🎯', row: 2, col: 1 },
+  { id: 'spc_knight_2', name: '不灭壁垒', description: '每级提升 8% 防御和 8% 生命', branch: 'special', rarity: 'legendary', maxLevel: 3, pointCostPerLevel: 5, effects: [{ type: 'defense', value: 0.08, isPercent: true }, { type: 'hp', value: 0.08, isPercent: true }], prerequisiteIds: ['spc_knight_1'], classRestriction: ['骑士'], minPlayerLevel: 40, icon: '🏯', row: 2, col: 1 },
+];
+
+export const PROFESSION_SPECS: ProfessionSpec[] = [
+  {
+    id: 'berserker',
+    name: '狂战士',
+    description: '战士的进阶之路，以血换力，攻击力大幅提升',
+    icon: '🪓',
+    baseClass: '战士',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'offense',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'attack', value: 0.15, isPercent: true },
+      { type: 'critDamage', value: 0.20, isPercent: true },
+      { type: 'hp', value: -0.10, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 1.25, defenseMultiplier: 0.9, speedMultiplier: 1.1 },
+    rebirthInheritRate: 0.5,
+    companionSynergy: {
+      preferredClasses: ['战士', '骑士'],
+      bonusPerCompanion: [{ type: 'attack', value: 0.05, isPercent: true }],
+      description: '每名战士/骑士伙伴额外提升 5% 攻击力',
+    },
+    color: '#dc2626',
+  },
+  {
+    id: 'guardian',
+    name: '守护者',
+    description: '战士的防御进阶，化身为不可撼动的堡垒',
+    icon: '🏯',
+    baseClass: '战士',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'defense',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'defense', value: 0.20, isPercent: true },
+      { type: 'hp', value: 0.15, isPercent: true },
+      { type: 'attack', value: -0.05, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 0.95, defenseMultiplier: 1.35, speedMultiplier: 0.9 },
+    rebirthInheritRate: 0.6,
+    companionSynergy: {
+      preferredClasses: ['牧师', '骑士'],
+      bonusPerCompanion: [{ type: 'defense', value: 0.05, isPercent: true }],
+      description: '每名牧师/骑士伙伴额外提升 5% 防御力',
+    },
+    color: '#2563eb',
+  },
+  {
+    id: 'archmage',
+    name: '大法师',
+    description: '法师的终极形态，掌控毁灭性的奥术之力',
+    icon: '🌀',
+    baseClass: '法师',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'offense',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'skillDamage', value: 0.25, isPercent: true },
+      { type: 'mp', value: 0.20, isPercent: true },
+      { type: 'defense', value: -0.10, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 1.35, defenseMultiplier: 0.85, speedMultiplier: 1.05 },
+    rebirthInheritRate: 0.4,
+    companionSynergy: {
+      preferredClasses: ['法师', '牧师'],
+      bonusPerCompanion: [{ type: 'skillDamage', value: 0.04, isPercent: true }],
+      description: '每名法师/牧师伙伴额外提升 4% 技能伤害',
+    },
+    color: '#7c3aed',
+  },
+  {
+    id: 'shadow_dancer',
+    name: '暗影舞者',
+    description: '盗贼的极致进化，在暗影中来去无踪',
+    icon: '👤',
+    baseClass: '盗贼',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'offense',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'critRate', value: 0.10, isPercent: true },
+      { type: 'dodge', value: 0.10, isPercent: true },
+      { type: 'speed', value: 0.15, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 1.15, defenseMultiplier: 0.85, speedMultiplier: 1.3 },
+    rebirthInheritRate: 0.45,
+    companionSynergy: {
+      preferredClasses: ['盗贼', '弓箭手'],
+      bonusPerCompanion: [{ type: 'critRate', value: 0.03, isPercent: true }],
+      description: '每名盗贼/弓箭手伙伴额外提升 3% 暴击率',
+    },
+    color: '#4b5563',
+  },
+  {
+    id: 'inquisitor',
+    name: '审判者',
+    description: '牧师的战斗化身，以神圣之力审判邪恶',
+    icon: '⚖️',
+    baseClass: '牧师',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'defense',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'attack', value: 0.10, isPercent: true },
+      { type: 'defense', value: 0.10, isPercent: true },
+      { type: 'hp', value: 0.10, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 1.15, defenseMultiplier: 1.15, speedMultiplier: 1.0 },
+    rebirthInheritRate: 0.55,
+    companionSynergy: {
+      preferredClasses: ['牧师', '骑士', '战士'],
+      bonusPerCompanion: [{ type: 'hp', value: 0.04, isPercent: true }],
+      description: '每名牧师/骑士/战士伙伴额外提升 4% 生命值',
+    },
+    color: '#eab308',
+  },
+  {
+    id: 'ranger_lord',
+    name: '游侠领主',
+    description: '弓箭手的王者形态，箭无虚发，统御自然',
+    icon: '🏹',
+    baseClass: '弓箭手',
+    minLevel: 30,
+    minRebirthCount: 1,
+    requiredBranchId: 'utility',
+    requiredBranchPoints: 15,
+    passiveEffects: [
+      { type: 'attack', value: 0.12, isPercent: true },
+      { type: 'speed', value: 0.10, isPercent: true },
+      { type: 'critRate', value: 0.08, isPercent: true },
+    ],
+    combatBonus: { damageMultiplier: 1.2, defenseMultiplier: 0.9, speedMultiplier: 1.2 },
+    rebirthInheritRate: 0.45,
+    companionSynergy: {
+      preferredClasses: ['弓箭手', '盗贼'],
+      bonusPerCompanion: [{ type: 'speed', value: 0.04, isPercent: true }],
+      description: '每名弓箭手/盗贼伙伴额外提升 4% 速度',
+    },
+    color: '#16a34a',
+  },
+];
+
+export const SKILL_TREE_COMPANION_SYNERGIES: SkillTreeCompanionSynergy[] = [
+  { companionClass: '战士', bonusPerStar: [{ type: 'attack', value: 0.01, isPercent: true }], description: '战士伙伴每星额外 +1% 攻击力' },
+  { companionClass: '法师', bonusPerStar: [{ type: 'skillDamage', value: 0.01, isPercent: true }], description: '法师伙伴每星额外 +1% 技能伤害' },
+  { companionClass: '盗贼', bonusPerStar: [{ type: 'critRate', value: 0.005, isPercent: true }], description: '盗贼伙伴每星额外 +0.5% 暴击率' },
+  { companionClass: '牧师', bonusPerStar: [{ type: 'hp', value: 0.01, isPercent: true }], description: '牧师伙伴每星额外 +1% 生命值' },
+  { companionClass: '弓箭手', bonusPerStar: [{ type: 'speed', value: 0.01, isPercent: true }], description: '弓箭手伙伴每星额外 +1% 速度' },
+  { companionClass: '骑士', bonusPerStar: [{ type: 'defense', value: 0.01, isPercent: true }], description: '骑士伙伴每星额外 +1% 防御力' },
 ];

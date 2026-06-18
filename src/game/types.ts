@@ -436,7 +436,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions' | 'trade' | 'blackmarket';
+export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions' | 'trade' | 'blackmarket' | 'skilltree';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1257,6 +1257,100 @@ export interface BlackMarketConfig {
   refreshCurrency: 'gold' | 'soulOrbs';
   riskEventChance: number;
 }
+
+export type SkillNodeEffectType = 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'exp' | 'gold' | 'soulOrbs' | 'skillDamage' | 'companionAttack' | 'companionDefense' | 'companionHp';
+
+export interface SkillNodeEffect {
+  type: SkillNodeEffectType;
+  value: number;
+  isPercent: boolean;
+}
+
+export type SkillNodeRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export interface SkillTreeNode {
+  id: string;
+  name: string;
+  description: string;
+  branch: SkillTreeBranchId;
+  rarity: SkillNodeRarity;
+  maxLevel: number;
+  pointCostPerLevel: number;
+  effects: SkillNodeEffect[];
+  prerequisiteIds?: string[];
+  classRestriction?: string[];
+  minPlayerLevel?: number;
+  icon: string;
+  row: number;
+  col: number;
+}
+
+export type SkillTreeBranchId = 'offense' | 'defense' | 'utility' | 'special';
+
+export interface SkillTreeBranch {
+  id: SkillTreeBranchId;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+}
+
+export interface SkillTreeAllocation {
+  nodeId: string;
+  level: number;
+}
+
+export type ProfessionSpecId = 'berserker' | 'guardian' | 'archmage' | 'shadow_dancer' | 'inquisitor' | 'ranger_lord';
+
+export interface ProfessionSpec {
+  id: ProfessionSpecId;
+  name: string;
+  description: string;
+  icon: string;
+  baseClass: string;
+  minLevel: number;
+  minRebirthCount: number;
+  requiredBranchId: SkillTreeBranchId;
+  requiredBranchPoints: number;
+  passiveEffects: SkillNodeEffect[];
+  combatBonus: {
+    damageMultiplier: number;
+    defenseMultiplier: number;
+    speedMultiplier: number;
+  };
+  rebirthInheritRate: number;
+  companionSynergy: {
+    preferredClasses: string[];
+    bonusPerCompanion: SkillNodeEffect[];
+    description: string;
+  };
+  color: string;
+}
+
+export interface ActiveProfessionSpec {
+  specId: ProfessionSpecId;
+  activatedAt: number;
+}
+
+export interface SkillTreeCompanionSynergy {
+  companionClass: string;
+  bonusPerStar: SkillNodeEffect[];
+  description: string;
+}
+
+export const SKILL_NODE_RARITY_COLORS: Record<SkillNodeRarity, string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#a855f7',
+  legendary: '#f59e0b',
+};
+
+export const SKILL_NODE_RARITY_NAMES: Record<SkillNodeRarity, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
 
 declare module './types' {
   interface GameState {

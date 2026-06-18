@@ -13,6 +13,7 @@ import { ChapterPanel } from './ChapterPanel';
 import CommissionPanel from './CommissionPanel';
 import TradeMarketPanel from './TradeMarketPanel';
 import BlackMarketPanel from './BlackMarketPanel';
+import SkillTreePanel from './SkillTreePanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -86,6 +87,7 @@ export default function GameScreen() {
     { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'equipment' as const, label: '⚒️ 装备', icon: '⚒️' },
     { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
+    { id: 'skilltree' as const, label: '🌳 技能树', icon: '🌳' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -712,6 +714,8 @@ export default function GameScreen() {
         return <EquipmentPanel />;
       case 'talents':
         return <TalentPanel />;
+      case 'skilltree':
+        return <SkillTreePanel />;
       case 'events':
         return (
           <div className="rebirth-panel">

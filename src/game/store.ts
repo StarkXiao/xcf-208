@@ -71,6 +71,13 @@ import type {
   TradeRecord,
   ActiveTradeEvent,
   TradeEvent,
+  SkillTreeAllocation,
+  SkillTreeNode,
+  SkillTreeBranchId,
+  ProfessionSpec,
+  ProfessionSpecId,
+  ActiveProfessionSpec,
+  SkillNodeEffectType,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -124,6 +131,9 @@ import {
   BLACK_MARKET_ITEMS_PER_REFRESH,
   BLACK_MARKET_CONFIG,
   TRADE_EVENTS,
+  SKILL_TREE_NODES,
+  PROFESSION_SPECS,
+  SKILL_TREE_COMPANION_SYNERGIES,
 } from './data';
 
 interface GameState {
@@ -491,6 +501,28 @@ interface GameState {
   getActiveTradeEvents: () => TradeEvent[];
   getTradeEventPriceModifier: (item: TradeItem) => number;
   triggerRandomTradeEvent: () => void;
+
+  skillTreeAllocations: SkillTreeAllocation[];
+  activeProfessionSpec: ActiveProfessionSpec | null;
+
+  getSkillNodeLevel: (nodeId: string) => number;
+  canUpgradeSkillNode: (nodeId: string) => boolean;
+  isSkillNodeUnlocked: (node: SkillTreeNode) => boolean;
+  upgradeSkillNode: (nodeId: string) => boolean;
+  resetSkillTree: () => boolean;
+  getSkillTreeBonus: (type: SkillNodeEffectType) => number;
+  getBranchPoints: (branchId: SkillTreeBranchId) => number;
+  getTotalAllocatedPoints: () => number;
+  getAvailableSkillPoints: () => number;
+  canActivateProfessionSpec: (specId: ProfessionSpecId) => boolean;
+  activateProfessionSpec: (specId: ProfessionSpecId) => boolean;
+  deactivateProfessionSpec: () => void;
+  getActiveSpec: () => ProfessionSpec | null;
+  getSpecCombatMultiplier: () => { damage: number; defense: number; speed: number };
+  getSpecRebirthInheritRate: () => number;
+  getSpecPassiveBonus: (type: SkillNodeEffectType) => number;
+  getCompanionSynergyBonus: (type: SkillNodeEffectType) => number;
+  getSkillTreeTotalBonus: (type: SkillNodeEffectType) => number;
 }
 
 let logIdCounter = 0;
@@ -790,6 +822,9 @@ export const useGameStore = create<GameState>()(
       tradeRecords: [],
       activeTradeEvents: [],
       lastTradeEventCheck: 0,
+
+      skillTreeAllocations: [],
+      activeProfessionSpec: null,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1531,6 +1566,17 @@ export const useGameStore = create<GameState>()(
         const newRebirthCount = state.player.rebirthCount + 1;
         const bonusTalentPoints = newRebirthCount >= 1 ? 1 + Math.floor(newRebirthCount / 2) : 0;
 
+        const activeSpec = state.activeProfessionSpec
+          ? PROFESSION_SPECS.find((s) => s.id === state.activeProfessionSpec!.specId)
+          : null;
+        const inheritRate = activeSpec?.rebirthInheritRate || 0;
+        const inheritedAllocations = inheritRate > 0
+          ? state.skillTreeAllocations.map((alloc) => ({
+              nodeId: alloc.nodeId,
+              level: Math.max(0, Math.floor(alloc.level * inheritRate)),
+            })).filter((a) => a.level > 0)
+          : [];
+
         set({
           screen: 'rebirth',
           player: {
@@ -1565,6 +1611,8 @@ export const useGameStore = create<GameState>()(
           equipmentInventory: [],
           companionEquipments: {},
           equipmentUidCounter: 0,
+          skillTreeAllocations: inheritedAllocations,
+          activeProfessionSpec: null,
         });
 
         return true;
@@ -6844,10 +6892,236 @@ export const useGameStore = create<GameState>()(
 
         return Math.max(0.1, modifier);
       },
+
+      getSkillNodeLevel: (nodeId) => {
+        const alloc = get().skillTreeAllocations.find((a) => a.nodeId === nodeId);
+        return alloc?.level || 0;
+      },
+
+      isSkillNodeUnlocked: (node) => {
+        const state = get();
+        if (node.minPlayerLevel && state.player.stats.level < node.minPlayerLevel) return false;
+        if (node.classRestriction && node.classRestriction.length > 0 && state.player.class) {
+          if (!node.classRestriction.includes(state.player.class)) return false;
+        }
+        if (node.branch === 'special' && state.player.rebirthCount < 1) return false;
+        if (node.prerequisiteIds && node.prerequisiteIds.length > 0) {
+          for (const preId of node.prerequisiteIds) {
+            const preNode = SKILL_TREE_NODES.find((n) => n.id === preId);
+            if (!preNode) continue;
+            const preLevel = get().getSkillNodeLevel(preId);
+            if (preLevel < preNode.maxLevel) return false;
+          }
+        }
+        return true;
+      },
+
+      canUpgradeSkillNode: (nodeId) => {
+        const state = get();
+        const node = SKILL_TREE_NODES.find((n) => n.id === nodeId);
+        if (!node) return false;
+        const currentLevel = get().getSkillNodeLevel(nodeId);
+        if (currentLevel >= node.maxLevel) return false;
+        if (!get().isSkillNodeUnlocked(node)) return false;
+        const availablePoints = get().getAvailableSkillPoints();
+        return availablePoints >= node.pointCostPerLevel;
+      },
+
+      upgradeSkillNode: (nodeId) => {
+        const state = get();
+        const node = SKILL_TREE_NODES.find((n) => n.id === nodeId);
+        if (!node) return false;
+        if (!get().canUpgradeSkillNode(nodeId)) return false;
+
+        const currentLevel = get().getSkillNodeLevel(nodeId);
+        const cost = node.pointCostPerLevel;
+
+        if (state.player.skillPoints < cost) return false;
+
+        set((s) => {
+          const existing = s.skillTreeAllocations.find((a) => a.nodeId === nodeId);
+          let newAllocations: SkillTreeAllocation[];
+          if (existing) {
+            newAllocations = s.skillTreeAllocations.map((a) =>
+              a.nodeId === nodeId ? { ...a, level: a.level + 1 } : a
+            );
+          } else {
+            newAllocations = [...s.skillTreeAllocations, { nodeId, level: 1 }];
+          }
+          return {
+            skillTreeAllocations: newAllocations,
+            player: {
+              ...s.player,
+              skillPoints: s.player.skillPoints - cost,
+            },
+          };
+        });
+
+        const newLevel = get().getSkillNodeLevel(nodeId);
+        get().addBattleLog(`🌳 技能树：${node.name} 升至 ${newLevel} 级`, 'levelup');
+        return true;
+      },
+
+      resetSkillTree: () => {
+        const state = get();
+        const totalRefund = state.skillTreeAllocations.reduce((sum, a) => {
+          const node = SKILL_TREE_NODES.find((n) => n.id === a.nodeId);
+          return sum + (node ? node.pointCostPerLevel * a.level : 0);
+        }, 0);
+        const refundedPoints = Math.floor(totalRefund * 0.7);
+
+        set((s) => ({
+          skillTreeAllocations: [],
+          activeProfessionSpec: null,
+          player: {
+            ...s.player,
+            skillPoints: s.player.skillPoints + refundedPoints,
+          },
+        }));
+
+        get().addBattleLog(`🌳 技能树已重置，返还 ${refundedPoints} 技能点（70%）`, 'system');
+        return true;
+      },
+
+      getSkillTreeBonus: (type) => {
+        const state = get();
+        let total = 0;
+        for (const alloc of state.skillTreeAllocations) {
+          const node = SKILL_TREE_NODES.find((n) => n.id === alloc.nodeId);
+          if (!node) continue;
+          for (const effect of node.effects) {
+            if (effect.type === type) {
+              total += effect.value * alloc.level;
+            }
+          }
+        }
+        return total;
+      },
+
+      getBranchPoints: (branchId) => {
+        const state = get();
+        return state.skillTreeAllocations.reduce((sum, a) => {
+          const node = SKILL_TREE_NODES.find((n) => n.id === a.nodeId);
+          if (node && node.branch === branchId) return sum + a.level;
+          return sum;
+        }, 0);
+      },
+
+      getTotalAllocatedPoints: () => {
+        const state = get();
+        return state.skillTreeAllocations.reduce((sum, a) => sum + a.level, 0);
+      },
+
+      getAvailableSkillPoints: () => {
+        return get().player.skillPoints;
+      },
+
+      canActivateProfessionSpec: (specId) => {
+        const state = get();
+        const spec = PROFESSION_SPECS.find((s) => s.id === specId);
+        if (!spec) return false;
+        if (spec.baseClass !== state.player.class) return false;
+        if (state.player.stats.level < spec.minLevel) return false;
+        if (state.player.rebirthCount < spec.minRebirthCount) return false;
+        const branchPoints = get().getBranchPoints(spec.requiredBranchId);
+        if (branchPoints < spec.requiredBranchPoints) return false;
+        return true;
+      },
+
+      activateProfessionSpec: (specId) => {
+        if (!get().canActivateProfessionSpec(specId)) return false;
+        const spec = PROFESSION_SPECS.find((s) => s.id === specId);
+        if (!spec) return false;
+
+        set({ activeProfessionSpec: { specId, activatedAt: Date.now() } });
+        get().addBattleLog(`🌟 激活职业专精：${spec.name}！${spec.description}`, 'levelup');
+        return true;
+      },
+
+      deactivateProfessionSpec: () => {
+        const spec = get().getActiveSpec();
+        set({ activeProfessionSpec: null });
+        if (spec) {
+          get().addBattleLog(`🌟 取消职业专精：${spec.name}`, 'system');
+        }
+      },
+
+      getActiveSpec: () => {
+        const state = get();
+        if (!state.activeProfessionSpec) return null;
+        return PROFESSION_SPECS.find((s) => s.id === state.activeProfessionSpec!.specId) || null;
+      },
+
+      getSpecCombatMultiplier: () => {
+        const spec = get().getActiveSpec();
+        if (!spec) return { damage: 1, defense: 1, speed: 1 };
+        return {
+          damage: spec.combatBonus.damageMultiplier,
+          defense: spec.combatBonus.defenseMultiplier,
+          speed: spec.combatBonus.speedMultiplier,
+        };
+      },
+
+      getSpecRebirthInheritRate: () => {
+        const spec = get().getActiveSpec();
+        return spec?.rebirthInheritRate || 0;
+      },
+
+      getSpecPassiveBonus: (type) => {
+        const spec = get().getActiveSpec();
+        if (!spec) return 0;
+        let total = 0;
+        for (const effect of spec.passiveEffects) {
+          if (effect.type === type) {
+            total += effect.value;
+          }
+        }
+        return total;
+      },
+
+      getCompanionSynergyBonus: (type) => {
+        const state = get();
+        const spec = get().getActiveSpec();
+        if (!spec) return 0;
+
+        const formationCompanions = get().getFormationCompanions();
+        const synergyCount = formationCompanions.filter(
+          (c) => spec.companionSynergy.preferredClasses.includes(c.class)
+        ).length;
+
+        let total = 0;
+        if (synergyCount > 0) {
+          for (const effect of spec.companionSynergy.bonusPerCompanion) {
+            if (effect.type === type) {
+              total += effect.value * synergyCount;
+            }
+          }
+        }
+
+        for (const synergy of SKILL_TREE_COMPANION_SYNERGIES) {
+          const matchingCompanions = formationCompanions.filter((c) => c.class === synergy.companionClass);
+          for (const comp of matchingCompanions) {
+            for (const effect of synergy.bonusPerStar) {
+              if (effect.type === type) {
+                total += effect.value * comp.stars;
+              }
+            }
+          }
+        }
+
+        return total;
+      },
+
+      getSkillTreeTotalBonus: (type) => {
+        const skillTreeBonus = get().getSkillTreeBonus(type);
+        const specPassive = get().getSpecPassiveBonus(type);
+        const companionSynergy = get().getCompanionSynergyBonus(type);
+        return skillTreeBonus + specPassive + companionSynergy;
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 11,
+      version: 12,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -6948,6 +7222,10 @@ export const useGameStore = create<GameState>()(
           state.tradeRecords = [];
           state.activeTradeEvents = [];
           state.lastTradeEventCheck = 0;
+        }
+        if (version < 12) {
+          state.skillTreeAllocations = [];
+          state.activeProfessionSpec = null;
         }
         return state as unknown as GameState;
       },

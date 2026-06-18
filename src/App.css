@@ -11810,3 +11810,579 @@
 .collection-item.owned .collection-name {
   color: #d1d5db;
 }
+
+.skilltree-panel {
+  padding: 16px;
+}
+
+.skilltree-header {
+  margin-bottom: 20px;
+}
+
+.skilltree-header h3 {
+  font-size: 20px;
+  color: #22c55e;
+  margin-bottom: 6px;
+}
+
+.skilltree-desc {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.skilltree-overview {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.skilltree-overview-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.skilltree-overview-item .value {
+  color: #22c55e;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.skilltree-overview-item .value.skill-points {
+  color: #60a5fa;
+}
+
+.active-spec-banner {
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.active-spec-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.active-spec-icon {
+  font-size: 24px;
+}
+
+.active-spec-name {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.active-spec-tag {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+.active-spec-bonuses {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.skilltree-branch-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.skilltree-branch-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.skilltree-branch-tab:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.skilltree-branch-tab.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: currentColor;
+  font-weight: bold;
+}
+
+.skilltree-branch-tab .tab-icon {
+  font-size: 16px;
+}
+
+.skilltree-branch-tab .tab-points {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #d1d5db;
+}
+
+.skilltree-branch-tab.spec-tab.active {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.skilltree-branch-description {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.skilltree-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.skill-node-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid;
+  border-radius: 10px;
+  padding: 12px;
+  transition: all 0.2s;
+}
+
+.skill-node-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.skill-node-card.maxed {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.skill-node-card.locked {
+  opacity: 0.5;
+  border-color: #4b5563;
+}
+
+.skill-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.skill-node-icon {
+  font-size: 20px;
+}
+
+.skill-node-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-node-name {
+  display: block;
+  font-size: 13px;
+  font-weight: bold;
+  color: #e5e7eb;
+}
+
+.skill-node-rarity {
+  display: block;
+  font-size: 11px;
+}
+
+.skill-node-level {
+  font-size: 12px;
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.skill-node-desc {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.skill-node-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.skill-node-effect {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.skill-node-effect.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.skill-node-effect.next {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.skill-node-next-level {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.skill-node-next-level .next-label {
+  margin-right: 4px;
+}
+
+.skill-node-upgrade-btn {
+  width: 100%;
+  padding: 6px;
+  background: rgba(96, 165, 250, 0.2);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 6px;
+  color: #60a5fa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.skill-node-upgrade-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.3);
+}
+
+.skill-node-upgrade-btn.maxed {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  cursor: default;
+}
+
+.skill-node-upgrade-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skill-node-lock-reason {
+  color: #6b7280;
+  font-size: 11px;
+  background: rgba(107, 114, 128, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.profession-specs-section {
+  margin-bottom: 20px;
+}
+
+.spec-section-desc {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.profession-specs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profession-spec-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.profession-spec-card.active {
+  background: rgba(34, 197, 94, 0.08);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.15);
+}
+
+.spec-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.spec-icon {
+  font-size: 28px;
+}
+
+.spec-title {
+  flex: 1;
+}
+
+.spec-name {
+  display: block;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.spec-base-class {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.spec-active-badge {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+.spec-desc {
+  color: #d1d5db;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.spec-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.spec-req {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.spec-req.met {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.spec-req.unmet {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.spec-effects,
+.spec-combat-bonus,
+.spec-synergy {
+  margin-bottom: 8px;
+}
+
+.spec-effects h5,
+.spec-combat-bonus h5,
+.spec-synergy h5 {
+  color: #d1d5db;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.spec-effect {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 2px;
+}
+
+.spec-effect.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.spec-effect.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.spec-combat-stat {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  margin: 2px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 4px;
+  color: #60a5fa;
+}
+
+.spec-synergy-desc {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.spec-synergy-classes {
+  color: #fbbf24;
+  font-size: 11px;
+}
+
+.spec-rebirth-inherit {
+  font-size: 12px;
+  color: #a78bfa;
+  margin-bottom: 10px;
+}
+
+.spec-activate-btn {
+  width: 100%;
+  padding: 8px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  color: #f59e0b;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.spec-activate-btn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+.spec-activate-btn.deactivate {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.spec-activate-btn.deactivate:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.spec-activate-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skilltree-stats-summary {
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.skilltree-stats-summary h4 {
+  color: #22c55e;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.skilltree-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.skilltree-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #6b7280;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.skilltree-stat-item.active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.skilltree-companion-synergies {
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.skilltree-companion-synergies h4 {
+  color: #fbbf24;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.skilltree-companion-synergies .synergy-desc {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.skilltree-companion-synergies .synergy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skilltree-companion-synergies .synergy-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.skilltree-companion-synergies .synergy-class {
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.skilltree-companion-synergies .synergy-detail {
+  color: #9ca3af;
+}
+
+.skilltree-reset-section {
+  margin-top: 12px;
+}
+
+.skilltree-reset-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.skilltree-reset-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
