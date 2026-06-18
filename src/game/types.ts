@@ -96,7 +96,7 @@ export interface StarCondition {
 }
 
 export interface StarReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed' | 'guildExp' | 'guildContribution' | 'stamina';
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'maxHp' | 'mp' | 'speed' | 'luck' | 'reputation' | 'guildExp' | 'guildContribution' | 'stamina';
   value: number;
 }
 
@@ -1019,13 +1019,34 @@ export interface ChapterProgress {
 
 export type ChapterTab = 'chapters' | 'stages' | 'bosses';
 
+export interface BattleMonster {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  expReward: number;
+  goldReward: number;
+  color: string;
+  baseAttack: number;
+  baseDefense: number;
+  baseSpeed: number;
+  currentPhase: number;
+  tier: MonsterTier;
+  baseMaxHp: number;
+  baseExpReward: number;
+  baseGoldReward: number;
+}
+
 export interface ActiveStageBattle {
   chapterId: string;
   stageId: string;
   phase: 'preparing' | 'fighting' | 'victory' | 'defeat';
   currentWave: number;
   totalWaves: number;
-  currentMonster: GameState['currentMonster'] | null;
+  currentMonster: BattleMonster | null;
   battleStats: LevelStats;
 }
 

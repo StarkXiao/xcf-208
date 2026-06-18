@@ -1,23 +1,23 @@
 import { useGameStore } from '../game/store';
 import { STORY_DIALOGUES } from '../game/data';
+import type { EventEffect } from '../game/types';
 
 export function StoryDialogueModal() {
   const {
     currentDialogue,
     advanceDialogue,
-    selectDialogueChoice,
     closeDialogue,
   } = useGameStore();
 
   if (!currentDialogue) return null;
 
-  const dialogue = STORY_DIALOGUES.find((d) => d.id === currentDialogue.dialogueId);
-  if (!dialogue) return null;
+  const dialogues = STORY_DIALOGUES[currentDialogue.dialogueId];
+  if (!dialogues) return null;
 
-  const currentLine = dialogue.lines[currentDialogue.currentIndex];
+  const currentLine = dialogues[currentDialogue.currentIndex];
   if (!currentLine) return null;
 
-  const isLastLine = currentDialogue.currentIndex >= dialogue.lines.length - 1;
+  const isLastLine = currentDialogue.currentIndex >= dialogues.length - 1;
   const hasChoices = currentLine.choices && currentLine.choices.length > 0;
 
   const handleContinue = () => {
@@ -38,7 +38,7 @@ export function StoryDialogueModal() {
         {currentLine.speaker && (
           <div className="bg-gradient-to-r from-yellow-900/50 to-transparent px-6 py-3 border-b border-yellow-800/50">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{currentLine.speakerIcon || '💬'}</span>
+              <span className="text-2xl">{currentLine.speakerAvatar || '💬'}</span>
               <h3 className="text-lg font-bold text-yellow-400">{currentLine.speaker}</h3>
             </div>
           </div>
@@ -55,9 +55,9 @@ export function StoryDialogueModal() {
             <p className="text-gray-400 text-sm mb-3">做出你的选择：</p>
             {currentLine.choices!.map((choice, index) => (
               <button
-                key={index}
+                key={choice.id || index}
                 className="w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-yellow-500 rounded-lg transition-all group"
-                onClick={() => selectDialogueChoice(index)}
+                onClick={() => advanceDialogue(choice.id)}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-yellow-500 group-hover:text-yellow-400">
@@ -68,7 +68,7 @@ export function StoryDialogueModal() {
                   </span>
                   {choice.effects && (
                     <span className="text-xs text-gray-500">
-                      {choice.effects.map((eff, i) => (
+                      {choice.effects.map((eff: EventEffect, i: number) => (
                         <span key={i} className="ml-2">
                           {eff.type === 'reputation'
                             ? `声望 ${eff.value > 0 ? '+' : ''}${eff.value}`
@@ -80,18 +80,13 @@ export function StoryDialogueModal() {
                     </span>
                   )}
                 </div>
-                {choice.consequence && (
-                  <p className="text-xs text-gray-500 mt-1 pl-7">
-                    {choice.consequence}
-                  </p>
-                )}
               </button>
             ))}
           </div>
         ) : (
           <div className="px-6 pb-6 flex justify-between items-center">
             <div className="text-gray-500 text-sm">
-              {currentDialogue.currentIndex + 1} / {dialogue.lines.length}
+              {currentDialogue.currentIndex + 1} / {dialogues.length}
             </div>
             <button
               className="px-6 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"

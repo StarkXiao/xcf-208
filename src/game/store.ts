@@ -56,15 +56,12 @@ import type {
   Chapter,
   ChapterProgress,
   StageProgress,
-  ChapterStage,
   StoryDialogue,
-  BossMechanic,
   ActiveStageBattle,
+  BattleMonster,
   ChapterTab,
   Commission,
   ActiveCommission,
-  CommissionEvent,
-  CommissionEventEffect,
   CommissionRewardResult,
   InventoryMaterial,
   RareMaterial,
@@ -74,9 +71,6 @@ import type {
   TradeRecord,
   ActiveTradeEvent,
   TradeEvent,
-  TradeItemRarity,
-  TradeItemCategory,
-  BlackMarketConfig,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES } from './types';
 import {
@@ -123,14 +117,7 @@ import {
   COMMISSION_REFRESH_INTERVAL,
   COMMISSION_MAX_ACTIVE,
   COMMISSION_DAILY_REFRESH_COUNT,
-  COMMISSION_RARITY_COLORS,
-  COMMISSION_RARITY_NAMES,
-  COMMISSION_TYPES,
   TRADE_ITEMS,
-  TRADE_RARITY_COLORS,
-  TRADE_RARITY_NAMES,
-  TRADE_CATEGORY_NAMES,
-  TRADE_CATEGORY_ICONS,
   PRICE_FLUCTUATION_CONFIG,
   TRADE_REFRESH_INTERVAL,
   TRADE_ITEMS_PER_REFRESH,
@@ -156,31 +143,12 @@ interface GameState {
   areaReputations: AreaReputation[];
   purchasedShopItems: string[];
   shopInventories: ShopInventory[];
-  currentMonster: {
-    id: string;
-    name: string;
-    hp: number;
-    maxHp: number;
-    attack: number;
-    defense: number;
-    speed: number;
-    expReward: number;
-    goldReward: number;
-    color: string;
-    baseAttack: number;
-    baseDefense: number;
-    baseSpeed: number;
-    currentPhase: number;
-    tier: MonsterTier;
-    baseMaxHp: number;
-    baseExpReward: number;
-    baseGoldReward: number;
-  } | null;
+  currentMonster: BattleMonster | null;
 
   monsterKillStats: MonsterKillStats;
   rebirthChallenges: RebirthChallengeTarget[];
 
-  generateMonster: (areaId: string, forceTier?: MonsterTier) => GameState['currentMonster'];
+  generateMonster: (areaId: string, forceTier?: MonsterTier) => BattleMonster | null;
   getMonsterTierConfig: (tier: MonsterTier) => MonsterTierConfig;
   updateKillStats: (monsterTier: MonsterTier, areaId: string, monsterId?: string) => void;
   getAreaEliteKills: (areaId: string) => number;
@@ -193,8 +161,8 @@ interface GameState {
   claimRebirthChallengeReward: (challengeId: string) => boolean;
   canClaimRebirthChallenge: (challengeId: string) => boolean;
   getTotalPower: () => number;
-  calculateMonsterStats: (monster: Monster, tier: MonsterTier, playerLevel: number, area: MapArea) => GameState['currentMonster'];
-  getMonsterDropReward: (monster: GameState['currentMonster']) => { exp: number; gold: number; soulOrbs: number; shardChance: number };
+  calculateMonsterStats: (monster: Monster, tier: MonsterTier, playerLevel: number, area: MapArea) => BattleMonster;
+  getMonsterDropReward: (monster: BattleMonster) => { exp: number; gold: number; soulOrbs: number; shardChance: number };
 
   setScreen: (screen: GameScreen) => void;
   setActiveTab: (tab: GameTab) => void;
@@ -215,7 +183,7 @@ interface GameState {
   closeEvent: () => void;
   performRebirth: (bonusIds: string[]) => boolean;
   setAutoBattle: (value: boolean) => void;
-  setCurrentMonster: (monster: GameState['currentMonster']) => void;
+  setCurrentMonster: (monster: BattleMonster) => void;
   calculateDamage: () => number;
   calculateDefense: () => number;
   calculateGoldBonus: () => number;
@@ -451,9 +419,9 @@ interface GameState {
   startStage: (chapterId: string, stageId: string) => boolean;
   completeStage: (chapterId: string, stageId: string, stars: number) => void;
   claimStageReward: (chapterId: string, stageId: string) => boolean;
-  claimFirstClearReward: (chapterId: string, stageId: string) => boolean;
+  claimStageFirstClearReward: (chapterId: string, stageId: string) => boolean;
   canClaimStageReward: (chapterId: string, stageId: string) => boolean;
-  canClaimFirstClearReward: (chapterId: string, stageId: string) => boolean;
+  canClaimStageFirstClearReward: (chapterId: string, stageId: string) => boolean;
   claimChapterReward: (chapterId: string) => boolean;
   canClaimChapterReward: (chapterId: string) => boolean;
 
@@ -506,7 +474,7 @@ interface GameState {
   getTradeItemPrice: (itemId: string, areaId: string) => number;
   getAvailableTradeItems: (areaId: string) => { item: TradeItem; inventory: TradeInventoryItem }[];
   shouldRefreshTrade: (areaId: string) => boolean;
-  refreshTradeInventory: (areaId: string, triggerType?: 'timer' | 'event' | 'manual') => void;
+  refreshTradeInventory: (areaId: string, _triggerType?: 'timer' | 'event' | 'manual') => void;
   calculatePriceModifier: (item: TradeItem, areaId: string) => number;
   buyTradeItem: (itemId: string, areaId: string, quantity?: number) => boolean;
   sellTradeItem: (itemId: string, areaId: string, quantity?: number) => boolean;
@@ -2480,7 +2448,7 @@ export const useGameStore = create<GameState>()(
             const elapsed = (now - ac.startTime) / 1000;
             const progress = Math.min(1, elapsed / ac.durationSeconds);
 
-            let newStatus = ac.status;
+            let newStatus = ac.status as ActiveCommission['status'];
             let newEvent = ac.currentEvent;
             let newEventLog = [...ac.eventLog];
 
@@ -5451,7 +5419,6 @@ export const useGameStore = create<GameState>()(
             });
 
             const totalStars = newStageProgresses.reduce((sum, sp) => sum + sp.bestStars, 0);
-            const bossStage = chapter.stages.find((s) => s.id === chapter.bossStageId);
             const bossProgress = newStageProgresses.find((sp) => sp.stageId === chapter.bossStageId);
             const isCompleted = bossProgress?.cleared || false;
 
@@ -5517,9 +5484,9 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
-      claimFirstClearReward: (chapterId, stageId) => {
+      claimStageFirstClearReward: (chapterId, stageId) => {
         const state = get();
-        if (!state.canClaimFirstClearReward(chapterId, stageId)) return false;
+        if (!state.canClaimStageFirstClearReward(chapterId, stageId)) return false;
 
         const chapter = state.getChapter(chapterId);
         const stage = chapter?.stages.find((s) => s.id === stageId);
@@ -5548,7 +5515,7 @@ export const useGameStore = create<GameState>()(
         return stageProgress.cleared && !stageProgress.claimedRewards;
       },
 
-      canClaimFirstClearReward: (chapterId, stageId) => {
+      canClaimStageFirstClearReward: (chapterId, stageId) => {
         const stageProgress = get().getStageProgress(chapterId, stageId);
         const chapter = get().getChapter(chapterId);
         const stage = chapter?.stages.find((s) => s.id === stageId);
@@ -5964,7 +5931,7 @@ export const useGameStore = create<GameState>()(
           const elapsed = (now - ac.startTime) / 1000;
           const progress = Math.min(1, elapsed / ac.durationSeconds);
 
-          let newStatus = ac.status;
+          let newStatus = ac.status as ActiveCommission['status'];
           let newEvent = ac.currentEvent;
           let newEventLog = [...ac.eventLog];
 
@@ -6317,7 +6284,7 @@ export const useGameStore = create<GameState>()(
         return finalModifier;
       },
 
-      refreshTradeInventory: (areaId, triggerType = 'manual') => {
+      refreshTradeInventory: (areaId, _triggerType = 'manual') => {
         const state = get();
         const playerLevel = state.player.stats.level;
         const repLevel = state.getAreaReputationLevel(areaId);

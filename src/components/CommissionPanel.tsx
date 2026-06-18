@@ -12,7 +12,6 @@ import type {
   Commission,
   ActiveCommission,
   CommissionRewardResult,
-  RareMaterial,
 } from '../game/types';
 
 type CommissionTab = 'available' | 'active' | 'materials';
@@ -57,18 +56,6 @@ export default function CommissionPanel() {
     }, 1000);
     return () => clearInterval(timer);
   }, [updateCommissionProgress]);
-
-  const getCommissionTemplate = (commissionId: string) => {
-    const commission = availableCommissions.find((c) => c.id === commissionId);
-    if (commission) {
-      return COMMISSION_TEMPLATES.find((t) => t.title === commission.title);
-    }
-    const active = activeCommissions.find((c) => c.commissionId === commissionId);
-    if (active) {
-      return COMMISSION_TEMPLATES.find((t) => t.title === active.title);
-    }
-    return null;
-  };
 
   const getActiveCommissionTemplate = (ac: ActiveCommission) => {
     return COMMISSION_TEMPLATES.find((t) => t.title === ac.title);

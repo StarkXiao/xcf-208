@@ -1,7 +1,7 @@
 import { useGameStore } from '../game/store';
 import { CHAPTERS } from '../game/data';
 import { StoryDialogueModal } from './StoryDialogueModal';
-import type { Chapter, ChapterStage, StageType } from '../game/types';
+import type { StageType } from '../game/types';
 
 const STAGE_TYPE_ICONS: Record<StageType, string> = {
   normal: '⚔️',
@@ -46,10 +46,8 @@ export function ChapterPanel() {
     setCurrentChapter,
     setChapterActiveTab,
     startStage,
-    claimStageReward,
-    claimFirstClearReward,
     canClaimStageReward,
-    canClaimFirstClearReward,
+    canClaimStageFirstClearReward,
     claimChapterReward,
     canClaimChapterReward,
     currentDialogue,
@@ -208,7 +206,7 @@ export function ChapterPanel() {
             const progress = getStageProgress(currentChapter.id, stage.id);
             const accessible = isStageAccessible(currentChapter.id, stage.id);
             const canClaimReward = canClaimStageReward(currentChapter.id, stage.id);
-            const canClaimFirstClear = canClaimFirstClearReward(currentChapter.id, stage.id);
+            const canClaimFirstClear = canClaimStageFirstClearReward(currentChapter.id, stage.id);
             const isBoss = stage.type === 'boss';
 
             return (

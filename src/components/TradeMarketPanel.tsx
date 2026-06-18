@@ -12,7 +12,6 @@ import type { TradeItem, TradeInventoryItem } from '../game/types';
 export default function TradeMarketPanel() {
   const {
     player,
-    tradeInventories,
     tradeRecords,
     getAvailableTradeItems,
     shouldRefreshTrade,
@@ -20,7 +19,6 @@ export default function TradeMarketPanel() {
     buyTradeItem,
     sellTradeItem,
     getMaterialCount,
-    activeTradeEvents,
     getActiveTradeEvents,
     checkTradeEvents,
   } = useGameStore();
