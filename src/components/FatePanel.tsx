@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useGameStore } from '../game/store';
 import { INHERITED_BONUSES } from '../game/data';
-import type { Storyline, StorylineNode, Ending, FateTab } from '../game/types';
+import type { Storyline, StorylineNode, Ending, FateTab, StorylineChoice } from '../game/types';
 
 export default function FatePanel() {
   const {
@@ -33,11 +33,11 @@ export default function FatePanel() {
   const inheritedBonuses = useMemo(() => getInheritedBonuses(), [getInheritedBonuses, fate.inheritedBonusIds]);
 
   const alignmentPercent = useMemo(() => {
-    if (alignment.total === 0) return { light: 50, shadow: 50, balance: 50 };
+    if (alignment.total === 0) return { light: 33, shadow: 33, neutral: 34 };
     return {
       light: Math.round((alignment.light / alignment.total) * 100),
       shadow: Math.round((alignment.shadow / alignment.total) * 100),
-      balance: Math.round((alignment.balance / alignment.total) * 100),
+      neutral: Math.round((alignment.neutral / alignment.total) * 100),
     };
   }, [alignment]);
 
@@ -122,7 +122,7 @@ export default function FatePanel() {
           <div className="space-y-2">
             <p className="text-sm text-gray-400 font-medium">做出你的选择：</p>
             {node.choices.map((choice: StorylineChoice) => {
-              const accessible = choice.condition
+              const accessible = choice.nextNodeId
                 ? isStorylineNodeAccessible(selectedStoryline!.id, choice.nextNodeId)
                 : true;
               return (
@@ -341,7 +341,7 @@ export default function FatePanel() {
   };
 
   const tabs: { id: FateTab; label: string; icon: string }[] = [
-    { id: 'storyline', label: '剧情线', icon: '📖' },
+    { id: 'storylines', label: '剧情线', icon: '📖' },
     { id: 'endings', label: '结局', icon: '🏆' },
     { id: 'alignment', label: '命运', icon: '⚖️' },
     { id: 'inheritance', label: '继承', icon: '🔄' },
@@ -378,7 +378,7 @@ export default function FatePanel() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {fate.activeTab === 'storyline' && (
+        {fate.activeTab === 'storylines' && (
           selectedStoryline ? renderStorylineDetail() : (
             <div className="h-full overflow-y-auto space-y-3">
               {availableStorylines.map((storyline) => {
@@ -521,31 +521,39 @@ export default function FatePanel() {
 
                 <div>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-blue-400">⚖️ 平衡</span>
-                    <span className="text-blue-400">{alignmentPercent.balance}%</span>
+                    <span className="text-blue-400">⚖️ 中立</span>
+                    <span className="text-blue-400">{alignmentPercent.neutral}%</span>
                   </div>
                   <div className="h-4 bg-gray-700 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all"
-                      style={{ width: `${alignmentPercent.balance}%` }}
+                      style={{ width: `${alignmentPercent.neutral}%` }}
                     />
                   </div>
                 </div>
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-700">
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-5 gap-2 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-yellow-400">{alignment.light}</p>
-                    <p className="text-xs text-gray-400">光明点数</p>
+                    <p className="text-xl font-bold text-yellow-400">{alignment.light}</p>
+                    <p className="text-xs text-gray-400">光明</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-purple-400">{alignment.shadow}</p>
-                    <p className="text-xs text-gray-400">暗影点数</p>
+                    <p className="text-xl font-bold text-purple-400">{alignment.shadow}</p>
+                    <p className="text-xs text-gray-400">暗影</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-blue-400">{alignment.balance}</p>
-                    <p className="text-xs text-gray-400">平衡点数</p>
+                    <p className="text-xl font-bold text-blue-400">{alignment.neutral}</p>
+                    <p className="text-xs text-gray-400">中立</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-cyan-400">{alignment.order}</p>
+                    <p className="text-xs text-gray-400">秩序</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-red-400">{alignment.chaos}</p>
+                    <p className="text-xs text-gray-400">混沌</p>
                   </div>
                 </div>
               </div>

@@ -123,9 +123,9 @@ import type {
   FateTab,
   PlaythroughRecord,
   StorylineNode,
-  StorylineChoice,
+  FateChoiceAlignment,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES, getFactionReputationLevel, FACTION_REPUTATION_LEVELS, STORYLINE_TYPE_NAMES, STORYLINE_TYPE_COLORS, STORYLINE_TYPE_ICONS, ENDING_TYPE_NAMES, ENDING_TYPE_COLORS, ENDING_TYPE_ICONS, FATE_ALIGNMENT_NAMES, FATE_ALIGNMENT_COLORS, FATE_ALIGNMENT_ICONS, FATE_TAB_NAMES, FATE_TAB_ICONS } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES, getFactionReputationLevel, FACTION_REPUTATION_LEVELS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -987,6 +987,7 @@ function initFateAlignment(): FateAlignment {
   return {
     light: 0,
     shadow: 0,
+    neutral: 0,
     order: 0,
     chaos: 0,
     total: 0,
@@ -1216,6 +1217,21 @@ export const useGameStore = create<GameState>()(
         const defenseBonus = state.rebirthBonuses['defense_boost'] || 0;
         const hpBonus = state.rebirthBonuses['hp_boost'] || 0;
 
+        const inheritedBonuses = get().getInheritedBonuses();
+        let inheritedGoldBonus = 0;
+        let inheritedLevelBonus = 0;
+        const inheritedStatBonuses: Record<string, number> = {};
+        
+        inheritedBonuses.forEach((bonus) => {
+          if (bonus.type === 'starting_gold' && bonus.value) {
+            inheritedGoldBonus += bonus.value;
+          } else if (bonus.type === 'starting_level' && bonus.value) {
+            inheritedLevelBonus += bonus.value;
+          } else if (bonus.type === 'stat' && bonus.stat && bonus.value) {
+            inheritedStatBonuses[bonus.stat] = (inheritedStatBonuses[bonus.stat] || 0) + (bonus.isPercent ? bonus.value / 100 : bonus.value);
+          }
+        });
+
         const talentAtkPct = get().getTotalTalentBonus('attack').percent;
         const talentAtkFlat = get().getTotalTalentBonus('attack').flat;
         const talentDefPct = get().getTotalTalentBonus('defense').percent;
@@ -1228,12 +1244,21 @@ export const useGameStore = create<GameState>()(
         const talentSpdFlat = get().getTotalTalentBonus('speed').flat;
         const talentLckFlat = get().getTotalTalentBonus('luck').flat;
 
+        const inheritedAtkPct = inheritedStatBonuses.attack || 0;
+        const inheritedDefPct = inheritedStatBonuses.defense || 0;
+        const inheritedHpPct = inheritedStatBonuses.maxHp || 0;
+        const inheritedAtkFlat = 0;
+        const inheritedDefFlat = 0;
+        const inheritedHpFlat = 0;
+
         const newStats = {
           ...baseStats,
-          attack: Math.floor((baseStats.attack + talentAtkFlat) * (1 + attackBonus + rebirthBonus * 0.01 + talentAtkPct)),
-          defense: Math.floor((baseStats.defense + talentDefFlat) * (1 + defenseBonus + rebirthBonus * 0.01 + talentDefPct)),
-          maxHp: Math.floor((baseStats.maxHp + talentHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct)),
-          hp: Math.floor((baseStats.maxHp + talentHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct)),
+          level: baseStats.level + inheritedLevelBonus,
+          gold: baseStats.gold + inheritedGoldBonus,
+          attack: Math.floor((baseStats.attack + talentAtkFlat + inheritedAtkFlat) * (1 + attackBonus + rebirthBonus * 0.01 + talentAtkPct + inheritedAtkPct)),
+          defense: Math.floor((baseStats.defense + talentDefFlat + inheritedDefFlat) * (1 + defenseBonus + rebirthBonus * 0.01 + talentDefPct + inheritedDefPct)),
+          maxHp: Math.floor((baseStats.maxHp + talentHpFlat + inheritedHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct + inheritedHpPct)),
+          hp: Math.floor((baseStats.maxHp + talentHpFlat + inheritedHpFlat) * (1 + hpBonus + rebirthBonus * 0.01 + talentHpPct + inheritedHpPct)),
           maxMp: Math.floor((baseStats.maxMp + talentMpFlat) * (1 + talentMpPct)),
           mp: Math.floor((baseStats.maxMp + talentMpFlat) * (1 + talentMpPct)),
           speed: Math.floor((baseStats.speed + talentSpdFlat) * (1 + talentSpdPct)),
@@ -8907,7 +8932,6 @@ export const useGameStore = create<GameState>()(
       },
 
       startStoryline: (storylineId) => {
-        const state = get();
         if (!get().canStartStoryline(storylineId)) return false;
 
         const storyline = STORYLINES.find((s) => s.id === storylineId);
@@ -8958,7 +8982,6 @@ export const useGameStore = create<GameState>()(
       },
 
       getNextStorylineNodes: (storylineId) => {
-        const state = get();
         const currentNode = get().getCurrentStorylineNode(storylineId);
         if (!currentNode) return [];
         const storyline = STORYLINES.find((s) => s.id === storylineId);
@@ -9138,6 +9161,33 @@ export const useGameStore = create<GameState>()(
             });
           }
 
+          if (nextNode?.battleConfig) {
+            const bc = nextNode.battleConfig;
+            const areaId = bc.areaId || state.currentAreaId;
+            let monster;
+            if (bc.monsterId) {
+              const area = state.mapAreas.find((a) => a.id === areaId);
+              const baseMonster = area?.monsters.find((m) => m.id === bc.monsterId);
+              if (baseMonster) {
+                monster = get().calculateMonsterStats(baseMonster, bc.minTier || 'normal', state.player.stats.level, area!);
+              }
+            } else if (bc.minTier || bc.bossOnly) {
+              monster = get().generateMonster(areaId, bc.bossOnly ? 'boss' : bc.minTier);
+            }
+            if (monster) {
+              set({ currentMonster: monster });
+              get().addBattleLog(`⚔️ 剧情战斗开始：${monster.name}`, 'event');
+            }
+          }
+
+          if (nextNode?.eventId) {
+            const event = RANDOM_EVENTS.find((e) => e.id === nextNode.eventId);
+            if (event) {
+              set({ currentEvent: { ...event } });
+              get().addBattleLog(`✨ 触发剧情事件：${event.title}`, 'event');
+            }
+          }
+
           if (nextNode?.isEnding) {
             set((state) => ({
               fate: {
@@ -9161,7 +9211,6 @@ export const useGameStore = create<GameState>()(
       },
 
       completeStorylineNode: (storylineId) => {
-        const state = get();
         const currentNode = get().getCurrentStorylineNode(storylineId);
         if (!currentNode) return;
 
@@ -9322,10 +9371,10 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
-      addAlignment: (alignment, value) => {
+      addAlignment: (alignment: FateChoiceAlignment, value: number) => {
         set((state) => {
           const newAlignment = { ...state.fate.alignment };
-          newAlignment[alignment] = (newAlignment[alignment] || 0) + value;
+          (newAlignment as Record<string, number>)[alignment] = ((newAlignment as Record<string, number>)[alignment] || 0) + value;
           newAlignment.total += value;
           return {
             fate: { ...state.fate, alignment: newAlignment },

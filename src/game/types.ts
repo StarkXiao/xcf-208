@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon' | 'season' | 'faction';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon' | 'season' | 'faction' | 'fate';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -2379,6 +2379,8 @@ export interface StorylineChoice {
   alignment?: FateChoiceAlignment;
   requiredTags?: string[];
   requiredAffinity?: { companionId: string; minValue: number }[];
+  condition?: boolean;
+  consequencePreview?: string;
 }
 
 export interface StorylineBranch {
@@ -2435,6 +2437,7 @@ export interface Ending {
   epilogueText: string;
   order: number;
   hidden?: boolean;
+  hint?: string;
 }
 
 export interface InheritedBonus {
@@ -2475,6 +2478,7 @@ export interface EndingProgress {
 export interface FateAlignment {
   light: number;
   shadow: number;
+  neutral: number;
   order: number;
   chaos: number;
   total: number;
