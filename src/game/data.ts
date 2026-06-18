@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement, RelicDungeonBuff, RelicDungeonBoss, RelicDungeonDifficulty } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -7338,6 +7338,623 @@ export const ALCHEMY_EXP_PER_CRAFT: Record<string, number> = {
   rare: 30,
   epic: 80,
   legendary: 200,
+};
+
+export const RELIC_DUNGEON_BUFFS: RelicDungeonBuff[] = [
+  {
+    id: 'dungeon_attack_1',
+    name: '勇气之力',
+    description: '攻击力小幅提升',
+    icon: '⚔️',
+    rarity: 'common',
+    effects: [{ stat: 'attack', value: 10, isPercent: false }],
+  },
+  {
+    id: 'dungeon_attack_2',
+    name: '战士的荣耀',
+    description: '攻击力大幅提升',
+    icon: '🗡️',
+    rarity: 'rare',
+    effects: [{ stat: 'attack', value: 20, isPercent: true }],
+  },
+  {
+    id: 'dungeon_attack_3',
+    name: '狂暴战魂',
+    description: '攻击力巨幅提升',
+    icon: '🔥',
+    rarity: 'epic',
+    effects: [{ stat: 'attack', value: 40, isPercent: true }],
+  },
+  {
+    id: 'dungeon_attack_4',
+    name: '战神赐福',
+    description: '攻击力史诗级提升',
+    icon: '⚜️',
+    rarity: 'legendary',
+    effects: [
+      { stat: 'attack', value: 60, isPercent: true },
+      { stat: 'critRate', value: 15, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_defense_1',
+    name: '铁壁',
+    description: '防御力小幅提升',
+    icon: '🛡️',
+    rarity: 'common',
+    effects: [{ stat: 'defense', value: 10, isPercent: false }],
+  },
+  {
+    id: 'dungeon_defense_2',
+    name: '守护者',
+    description: '防御力大幅提升',
+    icon: '🛡️',
+    rarity: 'rare',
+    effects: [{ stat: 'defense', value: 20, isPercent: true }],
+  },
+  {
+    id: 'dungeon_defense_3',
+    name: '不朽之躯',
+    description: '防御力巨幅提升并减伤',
+    icon: '🏛️',
+    rarity: 'epic',
+    effects: [
+      { stat: 'defense', value: 35, isPercent: true },
+      { stat: 'damageReduction', value: 10, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_hp_1',
+    name: '生命之力',
+    description: '生命上限小幅提升',
+    icon: '❤️',
+    rarity: 'common',
+    effects: [{ stat: 'hp', value: 100, isPercent: false }],
+  },
+  {
+    id: 'dungeon_hp_2',
+    name: '生命源泉',
+    description: '生命上限大幅提升',
+    icon: '💖',
+    rarity: 'rare',
+    effects: [{ stat: 'hp', value: 25, isPercent: true }],
+  },
+  {
+    id: 'dungeon_hp_3',
+    name: '生命古树',
+    description: '生命上限巨幅提升',
+    icon: '🌳',
+    rarity: 'epic',
+    effects: [{ stat: 'hp', value: 50, isPercent: true }],
+  },
+  {
+    id: 'dungeon_crit_1',
+    name: '锐利之眼',
+    description: '暴击率提升',
+    icon: '👁️',
+    rarity: 'rare',
+    effects: [{ stat: 'critRate', value: 10, isPercent: true }],
+  },
+  {
+    id: 'dungeon_crit_2',
+    name: '致命一击',
+    description: '暴击率和暴击伤害大幅提升',
+    icon: '💥',
+    rarity: 'epic',
+    effects: [
+      { stat: 'critRate', value: 20, isPercent: true },
+      { stat: 'critDamage', value: 50, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_crit_3',
+    name: '毁灭意志',
+    description: '暴击属性史诗提升',
+    icon: '☄️',
+    rarity: 'legendary',
+    effects: [
+      { stat: 'critRate', value: 30, isPercent: true },
+      { stat: 'critDamage', value: 100, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_speed_1',
+    name: '疾风',
+    description: '速度小幅提升',
+    icon: '💨',
+    rarity: 'common',
+    effects: [{ stat: 'speed', value: 5, isPercent: false }],
+  },
+  {
+    id: 'dungeon_speed_2',
+    name: '电光石火',
+    description: '速度大幅提升',
+    icon: '⚡',
+    rarity: 'rare',
+    effects: [{ stat: 'speed', value: 20, isPercent: true }],
+  },
+  {
+    id: 'dungeon_luck_1',
+    name: '幸运星',
+    description: '幸运提升',
+    icon: '🍀',
+    rarity: 'rare',
+    effects: [{ stat: 'luck', value: 10, isPercent: true }],
+  },
+  {
+    id: 'dungeon_gold_1',
+    name: '财富之手',
+    description: '金币收益提升',
+    icon: '💰',
+    rarity: 'common',
+    effects: [{ stat: 'goldBonus', value: 25, isPercent: true }],
+  },
+  {
+    id: 'dungeon_gold_2',
+    name: '点石成金',
+    description: '金币和经验收益大幅提升',
+    icon: '💎',
+    rarity: 'epic',
+    effects: [
+      { stat: 'goldBonus', value: 50, isPercent: true },
+      { stat: 'expBonus', value: 50, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_lifesteal_1',
+    name: '吸血獠牙',
+    description: '攻击时吸取生命',
+    icon: '🩸',
+    rarity: 'epic',
+    effects: [{ stat: 'lifesteal', value: 15, isPercent: true }],
+  },
+  {
+    id: 'dungeon_lifesteal_2',
+    name: '吸血鬼之血',
+    description: '大量生命偷取',
+    icon: '🧛',
+    rarity: 'legendary',
+    effects: [{ stat: 'lifesteal', value: 30, isPercent: true }],
+  },
+  {
+    id: 'dungeon_thorns_1',
+    name: '荆棘护甲',
+    description: '受到攻击时反弹伤害',
+    icon: '🌵',
+    rarity: 'rare',
+    effects: [{ stat: 'thorns', value: 20, isPercent: true }],
+  },
+  {
+    id: 'dungeon_dodge_1',
+    name: '幻影步',
+    description: '闪避率提升',
+    icon: '🌀',
+    rarity: 'rare',
+    effects: [{ stat: 'dodge', value: 15, isPercent: true }],
+  },
+  {
+    id: 'dungeon_combo_1',
+    name: '战斗艺术家',
+    description: '全属性小幅提升',
+    icon: '🎭',
+    rarity: 'epic',
+    effects: [
+      { stat: 'attack', value: 15, isPercent: true },
+      { stat: 'defense', value: 15, isPercent: true },
+      { stat: 'hp', value: 15, isPercent: true },
+    ],
+  },
+  {
+    id: 'dungeon_combo_2',
+    name: '全能冠军',
+    description: '全属性史诗提升',
+    icon: '🏆',
+    rarity: 'legendary',
+    effects: [
+      { stat: 'attack', value: 30, isPercent: true },
+      { stat: 'defense', value: 30, isPercent: true },
+      { stat: 'hp', value: 30, isPercent: true },
+      { stat: 'speed', value: 20, isPercent: true },
+      { stat: 'critRate', value: 10, isPercent: true },
+    ],
+  },
+];
+
+export const RELIC_DUNGEON_BOSSES: RelicDungeonBoss[] = [
+  {
+    id: 'dungeon_guardian_wolf',
+    name: '秘境守卫·影狼',
+    description: '守护秘境第一层的古老影狼，速度极快，攻击凶猛',
+    icon: '🐺',
+    hp: 1500,
+    attack: 80,
+    defense: 40,
+    speed: 20,
+    minFloor: 5,
+    phases: [
+      {
+        name: '初始形态',
+        hpThreshold: 1.0,
+        attackMultiplier: 1.0,
+        defenseMultiplier: 1.0,
+      },
+      {
+        name: '狂怒',
+        hpThreshold: 0.6,
+        attackMultiplier: 1.4,
+        defenseMultiplier: 0.9,
+        specialMechanic: {
+          type: 'berserk',
+          value: 40,
+          description: '影狼进入狂怒状态，攻击速度大幅提升！',
+        },
+      },
+      {
+        name: '暗影形态',
+        hpThreshold: 0.3,
+        attackMultiplier: 1.8,
+        defenseMultiplier: 0.7,
+        specialMechanic: {
+          type: 'summon',
+          value: 2,
+          description: '影狼分裂出暗影分身，威胁倍增！',
+        },
+      },
+    ],
+    rewards: [
+      { type: 'gold', value: 2000 },
+      { type: 'exp', value: 1500 },
+      { type: 'soulOrbs', value: 5 },
+    ],
+    uniqueBuffDropChance: 0.3,
+    uniqueBuffId: 'dungeon_speed_2',
+  },
+  {
+    id: 'dungeon_guardian_golem',
+    name: '秘境守卫·石像王',
+    description: '第二层的古老石像守卫，防御力极高，拥有召唤岩石的能力',
+    icon: '🗿',
+    hp: 3000,
+    attack: 120,
+    defense: 100,
+    speed: 8,
+    minFloor: 10,
+    phases: [
+      {
+        name: '石甲形态',
+        hpThreshold: 1.0,
+        attackMultiplier: 1.0,
+        defenseMultiplier: 1.2,
+      },
+      {
+        name: '岩柱召唤',
+        hpThreshold: 0.7,
+        attackMultiplier: 1.1,
+        defenseMultiplier: 1.0,
+        specialMechanic: {
+          type: 'aoe',
+          value: 30,
+          description: '石像王召唤岩柱进行范围攻击！',
+        },
+      },
+      {
+        name: '岩壳碎裂',
+        hpThreshold: 0.4,
+        attackMultiplier: 1.5,
+        defenseMultiplier: 0.8,
+        specialMechanic: {
+          type: 'berserk',
+          value: 50,
+          description: '外层岩壳碎裂，露出狂暴核心！',
+        },
+      },
+    ],
+    rewards: [
+      { type: 'gold', value: 4000 },
+      { type: 'exp', value: 3000 },
+      { type: 'soulOrbs', value: 10 },
+    ],
+    uniqueBuffDropChance: 0.35,
+    uniqueBuffId: 'dungeon_defense_3',
+  },
+  {
+    id: 'dungeon_guardian_lich',
+    name: '秘境守卫·巫妖贤者',
+    description: '第三层的古老巫妖，精通诅咒与暗影魔法',
+    icon: '💀',
+    hp: 5000,
+    attack: 180,
+    defense: 80,
+    speed: 12,
+    minFloor: 15,
+    phases: [
+      {
+        name: '暗影护盾',
+        hpThreshold: 1.0,
+        attackMultiplier: 1.0,
+        defenseMultiplier: 1.1,
+        specialMechanic: {
+          type: 'shield',
+          value: 500,
+          description: '巫妖启动暗影护盾，减伤大幅提升！',
+        },
+      },
+      {
+        name: '诅咒之雨',
+        hpThreshold: 0.6,
+        attackMultiplier: 1.3,
+        defenseMultiplier: 1.0,
+        specialMechanic: {
+          type: 'curse',
+          value: 20,
+          description: '巫妖释放诅咒之雨，削弱冒险者！',
+        },
+      },
+      {
+        name: '死亡凝视',
+        hpThreshold: 0.35,
+        attackMultiplier: 1.7,
+        defenseMultiplier: 0.8,
+        specialMechanic: {
+          type: 'heal',
+          value: 15,
+          description: '巫妖吸取生命力进行自我修复！',
+        },
+      },
+    ],
+    rewards: [
+      { type: 'gold', value: 8000 },
+      { type: 'exp', value: 6000 },
+      { type: 'soulOrbs', value: 20 },
+    ],
+    uniqueBuffDropChance: 0.4,
+    uniqueBuffId: 'dungeon_crit_2',
+  },
+  {
+    id: 'dungeon_guardian_phoenix',
+    name: '秘境守卫·不死凤凰',
+    description: '第四层的传说凤凰，浴火重生，永不熄灭',
+    icon: '🔥',
+    hp: 8000,
+    attack: 250,
+    defense: 120,
+    speed: 18,
+    minFloor: 20,
+    phases: [
+      {
+        name: '烈焰之翼',
+        hpThreshold: 1.0,
+        attackMultiplier: 1.0,
+        defenseMultiplier: 1.0,
+        specialMechanic: {
+          type: 'aoe',
+          value: 25,
+          description: '凤凰展开烈焰之翼，火焰灼烧一切！',
+        },
+      },
+      {
+        name: '焚天之火',
+        hpThreshold: 0.65,
+        attackMultiplier: 1.4,
+        defenseMultiplier: 0.9,
+        specialMechanic: {
+          type: 'berserk',
+          value: 40,
+          description: '凤凰发动焚天之火，攻击暴增！',
+        },
+      },
+      {
+        name: '涅槃重生',
+        hpThreshold: 0.4,
+        attackMultiplier: 1.2,
+        defenseMultiplier: 1.1,
+        specialMechanic: {
+          type: 'heal',
+          value: 30,
+          description: '凤凰启动涅槃仪式，恢复大量生命！',
+        },
+      },
+      {
+        name: '最终涅槃',
+        hpThreshold: 0.2,
+        attackMultiplier: 2.0,
+        defenseMultiplier: 0.7,
+        specialMechanic: {
+          type: 'berserk',
+          value: 100,
+          description: '凤凰进入最终涅槃状态，拼死一战！',
+        },
+      },
+    ],
+    rewards: [
+      { type: 'gold', value: 15000 },
+      { type: 'exp', value: 12000 },
+      { type: 'soulOrbs', value: 35 },
+    ],
+    uniqueBuffDropChance: 0.5,
+    uniqueBuffId: 'dungeon_combo_1',
+  },
+  {
+    id: 'dungeon_guardian_dragon',
+    name: '秘境至尊·时空龙王',
+    description: '秘境最深处的至尊存在，掌控时空之力的远古巨龙',
+    icon: '🐉',
+    hp: 15000,
+    attack: 350,
+    defense: 180,
+    speed: 15,
+    minFloor: 25,
+    phases: [
+      {
+        name: '龙鳞护体',
+        hpThreshold: 1.0,
+        attackMultiplier: 1.0,
+        defenseMultiplier: 1.3,
+        specialMechanic: {
+          type: 'shield',
+          value: 1500,
+          description: '龙鳞激活远古护盾，减伤大幅提升！',
+        },
+      },
+      {
+        name: '龙息风暴',
+        hpThreshold: 0.75,
+        attackMultiplier: 1.3,
+        defenseMultiplier: 1.1,
+        specialMechanic: {
+          type: 'aoe',
+          value: 40,
+          description: '龙王释放龙息风暴，范围毁灭打击！',
+        },
+      },
+      {
+        name: '时空扭曲',
+        hpThreshold: 0.5,
+        attackMultiplier: 1.6,
+        defenseMultiplier: 1.0,
+        specialMechanic: {
+          type: 'summon',
+          value: 3,
+          description: '时空扭曲，召唤过去的幻影！',
+        },
+      },
+      {
+        name: '次元裂隙',
+        hpThreshold: 0.3,
+        attackMultiplier: 1.8,
+        defenseMultiplier: 0.9,
+        specialMechanic: {
+          type: 'curse',
+          value: 30,
+          description: '次元裂隙开启，诅咒侵蚀冒险者！',
+        },
+      },
+      {
+        name: '终极形态',
+        hpThreshold: 0.15,
+        attackMultiplier: 2.5,
+        defenseMultiplier: 0.8,
+        specialMechanic: {
+          type: 'berserk',
+          value: 150,
+          description: '龙王爆发最终形态，展现真正的恐怖！',
+        },
+      },
+    ],
+    rewards: [
+      { type: 'gold', value: 30000 },
+      { type: 'exp', value: 25000 },
+      { type: 'soulOrbs', value: 60 },
+    ],
+    uniqueBuffDropChance: 0.6,
+    uniqueBuffId: 'dungeon_combo_2',
+  },
+];
+
+export const RELIC_DUNGEON_DIFFICULTY_CONFIG: Record<RelicDungeonDifficulty, {
+  name: string;
+  minPlayerLevel: number;
+  totalFloors: number;
+  monsterHpMultiplier: number;
+  monsterAtkMultiplier: number;
+  monsterDefMultiplier: number;
+  goldMultiplier: number;
+  expMultiplier: number;
+  relicDropChance: number;
+  buffRarityBonus: number;
+  eliteChance: number;
+  mysteryChance: number;
+  unlockFloor: number;
+}> = {
+  easy: {
+    name: '简单',
+    minPlayerLevel: 10,
+    totalFloors: 5,
+    monsterHpMultiplier: 0.8,
+    monsterAtkMultiplier: 0.8,
+    monsterDefMultiplier: 0.8,
+    goldMultiplier: 1.0,
+    expMultiplier: 1.0,
+    relicDropChance: 0.05,
+    buffRarityBonus: 0,
+    eliteChance: 0.1,
+    mysteryChance: 0.05,
+    unlockFloor: 0,
+  },
+  normal: {
+    name: '普通',
+    minPlayerLevel: 25,
+    totalFloors: 10,
+    monsterHpMultiplier: 1.0,
+    monsterAtkMultiplier: 1.0,
+    monsterDefMultiplier: 1.0,
+    goldMultiplier: 1.5,
+    expMultiplier: 1.5,
+    relicDropChance: 0.1,
+    buffRarityBonus: 0.1,
+    eliteChance: 0.15,
+    mysteryChance: 0.1,
+    unlockFloor: 5,
+  },
+  hard: {
+    name: '困难',
+    minPlayerLevel: 50,
+    totalFloors: 15,
+    monsterHpMultiplier: 1.3,
+    monsterAtkMultiplier: 1.3,
+    monsterDefMultiplier: 1.2,
+    goldMultiplier: 2.5,
+    expMultiplier: 2.5,
+    relicDropChance: 0.18,
+    buffRarityBonus: 0.25,
+    eliteChance: 0.2,
+    mysteryChance: 0.15,
+    unlockFloor: 10,
+  },
+  nightmare: {
+    name: '噩梦',
+    minPlayerLevel: 80,
+    totalFloors: 25,
+    monsterHpMultiplier: 1.8,
+    monsterAtkMultiplier: 1.8,
+    monsterDefMultiplier: 1.5,
+    goldMultiplier: 5.0,
+    expMultiplier: 5.0,
+    relicDropChance: 0.3,
+    buffRarityBonus: 0.5,
+    eliteChance: 0.3,
+    mysteryChance: 0.2,
+    unlockFloor: 15,
+  },
+};
+
+export const RELIC_DUNGEON_ROOM_DISTRIBUTION: Record<number, {
+  combat: number;
+  elite: number;
+  treasure: number;
+  event: number;
+  shrine: number;
+  rest: number;
+  shop: number;
+  mystery: number;
+}> = {
+  1: { combat: 0.35, elite: 0, treasure: 0.15, event: 0.2, shrine: 0.1, rest: 0.1, shop: 0.05, mystery: 0.05 },
+  2: { combat: 0.3, elite: 0.1, treasure: 0.1, event: 0.18, shrine: 0.12, rest: 0.08, shop: 0.07, mystery: 0.05 },
+  3: { combat: 0.28, elite: 0.12, treasure: 0.1, event: 0.15, shrine: 0.1, rest: 0.1, shop: 0.08, mystery: 0.07 },
+  4: { combat: 0.25, elite: 0.15, treasure: 0.08, event: 0.15, shrine: 0.12, rest: 0.08, shop: 0.07, mystery: 0.1 },
+  5: { combat: 0, elite: 0, treasure: 0, event: 0, shrine: 0, rest: 0, shop: 0, mystery: 0 },
+};
+
+export const RELIC_DUNGEON_ROOM_NAMES: Record<string, string[]> = {
+  combat: ['废弃营地', '暗影走廊', '残破战场', '血腥竞技场', '荒野小径'],
+  elite: ['精英巢穴', '狩猎领地', '危险区域', '试炼之地', '强者对决'],
+  treasure: ['隐藏宝库', '遗忘密室', '古老宝箱', '财富之厅', '宝藏洞穴'],
+  event: ['神秘石碑', '迷路旅人', '古老祭坛', '奇异森林', '时间裂隙'],
+  shrine: ['祝福神龛', '元素祭坛', '先贤圣殿', '生命之泉', '力量源泉'],
+  rest: ['安全营地', '隐蔽山洞', '驿站遗迹', '宁静花园', '休憩之地'],
+  shop: ['流动商队', '秘境商店', '神秘集市', '黑商据点', '旅人交易'],
+  mystery: ['时空裂缝', '未知之门', '混沌区域', '神秘传送', '奇异空间'],
+  boss: ['守护者大厅'],
 };
 
 export const ACHIEVEMENTS: Achievement[] = [

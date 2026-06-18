@@ -89,8 +89,18 @@ import type {
   RebirthRecord,
   Achievement,
   AchievementProgress,
+  EventEffect,
+  RelicDungeonState,
+  RelicDungeonRoom,
+  RelicDungeonFloor,
+  RelicDungeonBuff,
+  RelicDungeonBuffEffect,
+  RelicDungeonDifficulty,
+  RelicDungeonShopItem,
+  RelicDungeonSettlement,
+  RelicDungeonReplayEvent,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -143,6 +153,11 @@ import {
   ALCHEMY_BATTLE_BUFF_DURATION,
   ALCHEMY_EXP_PER_CRAFT,
   ACHIEVEMENTS,
+  RELIC_DUNGEON_BUFFS,
+  RELIC_DUNGEON_BOSSES,
+  RELIC_DUNGEON_DIFFICULTY_CONFIG,
+  RELIC_DUNGEON_ROOM_DISTRIBUTION,
+  RELIC_DUNGEON_ROOM_NAMES,
 } from './data';
 
 interface GameState {
@@ -637,6 +652,37 @@ interface GameState {
   canClaimAchievement: (achievementId: string) => boolean;
   getAchievementSummary: () => { total: number; unlocked: number; claimed: number; percentage: number };
   getUnclaimedAchievementCount: () => number;
+
+  relicDungeon: RelicDungeonState;
+  startRelicDungeon: (difficulty: RelicDungeonDifficulty) => boolean;
+  generateRelicDungeonFloor: (floor: number, difficulty: RelicDungeonDifficulty) => RelicDungeonFloor;
+  getRandomRelicDungeonBuff: (rarityBonus?: number, count?: number) => RelicDungeonBuff[];
+  enterRelicDungeonRoom: (roomId: string) => void;
+  clearRelicDungeonRoom: (roomId: string) => void;
+  collectRelicDungeonBuff: (buff: RelicDungeonBuff) => void;
+  getRelicDungeonBuffBonus: (stat: RelicDungeonBuffEffect['stat']) => { flat: number; percent: number };
+  getRelicDungeonTotalAttack: () => number;
+  getRelicDungeonTotalDefense: () => number;
+  getRelicDungeonCurrentFloor: () => RelicDungeonFloor | null;
+  getRelicDungeonCurrentRoom: () => RelicDungeonRoom | null;
+  getAccessibleRelicDungeonRooms: () => RelicDungeonRoom[];
+  advanceToNextRelicDungeonFloor: () => void;
+  completeRelicDungeonBoss: () => void;
+  dealRelicDungeonBossDamage: () => number;
+  takeRelicDungeonBossDamage: () => number;
+  updateRelicDungeonBossPhase: () => void;
+  abandonRelicDungeon: () => void;
+  settleRelicDungeon: (survival: boolean) => void;
+  claimRelicDungeonRewards: () => void;
+  addRelicDungeonReplayEvent: (event: Omit<RelicDungeonReplayEvent, 'id' | 'timestamp'>) => void;
+  getRelicDungeonHistory: () => RelicDungeonSettlement[];
+  viewRelicDungeonReplay: (runId: string) => void;
+  closeRelicDungeonReplay: () => void;
+  stepRelicDungeonReplay: (direction: 'prev' | 'next' | 'first' | 'last') => void;
+  toggleRelicDungeonReplayPlaying: () => void;
+  generateRelicDungeonShop: () => RelicDungeonShopItem[];
+  buyRelicDungeonShopItem: (itemId: string) => boolean;
+  getBossForFloor: (floor: number, difficulty: RelicDungeonDifficulty) => typeof RELIC_DUNGEON_BOSSES[0] | null;
 }
 
 let logIdCounter = 0;
@@ -929,6 +975,38 @@ export const useGameStore = create<GameState>()(
       achievementProgresses: initAchievementProgresses(),
       totalGoldEarned: 0,
       totalSoulOrbsEarned: 0,
+
+      relicDungeon: {
+        isActive: false,
+        currentFloor: 0,
+        maxFloor: 0,
+        totalFloors: 0,
+        difficulty: 'easy',
+        floors: [],
+        currentRoomId: null,
+        activeBuffs: [],
+        playerHp: 0,
+        playerMaxHp: 0,
+        playerMp: 0,
+        playerMaxMp: 0,
+        currentBoss: null,
+        bossLog: [],
+        settlement: null,
+        history: [],
+        highestFloorReached: 0,
+        totalRuns: 0,
+        totalBossesDefeated: 0,
+        unlockedDifficulties: ['easy'],
+        tempGold: 0,
+        tempSoulOrbs: 0,
+        tempExp: 0,
+        visitedRoomIds: [],
+        replayBuffer: [],
+        currentShopInventory: [],
+        viewingReplay: null,
+        replayIndex: 0,
+        replayPlaying: false,
+      },
 
       alchemyLevel: 1,
       alchemyExp: 0,
@@ -6682,6 +6760,925 @@ export const useGameStore = create<GameState>()(
 
       getUnclaimedAchievementCount: () => {
         return get().achievementProgresses.filter((p) => p.unlocked && !p.claimed).length;
+      },
+
+      startRelicDungeon: (difficulty) => {
+        const state = get();
+        const config = RELIC_DUNGEON_DIFFICULTY_CONFIG[difficulty];
+        if (state.player.stats.level < config.minPlayerLevel) return false;
+        if (!state.relicDungeon.unlockedDifficulties.includes(difficulty)) return false;
+
+        const totalFloors = config.totalFloors;
+        const floors: RelicDungeonFloor[] = [];
+        for (let f = 1; f <= totalFloors; f++) {
+          floors.push(state.generateRelicDungeonFloor(f, difficulty));
+        }
+
+        const playerMaxHp = state.player.stats.maxHp;
+        const playerMaxMp = state.player.stats.maxMp;
+
+        const newState: Partial<GameState> = {
+          relicDungeon: {
+            ...state.relicDungeon,
+            isActive: true,
+            currentFloor: 1,
+            maxFloor: totalFloors,
+            totalFloors,
+            difficulty,
+            floors,
+            currentRoomId: floors[0]?.startRoomId || null,
+            activeBuffs: [],
+            playerHp: playerMaxHp,
+            playerMaxHp,
+            playerMp: playerMaxMp,
+            playerMaxMp,
+            currentBoss: null,
+            bossLog: [],
+            settlement: null,
+            tempGold: 0,
+            tempSoulOrbs: 0,
+            tempExp: 0,
+            visitedRoomIds: floors[0]?.startRoomId ? [floors[0].startRoomId] : [],
+            replayBuffer: [],
+            currentShopInventory: [],
+            totalRuns: state.relicDungeon.totalRuns + 1,
+          },
+        };
+        set(newState);
+
+        get().addRelicDungeonReplayEvent({
+          type: 'room_enter',
+          floor: 1,
+          roomId: floors[0]?.startRoomId,
+          roomType: 'rest',
+          description: `遗物秘境开始！难度:${RELIC_DUNGEON_DIFFICULTY_CONFIG[difficulty].name}`,
+        });
+        get().addBattleLog(`🏛️ 进入遗物秘境 [${RELIC_DUNGEON_DIFFICULTY_CONFIG[difficulty].name}]`, 'system');
+        return true;
+      },
+
+      generateRelicDungeonFloor: (floor, difficulty) => {
+        const state = get();
+        const config = RELIC_DUNGEON_DIFFICULTY_CONFIG[difficulty];
+        const isBossFloor = floor === config.totalFloors || (floor > 0 && floor % 5 === 0);
+        const distKey = Math.min(4, Math.ceil(floor / (config.totalFloors / 4)));
+        const distribution = RELIC_DUNGEON_ROOM_DISTRIBUTION[distKey] || RELIC_DUNGEON_ROOM_DISTRIBUTION[1];
+
+        const rooms: RelicDungeonRoom[] = [];
+        const roomCount = isBossFloor ? 3 : 4 + Math.floor(Math.random() * 3);
+
+        const startRoom: RelicDungeonRoom = {
+          id: `floor_${floor}_start`,
+          type: 'rest',
+          floor,
+          name: RELIC_DUNGEON_ROOM_NAMES['rest'][Math.floor(Math.random() * RELIC_DUNGEON_ROOM_NAMES['rest'].length)],
+          description: '一个安全的休息点，准备开始新的一层探索',
+          cleared: true,
+          connections: [],
+          position: { x: 0, y: 0 },
+        };
+        rooms.push(startRoom);
+
+        const availableTypes: Array<RelicDungeonRoom['type']> = [];
+        Object.entries(distribution).forEach(([type, weight]) => {
+          const count = Math.ceil((weight as number) * roomCount);
+          for (let i = 0; i < count; i++) availableTypes.push(type as RelicDungeonRoom['type']);
+        });
+
+        for (let i = 1; i < roomCount; i++) {
+          const tIdx = Math.floor(Math.random() * availableTypes.length);
+          let type = availableTypes[tIdx] || 'combat';
+          availableTypes.splice(tIdx, 1);
+
+          if (Math.random() < config.eliteChance && type === 'combat') type = 'elite';
+          if (Math.random() < config.mysteryChance) type = 'mystery';
+
+          const typeNames = RELIC_DUNGEON_ROOM_NAMES[type] || RELIC_DUNGEON_ROOM_NAMES['combat'];
+          const room: RelicDungeonRoom = {
+            id: `floor_${floor}_room_${i}`,
+            type,
+            floor,
+            name: typeNames[Math.floor(Math.random() * typeNames.length)],
+            description: `第${floor}层的${RELIC_DUNGEON_ROOM_TYPE_NAMES[type]}`,
+            cleared: false,
+            connections: [],
+            position: { x: i * 180 + 90, y: 80 + (i % 2) * 60 },
+          };
+
+          if (type === 'combat' || type === 'elite') {
+            room.monsterTier = type === 'elite' ? 'elite' : 'normal';
+            room.rewards = [
+              { type: 'gold', value: (50 + floor * 20) * (type === 'elite' ? 3 : 1) },
+              { type: 'exp', value: (30 + floor * 15) * (type === 'elite' ? 3 : 1) },
+            ];
+          } else if (type === 'treasure') {
+            room.rewards = [
+              { type: 'gold', value: 200 + floor * 80 },
+              { type: 'soulOrbs', value: 1 + Math.floor(floor / 5) },
+            ];
+          } else if (type === 'shrine') {
+            room.buffChoices = state.getRandomRelicDungeonBuff(config.buffRarityBonus, 3);
+          } else if (type === 'rest') {
+            room.rewards = [
+              { type: 'hp', value: Math.floor(state.player.stats.maxHp * 0.3) },
+              { type: 'mp', value: Math.floor(state.player.stats.maxMp * 0.3) },
+            ];
+          } else if (type === 'shop') {
+            room.shopItems = state.generateRelicDungeonShop();
+          } else if (type === 'event') {
+            const eventPool = RANDOM_EVENTS.filter(e => !e.areaId);
+            room.eventId = eventPool[Math.floor(Math.random() * eventPool.length)]?.id;
+          } else if (type === 'mystery') {
+            const mysteryTypes: RelicDungeonRoom['type'][] = ['treasure', 'shrine', 'combat', 'elite', 'event'];
+            const resolved = mysteryTypes[Math.floor(Math.random() * mysteryTypes.length)];
+            room.type = resolved;
+            room.name = `神秘：${typeNames[0]}`;
+            if (resolved === 'shrine') {
+              room.buffChoices = state.getRandomRelicDungeonBuff(config.buffRarityBonus + 0.1, 3);
+            }
+          }
+
+          rooms.push(room);
+        }
+
+        if (isBossFloor) {
+          const bossRoom: RelicDungeonRoom = {
+            id: `floor_${floor}_boss`,
+            type: 'boss',
+            floor,
+            name: RELIC_DUNGEON_ROOM_NAMES['boss'][0],
+            description: '强大的守护者正在等待着你...',
+            cleared: false,
+            isBoss: true,
+            connections: [],
+            position: { x: roomCount * 180 + 90, y: 110 },
+          };
+          rooms.push(bossRoom);
+        }
+
+        rooms.forEach((r, idx) => {
+          if (idx < rooms.length - 1) {
+            const next = rooms[idx + 1];
+            r.connections.push(next.id);
+            next.connections.push(r.id);
+          }
+          if (idx < rooms.length - 2 && Math.random() < 0.3) {
+            const skipNext = rooms[idx + 2];
+            if (!r.connections.includes(skipNext.id)) {
+              r.connections.push(skipNext.id);
+              skipNext.connections.push(r.id);
+            }
+          }
+        });
+
+        const bossRoomId = isBossFloor ? rooms[rooms.length - 1].id : rooms[rooms.length - 1].id;
+        return { floor, rooms, startRoomId: startRoom.id, bossRoomId };
+      },
+
+      getRandomRelicDungeonBuff: (rarityBonus = 0, count = 3) => {
+        const result: RelicDungeonBuff[] = [];
+        const used = new Set<string>();
+
+        while (result.length < count && used.size < RELIC_DUNGEON_BUFFS.length) {
+          const rarityRoll = Math.random() + rarityBonus;
+          let targetRarity: RelicDungeonBuff['rarity'];
+          if (rarityRoll >= 0.97) targetRarity = 'legendary';
+          else if (rarityRoll >= 0.85) targetRarity = 'epic';
+          else if (rarityRoll >= 0.6) targetRarity = 'rare';
+          else targetRarity = 'common';
+
+          const candidates = RELIC_DUNGEON_BUFFS.filter(b => b.rarity === targetRarity && !used.has(b.id));
+          if (candidates.length > 0) {
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            used.add(pick.id);
+            result.push({ ...pick });
+          } else {
+            const fallback = RELIC_DUNGEON_BUFFS.filter(b => !used.has(b.id));
+            if (fallback.length > 0) {
+              const pick = fallback[Math.floor(Math.random() * fallback.length)];
+              used.add(pick.id);
+              result.push({ ...pick });
+            }
+          }
+        }
+        return result;
+      },
+
+      enterRelicDungeonRoom: (roomId) => {
+        const state = get();
+        if (!state.relicDungeon.isActive) return;
+        const floor = state.getRelicDungeonCurrentFloor();
+        const room = floor?.rooms.find(r => r.id === roomId);
+        if (!room) return;
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            currentRoomId: roomId,
+            visitedRoomIds: s.relicDungeon.visitedRoomIds.includes(roomId)
+              ? s.relicDungeon.visitedRoomIds
+              : [...s.relicDungeon.visitedRoomIds, roomId],
+          },
+        }));
+
+        get().addRelicDungeonReplayEvent({
+          type: 'room_enter',
+          floor: state.relicDungeon.currentFloor,
+          roomId,
+          roomType: room.type,
+          description: `进入${RELIC_DUNGEON_ROOM_TYPE_NAMES[room.type]}: ${room.name}`,
+        });
+
+        if (room.type === 'boss' && !room.cleared) {
+          const boss = state.getBossForFloor(state.relicDungeon.currentFloor, state.relicDungeon.difficulty);
+          if (boss) {
+            const dConfig = RELIC_DUNGEON_DIFFICULTY_CONFIG[state.relicDungeon.difficulty];
+            const floorMultiplier = 1 + (state.relicDungeon.currentFloor - 1) * 0.15;
+            set(s => ({
+              relicDungeon: {
+                ...s.relicDungeon,
+                currentBoss: {
+                  id: boss.id,
+                  name: boss.name,
+                  hp: Math.floor(boss.hp * dConfig.monsterHpMultiplier * floorMultiplier),
+                  maxHp: Math.floor(boss.hp * dConfig.monsterHpMultiplier * floorMultiplier),
+                  attack: Math.floor(boss.attack * dConfig.monsterAtkMultiplier * floorMultiplier),
+                  defense: Math.floor(boss.defense * dConfig.monsterDefMultiplier * floorMultiplier),
+                  currentPhase: 0,
+                  mechanicActive: null,
+                },
+                bossLog: [`⚔️ ${boss.name} 出现了！`],
+              },
+            }));
+          }
+        }
+      },
+
+      clearRelicDungeonRoom: (roomId) => {
+        const state = get();
+        if (!state.relicDungeon.isActive) return;
+        const floor = state.getRelicDungeonCurrentFloor();
+        if (!floor) return;
+
+        const newRooms = floor.rooms.map(r =>
+          r.id === roomId ? { ...r, cleared: true } : r
+        );
+        const room = newRooms.find(r => r.id === roomId);
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            floors: s.relicDungeon.floors.map(f =>
+              f.floor === floor.floor ? { ...f, rooms: newRooms } : f
+            ),
+          },
+        }));
+
+        if (room?.rewards) {
+          room.rewards.forEach(rew => {
+            if (rew.type === 'gold') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempGold: s.relicDungeon.tempGold + (rew.value || 0) } }));
+            } else if (rew.type === 'exp') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempExp: s.relicDungeon.tempExp + (rew.value || 0) } }));
+            } else if (rew.type === 'soulOrbs') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempSoulOrbs: s.relicDungeon.tempSoulOrbs + (rew.value || 0) } }));
+            } else if (rew.type === 'hp') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, playerHp: Math.min(s.relicDungeon.playerMaxHp, s.relicDungeon.playerHp + (rew.value || 0)) } }));
+            } else if (rew.type === 'mp') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, playerMp: Math.min(s.relicDungeon.playerMaxMp, s.relicDungeon.playerMp + (rew.value || 0)) } }));
+            }
+          });
+        }
+
+        get().addRelicDungeonReplayEvent({
+          type: 'room_clear',
+          floor: state.relicDungeon.currentFloor,
+          roomId,
+          roomType: room?.type,
+          description: `通关${RELIC_DUNGEON_ROOM_TYPE_NAMES[room?.type || 'combat']}: ${room?.name}`,
+          details: { rewards: room?.rewards },
+        });
+
+        if (room?.type === 'boss') {
+          state.completeRelicDungeonBoss();
+        }
+      },
+
+      collectRelicDungeonBuff: (buff) => {
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            activeBuffs: [...s.relicDungeon.activeBuffs, { ...buff }],
+          },
+        }));
+        get().addRelicDungeonReplayEvent({
+          type: 'buff_gain',
+          floor: get().relicDungeon.currentFloor,
+          description: `获得增益: ${buff.name}`,
+          details: { buff },
+        });
+        get().addBattleLog(`✨ 获得秘境增益 [${buff.name}]`, 'event');
+      },
+
+      getRelicDungeonBuffBonus: (stat) => {
+        const state = get();
+        let flat = 0;
+        let percent = 0;
+        state.relicDungeon.activeBuffs.forEach(buff => {
+          buff.effects.forEach(e => {
+            if (e.stat === stat) {
+              if (e.isPercent) percent += e.value;
+              else flat += e.value;
+            }
+          });
+        });
+        return { flat, percent };
+      },
+
+      getRelicDungeonTotalAttack: () => {
+        const state = get();
+        const base = state.getTotalAttack();
+        const bonus = state.getRelicDungeonBuffBonus('attack');
+        return Math.floor((base + bonus.flat) * (1 + bonus.percent));
+      },
+
+      getRelicDungeonTotalDefense: () => {
+        const state = get();
+        const base = state.getTotalDefense();
+        const bonus = state.getRelicDungeonBuffBonus('defense');
+        return Math.floor((base + bonus.flat) * (1 + bonus.percent));
+      },
+
+      getRelicDungeonCurrentFloor: () => {
+        const state = get();
+        return state.relicDungeon.floors.find(f => f.floor === state.relicDungeon.currentFloor) || null;
+      },
+
+      getRelicDungeonCurrentRoom: () => {
+        const state = get();
+        const floor = state.getRelicDungeonCurrentFloor();
+        if (!floor || !state.relicDungeon.currentRoomId) return null;
+        return floor.rooms.find(r => r.id === state.relicDungeon.currentRoomId) || null;
+      },
+
+      getAccessibleRelicDungeonRooms: () => {
+        const state = get();
+        const floor = state.getRelicDungeonCurrentFloor();
+        if (!floor) return [];
+        const current = state.getRelicDungeonCurrentRoom();
+        if (!current) return [floor.rooms[0]].filter(Boolean) as RelicDungeonRoom[];
+        return current.connections
+          .map(id => floor.rooms.find(r => r.id === id))
+          .filter((r): r is RelicDungeonRoom => !!r);
+      },
+
+      advanceToNextRelicDungeonFloor: () => {
+        const state = get();
+        if (!state.relicDungeon.isActive) return;
+        if (state.relicDungeon.currentFloor >= state.relicDungeon.totalFloors) {
+          state.settleRelicDungeon(true);
+          return;
+        }
+        const nextFloor = state.relicDungeon.currentFloor + 1;
+        const floorData = state.relicDungeon.floors.find(f => f.floor === nextFloor);
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            currentFloor: nextFloor,
+            currentRoomId: floorData?.startRoomId || null,
+            visitedRoomIds: floorData?.startRoomId ? [floorData.startRoomId] : [],
+            currentBoss: null,
+            bossLog: [],
+            highestFloorReached: Math.max(s.relicDungeon.highestFloorReached, nextFloor),
+          },
+        }));
+        get().addBattleLog(`📍 进入遗物秘境第 ${nextFloor} 层`, 'system');
+      },
+
+      completeRelicDungeonBoss: () => {
+        const state = get();
+        const floor = state.relicDungeon.currentFloor;
+        const boss = state.getBossForFloor(floor, state.relicDungeon.difficulty);
+
+        if (boss) {
+          boss.rewards.forEach(r => {
+            if (r.type === 'gold') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempGold: s.relicDungeon.tempGold + (r.value || 0) } }));
+            } else if (r.type === 'exp') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempExp: s.relicDungeon.tempExp + (r.value || 0) } }));
+            } else if (r.type === 'soulOrbs') {
+              set(s => ({ relicDungeon: { ...s.relicDungeon, tempSoulOrbs: s.relicDungeon.tempSoulOrbs + (r.value || 0) } }));
+            }
+          });
+
+          if (Math.random() < boss.uniqueBuffDropChance && boss.uniqueBuffId) {
+            const ub = RELIC_DUNGEON_BUFFS.find(b => b.id === boss.uniqueBuffId);
+            if (ub) {
+              set(s => ({
+                relicDungeon: { ...s.relicDungeon, activeBuffs: [...s.relicDungeon.activeBuffs, { ...ub }] }
+              }));
+              if (ub !== undefined) {
+                get().addRelicDungeonReplayEvent({
+                  type: 'buff_gain',
+                  floor,
+                  description: `BOSS掉落独特增益: ${ub.name}`,
+                  details: { buff: ub },
+                });
+                get().addBattleLog(`🎁 获得BOSS独特增益 [${ub.name}]`, 'event');
+              }
+            }
+          }
+          set(s => ({
+            relicDungeon: { ...s.relicDungeon, totalBossesDefeated: s.relicDungeon.totalBossesDefeated + 1 },
+          }));
+        }
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            currentBoss: null,
+          },
+        }));
+
+        get().addRelicDungeonReplayEvent({
+          type: 'reward_gain',
+          floor,
+          description: `击败BOSS: ${boss?.name || '守护者'}`,
+          details: { rewards: boss?.rewards },
+        });
+        get().addBattleLog(`👑 击败了BOSS [${boss?.name || '守护者'}]！`, 'event');
+
+        (Object.keys(RELIC_DUNGEON_DIFFICULTY_CONFIG) as RelicDungeonDifficulty[]).forEach((diffKey) => {
+          const cfg = RELIC_DUNGEON_DIFFICULTY_CONFIG[diffKey];
+          if (!state.relicDungeon.unlockedDifficulties.includes(diffKey)
+            && cfg.unlockFloor <= floor) {
+            set(s => ({
+              relicDungeon: {
+                ...s.relicDungeon,
+                unlockedDifficulties: [...s.relicDungeon.unlockedDifficulties, diffKey],
+              },
+            }));
+            get().addBattleLog(`🔓 解锁新难度: ${cfg.name}`, 'system');
+          }
+        });
+      },
+
+      dealRelicDungeonBossDamage: () => {
+        const state = get();
+        const boss = state.relicDungeon.currentBoss;
+        if (!boss) return 0;
+        const playerAtk = state.getRelicDungeonTotalAttack();
+        const critBonus = state.getRelicDungeonBuffBonus('critRate');
+        const critDmgBonus = state.getRelicDungeonBuffBonus('critDamage');
+        const isCrit = Math.random() < (0.05 + critBonus.percent);
+        let damage = Math.max(1, playerAtk - boss.defense * 0.5);
+        if (isCrit) damage = Math.floor(damage * (1.5 + critDmgBonus.percent));
+        damage = Math.floor(damage);
+
+        const lifesteal = state.getRelicDungeonBuffBonus('lifesteal');
+        if (lifesteal.percent > 0) {
+          const heal = Math.floor(damage * lifesteal.percent);
+          if (heal > 0) {
+            set(s => ({
+              relicDungeon: {
+                ...s.relicDungeon,
+                playerHp: Math.min(s.relicDungeon.playerMaxHp, s.relicDungeon.playerHp + heal),
+              },
+            }));
+          }
+        }
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            currentBoss: boss.hp - damage <= 0
+              ? null
+              : { ...boss, hp: Math.max(0, boss.hp - damage) },
+            bossLog: [
+              ...s.relicDungeon.bossLog.slice(-20),
+              `${isCrit ? '💥暴击!' : '⚔️'}对${boss.name}造成 ${damage} 伤害${boss.hp - damage > 0 ? `(剩余${boss.hp - damage}HP)` : '，BOSS被击败!'}`,
+            ],
+          },
+        }));
+
+        get().addRelicDungeonReplayEvent({
+          type: 'damage_dealt',
+          floor: state.relicDungeon.currentFloor,
+          description: `对BOSS造成 ${damage} 伤害${isCrit ? ' (暴击!)' : ''}`,
+          details: { damage, isCrit, bossHp: Math.max(0, boss.hp - damage) },
+        });
+
+        if (boss.hp - damage <= 0) {
+          const floorRooms = state.getRelicDungeonCurrentFloor();
+          const bossRoom = floorRooms?.rooms.find(r => r.type === 'boss');
+          if (bossRoom) state.clearRelicDungeonRoom(bossRoom.id);
+        } else {
+          state.updateRelicDungeonBossPhase();
+        }
+        return damage;
+      },
+
+      takeRelicDungeonBossDamage: () => {
+        const state = get();
+        const boss = state.relicDungeon.currentBoss;
+        if (!boss) return 0;
+        const playerDef = state.getRelicDungeonTotalDefense();
+        const drBonus = state.getRelicDungeonBuffBonus('damageReduction');
+        const dodgeBonus = state.getRelicDungeonBuffBonus('dodge');
+        if (Math.random() < dodgeBonus.percent) {
+          set(s => ({
+            relicDungeon: {
+              ...s.relicDungeon,
+              bossLog: [...s.relicDungeon.bossLog.slice(-20), '💨你闪避了攻击!'],
+            },
+          }));
+          return 0;
+        }
+        let damage = Math.max(1, boss.attack - playerDef * 0.5);
+        damage = Math.floor(damage * (1 - drBonus.percent));
+
+        const thorns = state.getRelicDungeonBuffBonus('thorns');
+        if (thorns.percent > 0) {
+          const thornDmg = Math.floor(damage * thorns.percent);
+          set(s => s.relicDungeon.currentBoss ? {
+            relicDungeon: {
+              ...s.relicDungeon,
+              currentBoss: {
+                ...s.relicDungeon.currentBoss,
+                hp: Math.max(1, s.relicDungeon.currentBoss.hp - thornDmg),
+              },
+            },
+          } : s);
+        }
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            playerHp: Math.max(0, s.relicDungeon.playerHp - damage),
+            bossLog: [...s.relicDungeon.bossLog.slice(-20), `🩸${boss.name}对你造成 ${damage} 伤害(剩余${Math.max(0, s.relicDungeon.playerHp - damage)}HP)`],
+          },
+        }));
+
+        get().addRelicDungeonReplayEvent({
+          type: 'damage_taken',
+          floor: state.relicDungeon.currentFloor,
+          description: `受到BOSS ${damage} 伤害`,
+          details: { damage, playerHp: Math.max(0, state.relicDungeon.playerHp - damage) },
+        });
+
+        if (state.relicDungeon.playerHp - damage <= 0) {
+          state.settleRelicDungeon(false);
+        }
+        return damage;
+      },
+
+      updateRelicDungeonBossPhase: () => {
+        const state = get();
+        const boss = state.relicDungeon.currentBoss;
+        const bossData = state.getBossForFloor(state.relicDungeon.currentFloor, state.relicDungeon.difficulty);
+        if (!boss || !bossData) return;
+
+        const hpPercent = boss.hp / boss.maxHp;
+        let newPhase = boss.currentPhase;
+        for (let i = bossData.phases.length - 1; i >= 0; i--) {
+          if (hpPercent <= bossData.phases[i].hpThreshold && hpPercent > 0) {
+            newPhase = i;
+            break;
+          }
+        }
+
+        if (newPhase !== boss.currentPhase && bossData.phases[newPhase]?.specialMechanic) {
+          const mechanic = bossData.phases[newPhase].specialMechanic!;
+          set(s => ({
+            relicDungeon: {
+              ...s.relicDungeon,
+              currentBoss: s.relicDungeon.currentBoss ? {
+                ...s.relicDungeon.currentBoss,
+                currentPhase: newPhase,
+                attack: Math.floor(s.relicDungeon.currentBoss.attack * bossData.phases[newPhase].attackMultiplier),
+                defense: Math.floor(s.relicDungeon.currentBoss.defense * bossData.phases[newPhase].defenseMultiplier),
+                mechanicActive: mechanic,
+              } : null,
+              bossLog: [...s.relicDungeon.bossLog.slice(-20), `⚠️ ${bossData.phases[newPhase].name} - ${mechanic.description}`],
+            },
+          }));
+          get().addRelicDungeonReplayEvent({
+            type: 'boss_phase',
+            floor: state.relicDungeon.currentFloor,
+            description: `BOSS进入阶段: ${bossData.phases[newPhase].name}`,
+            details: { phase: newPhase, mechanic },
+          });
+        } else if (newPhase !== boss.currentPhase) {
+          set(s => ({
+            relicDungeon: {
+              ...s.relicDungeon,
+              currentBoss: s.relicDungeon.currentBoss ? {
+                ...s.relicDungeon.currentBoss,
+                currentPhase: newPhase,
+                attack: Math.floor(s.relicDungeon.currentBoss.attack * bossData.phases[newPhase].attackMultiplier),
+                defense: Math.floor(s.relicDungeon.currentBoss.defense * bossData.phases[newPhase].defenseMultiplier),
+              } : null,
+              bossLog: [...s.relicDungeon.bossLog.slice(-20), `进入 ${bossData.phases[newPhase].name}`],
+            },
+          }));
+        }
+      },
+
+      abandonRelicDungeon: () => {
+        get().settleRelicDungeon(false);
+        get().addBattleLog('🏳️ 放弃了本次遗物秘境探索', 'system');
+      },
+
+      settleRelicDungeon: (survival) => {
+        const state = get();
+        if (!state.relicDungeon.isActive) return;
+
+        const dConfig = RELIC_DUNGEON_DIFFICULTY_CONFIG[state.relicDungeon.difficulty];
+        const goldMult = dConfig.goldMultiplier;
+        const expMult = dConfig.expMultiplier;
+
+        const goldEarned = Math.floor(state.relicDungeon.tempGold * goldMult);
+        const expEarned = Math.floor(state.relicDungeon.tempExp * expMult);
+        const soulOrbsEarned = state.relicDungeon.tempSoulOrbs;
+
+        let totalDamageDealt = 0;
+        let totalDamageTaken = 0;
+        let monstersKilled = 0;
+        let roomsCleared = 0;
+        state.relicDungeon.floors.forEach(f => {
+          roomsCleared += f.rooms.filter(r => r.cleared).length;
+          f.rooms.forEach(r => {
+            if (r.cleared && (r.type === 'combat' || r.type === 'elite' || r.type === 'boss')) {
+              monstersKilled++;
+              totalDamageDealt += 500 + f.floor * 100;
+              totalDamageTaken += 100 + f.floor * 20;
+            }
+          });
+        });
+
+        const floorsCleared = Math.max(0, state.relicDungeon.currentFloor - (survival ? 0 : 1));
+        const floorRatio = floorsCleared / state.relicDungeon.totalFloors;
+        const hpRatio = state.relicDungeon.playerHp / state.relicDungeon.playerMaxHp;
+
+        let rank: RelicDungeonSettlement['rank'];
+        if (survival && floorRatio >= 1 && hpRatio >= 0.7) rank = 'S';
+        else if (survival && floorRatio >= 0.8) rank = 'A';
+        else if (floorRatio >= 0.5) rank = 'B';
+        else if (floorRatio >= 0.2) rank = 'C';
+        else rank = 'D';
+
+        const rankMultiplier: Record<string, number> = { S: 2.0, A: 1.5, B: 1.2, C: 1.0, D: 0.5 };
+        const finalGold = Math.floor(goldEarned * rankMultiplier[rank]);
+        const finalExp = Math.floor(expEarned * rankMultiplier[rank]);
+        const finalSoulOrbs = Math.ceil(soulOrbsEarned * rankMultiplier[rank]);
+
+        const settlement: RelicDungeonSettlement = {
+          runId: `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          startTime: Date.now() - 60000,
+          endTime: Date.now(),
+          difficulty: state.relicDungeon.difficulty,
+          totalFloors: state.relicDungeon.totalFloors,
+          floorsCleared,
+          roomsCleared,
+          totalDamageDealt,
+          totalDamageTaken,
+          monstersKilled,
+          bossesDefeated: state.relicDungeon.floors.filter(f => f.rooms.some(r => r.type === 'boss' && r.cleared)).length,
+          buffsCollected: state.relicDungeon.activeBuffs.length,
+          goldEarned: finalGold,
+          expEarned: finalExp,
+          soulOrbsEarned: finalSoulOrbs,
+          relicsFound: 0,
+          survival,
+          rank,
+          rewards: [
+            { type: 'gold', value: finalGold },
+            { type: 'exp', value: finalExp },
+            { type: 'soulOrbs', value: finalSoulOrbs },
+          ],
+          replay: state.relicDungeon.replayBuffer,
+        };
+
+        if (survival) {
+          get().addRelicDungeonReplayEvent({
+            type: 'reward_gain',
+            floor: state.relicDungeon.currentFloor,
+            description: `成功通关！获得评级 [${rank}]`,
+            details: { rank, rewards: settlement.rewards },
+          });
+        } else {
+          get().addRelicDungeonReplayEvent({
+            type: 'player_death',
+            floor: state.relicDungeon.currentFloor,
+            description: `探索失败... 获得评级 [${rank}]`,
+            details: { rank },
+          });
+        }
+        settlement.replay = [...state.relicDungeon.replayBuffer];
+
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            isActive: false,
+            settlement,
+            history: [settlement, ...s.relicDungeon.history].slice(0, 50),
+            currentFloor: 0,
+            currentRoomId: null,
+            floors: [],
+            activeBuffs: [],
+          },
+        }));
+      },
+
+      claimRelicDungeonRewards: () => {
+        const state = get();
+        const s = state.relicDungeon.settlement;
+        if (!s) return;
+        state.addGold(s.goldEarned);
+        state.addExp(s.expEarned);
+        state.addSoulOrbs(s.soulOrbsEarned);
+        get().addBattleLog(`🎁 领取遗物秘境奖励：💰${s.goldEarned} ⭐${s.expEarned} 💎${s.soulOrbsEarned}`, 'event');
+        set(st => ({
+          relicDungeon: { ...st.relicDungeon, settlement: null },
+        }));
+        state.checkAchievements();
+      },
+
+      addRelicDungeonReplayEvent: (event) => {
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            replayBuffer: [
+              ...s.relicDungeon.replayBuffer,
+              {
+                ...event,
+                id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                timestamp: Date.now(),
+              },
+            ].slice(-500),
+          },
+        }));
+      },
+
+      getRelicDungeonHistory: () => {
+        return get().relicDungeon.history;
+      },
+
+      viewRelicDungeonReplay: (runId) => {
+        const state = get();
+        const record = state.relicDungeon.history.find(h => h.runId === runId);
+        if (!record) return;
+        set(s => ({
+          relicDungeon: {
+            ...s.relicDungeon,
+            viewingReplay: record,
+            replayIndex: 0,
+            replayPlaying: false,
+          },
+        }));
+      },
+
+      closeRelicDungeonReplay: () => {
+        set(s => ({
+          relicDungeon: { ...s.relicDungeon, viewingReplay: null, replayPlaying: false },
+        }));
+      },
+
+      stepRelicDungeonReplay: (direction) => {
+        const state = get();
+        if (!state.relicDungeon.viewingReplay) return;
+        const total = state.relicDungeon.viewingReplay.replay.length;
+        let idx = state.relicDungeon.replayIndex;
+        if (direction === 'first') idx = 0;
+        else if (direction === 'last') idx = total - 1;
+        else if (direction === 'prev') idx = Math.max(0, idx - 1);
+        else idx = Math.min(total - 1, idx + 1);
+        set(s => ({ relicDungeon: { ...s.relicDungeon, replayIndex: idx } }));
+      },
+
+      toggleRelicDungeonReplayPlaying: () => {
+        set(s => ({
+          relicDungeon: { ...s.relicDungeon, replayPlaying: !s.relicDungeon.replayPlaying },
+        }));
+      },
+
+      generateRelicDungeonShop: () => {
+        const buffs = get().getRandomRelicDungeonBuff(0.15, 3);
+        const items: RelicDungeonShopItem[] = [
+          {
+            id: 'shop_heal',
+            name: '秘境治疗药水',
+            description: '恢复50%最大生命值',
+            icon: '🧪',
+            cost: 300,
+            currency: 'gold',
+            effect: { type: 'hp', value: 50, isPercent: true } as EventEffect,
+            rarity: 'common',
+          },
+          {
+            id: 'shop_mana',
+            name: '秘境魔力药水',
+            description: '恢复50%最大魔力值',
+            icon: '💧',
+            cost: 250,
+            currency: 'gold',
+            effect: { type: 'mp', value: 50, isPercent: true } as EventEffect,
+            rarity: 'common',
+          },
+          {
+            id: 'shop_soul',
+            name: '精炼魂珠',
+            description: '立即获得2颗魂珠',
+            icon: '💎',
+            cost: 800,
+            currency: 'gold',
+            effect: { type: 'soulOrbs', value: 2 } as EventEffect,
+            rarity: 'rare',
+          },
+          ...buffs.map((b, i) => ({
+            id: `shop_buff_${i}`,
+            name: `增益: ${b.name}`,
+            description: b.description,
+            icon: b.icon,
+            cost: b.rarity === 'legendary' ? 5 : b.rarity === 'epic' ? 3 : b.rarity === 'rare' ? 1 : 0,
+            currency: 'soulOrbs' as const,
+            effect: b,
+            isBuff: true,
+            rarity: b.rarity,
+          })),
+        ];
+        return items;
+      },
+
+      buyRelicDungeonShopItem: (itemId) => {
+        const state = get();
+        const room = state.getRelicDungeonCurrentRoom();
+        if (!room || room.type !== 'shop') return false;
+        const item = (room.shopItems || state.relicDungeon.currentShopInventory).find(i => i.id === itemId);
+        if (!item) return false;
+
+        if (item.currency === 'gold') {
+          if (state.relicDungeon.tempGold < item.cost) return false;
+          set(s => ({ relicDungeon: { ...s.relicDungeon, tempGold: s.relicDungeon.tempGold - item.cost } }));
+        } else {
+          if (state.relicDungeon.tempSoulOrbs < item.cost) return false;
+          set(s => ({ relicDungeon: { ...s.relicDungeon, tempSoulOrbs: s.relicDungeon.tempSoulOrbs - item.cost } }));
+        }
+
+        if (item.isBuff && 'effects' in item.effect) {
+          get().collectRelicDungeonBuff(item.effect);
+        } else if ('type' in item.effect) {
+          const eff = item.effect as EventEffect;
+          if (eff.type === 'hp') {
+            set(s => ({
+              relicDungeon: {
+                ...s.relicDungeon,
+                playerHp: Math.min(s.relicDungeon.playerMaxHp, s.relicDungeon.playerHp +
+                  (eff.isPercent ? Math.floor(s.relicDungeon.playerMaxHp * (eff.value || 0) / 100) : (eff.value || 0))),
+              },
+            }));
+          } else if (eff.type === 'mp') {
+            set(s => ({
+              relicDungeon: {
+                ...s.relicDungeon,
+                playerMp: Math.min(s.relicDungeon.playerMaxMp, s.relicDungeon.playerMp +
+                  (eff.isPercent ? Math.floor(s.relicDungeon.playerMaxMp * (eff.value || 0) / 100) : (eff.value || 0))),
+              },
+            }));
+          } else if (eff.type === 'soulOrbs') {
+            set(s => ({ relicDungeon: { ...s.relicDungeon, tempSoulOrbs: s.relicDungeon.tempSoulOrbs + (eff.value || 0) } }));
+          }
+        }
+
+        const newShop = (room.shopItems || state.relicDungeon.currentShopInventory).filter(i => i.id !== itemId);
+        const floor = state.getRelicDungeonCurrentFloor();
+        if (floor) {
+          set(s => ({
+            relicDungeon: {
+              ...s.relicDungeon,
+              floors: s.relicDungeon.floors.map(f =>
+                f.floor === floor.floor ? {
+                  ...f,
+                  rooms: f.rooms.map(r => r.id === room.id ? { ...r, shopItems: newShop } : r),
+                } : f
+              ),
+              currentShopInventory: newShop,
+            },
+          }));
+        }
+        return true;
+      },
+
+      getBossForFloor: (floor, difficulty) => {
+        const dConfig = RELIC_DUNGEON_DIFFICULTY_CONFIG[difficulty];
+        const ratio = floor / dConfig.totalFloors;
+        const available = RELIC_DUNGEON_BOSSES.filter(b => b.minFloor <= floor);
+        if (available.length === 0) return RELIC_DUNGEON_BOSSES[0];
+        if (ratio >= 1) return available[available.length - 1];
+        if (ratio >= 0.8 && available[3]) return available[3];
+        if (ratio >= 0.6 && available[2]) return available[2];
+        if (ratio >= 0.4 && available[1]) return available[1];
+        return available[0];
       },
     }),
     {

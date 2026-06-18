@@ -20,6 +20,7 @@ import WorldBossPanel from './WorldBossPanel';
 import AlchemyWorkshopPanel from './AlchemyWorkshopPanel';
 import CodexPanel from './CodexPanel';
 import AchievementPanel from './AchievementPanel';
+import RelicDungeonPanel from './RelicDungeonPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -107,6 +108,7 @@ export default function GameScreen() {
     { id: 'alchemy' as const, label: '⚗️ 炼金', icon: '⚗️' },
     { id: 'codex' as const, label: '📖 图鉴', icon: '📖' },
     { id: 'achievements' as const, label: '🏆 成就', icon: '🏆' },
+    { id: 'relicdungeon' as const, label: '🏛️ 秘境', icon: '🏛️' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -747,6 +749,8 @@ export default function GameScreen() {
         return <CodexPanel />;
       case 'achievements':
         return <AchievementPanel />;
+      case 'relicdungeon':
+        return <RelicDungeonPanel />;
       case 'events':
         return (
           <div className="rebirth-panel">

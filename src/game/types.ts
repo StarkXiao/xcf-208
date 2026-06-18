@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1742,4 +1742,237 @@ export const ACHIEVEMENT_CATEGORY_ICONS: Record<AchievementCategory, string> = {
   exploration: '🗺️',
   combat: '⚔️',
   collection: '📚',
+};
+
+export type RelicDungeonRoomType = 'combat' | 'elite' | 'treasure' | 'event' | 'shrine' | 'rest' | 'boss' | 'shop' | 'mystery';
+export type RelicDungeonDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
+
+export interface RelicDungeonBuff {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  effects: RelicDungeonBuffEffect[];
+  remainingRooms?: number;
+}
+
+export interface RelicDungeonBuffEffect {
+  stat: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'goldBonus' | 'expBonus' | 'damageReduction' | 'lifesteal' | 'thorns';
+  value: number;
+  isPercent: boolean;
+}
+
+export const RELIC_DUNGEON_ROOM_TYPE_NAMES: Record<RelicDungeonRoomType, string> = {
+  combat: '战斗房',
+  elite: '精英房',
+  treasure: '宝藏房',
+  event: '事件房',
+  shrine: '神龛房',
+  rest: '休息房',
+  boss: 'BOSS房',
+  shop: '商店房',
+  mystery: '神秘房',
+};
+
+export const RELIC_DUNGEON_ROOM_TYPE_ICONS: Record<RelicDungeonRoomType, string> = {
+  combat: '⚔️',
+  elite: '💀',
+  treasure: '💰',
+  event: '✨',
+  shrine: '⛩️',
+  rest: '🏕️',
+  boss: '👑',
+  shop: '🛒',
+  mystery: '❓',
+};
+
+export const RELIC_DUNGEON_ROOM_TYPE_COLORS: Record<RelicDungeonRoomType, string> = {
+  combat: '#6b7280',
+  elite: '#3b82f6',
+  treasure: '#f59e0b',
+  event: '#8b5cf6',
+  shrine: '#22c55e',
+  rest: '#14b8a6',
+  boss: '#ef4444',
+  shop: '#eab308',
+  mystery: '#a855f7',
+};
+
+export const RELIC_DUNGEON_DIFFICULTY_NAMES: Record<RelicDungeonDifficulty, string> = {
+  easy: '简单',
+  normal: '普通',
+  hard: '困难',
+  nightmare: '噩梦',
+};
+
+export const RELIC_DUNGEON_DIFFICULTY_COLORS: Record<RelicDungeonDifficulty, string> = {
+  easy: '#22c55e',
+  normal: '#3b82f6',
+  hard: '#f59e0b',
+  nightmare: '#ef4444',
+};
+
+export interface RelicDungeonRoom {
+  id: string;
+  type: RelicDungeonRoomType;
+  floor: number;
+  name: string;
+  description: string;
+  cleared: boolean;
+  rewards?: EventEffect[];
+  monsterId?: string;
+  monsterTier?: MonsterTier;
+  eventId?: string;
+  buffChoices?: RelicDungeonBuff[];
+  isBoss?: boolean;
+  shopItems?: RelicDungeonShopItem[];
+  connections: string[];
+  position: { x: number; y: number };
+}
+
+export interface RelicDungeonFloor {
+  floor: number;
+  rooms: RelicDungeonRoom[];
+  startRoomId: string;
+  bossRoomId: string;
+}
+
+export interface RelicDungeonShopItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  cost: number;
+  currency: 'gold' | 'soulOrbs';
+  effect: EventEffect | RelicDungeonBuff;
+  isBuff?: boolean;
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+}
+
+export interface RelicDungeonBoss {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  hp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  minFloor: number;
+  phases: RelicDungeonBossPhase[];
+  rewards: EventEffect[];
+  uniqueBuffDropChance: number;
+  uniqueBuffId?: string;
+}
+
+export interface RelicDungeonBossPhase {
+  name: string;
+  hpThreshold: number;
+  attackMultiplier: number;
+  defenseMultiplier: number;
+  specialMechanic?: RelicDungeonBossMechanic;
+}
+
+export interface RelicDungeonBossMechanic {
+  type: 'summon' | 'aoe' | 'heal' | 'shield' | 'berserk' | 'curse';
+  value: number;
+  description: string;
+}
+
+export interface RelicDungeonReplayEvent {
+  id: string;
+  timestamp: number;
+  type: 'room_enter' | 'room_clear' | 'buff_gain' | 'buff_lose' | 'damage_dealt' | 'damage_taken' | 'reward_gain' | 'player_death' | 'boss_phase' | 'choice_made';
+  floor: number;
+  roomId?: string;
+  roomType?: RelicDungeonRoomType;
+  description: string;
+  details?: Record<string, unknown>;
+}
+
+export interface RelicDungeonSettlement {
+  runId: string;
+  startTime: number;
+  endTime: number;
+  difficulty: RelicDungeonDifficulty;
+  totalFloors: number;
+  floorsCleared: number;
+  roomsCleared: number;
+  totalDamageDealt: number;
+  totalDamageTaken: number;
+  monstersKilled: number;
+  bossesDefeated: number;
+  buffsCollected: number;
+  goldEarned: number;
+  expEarned: number;
+  soulOrbsEarned: number;
+  relicsFound: number;
+  survival: boolean;
+  rank: 'S' | 'A' | 'B' | 'C' | 'D';
+  rewards: EventEffect[];
+  replay: RelicDungeonReplayEvent[];
+}
+
+export interface RelicDungeonState {
+  isActive: boolean;
+  currentFloor: number;
+  maxFloor: number;
+  totalFloors: number;
+  difficulty: RelicDungeonDifficulty;
+  floors: RelicDungeonFloor[];
+  currentRoomId: string | null;
+  activeBuffs: RelicDungeonBuff[];
+  playerHp: number;
+  playerMaxHp: number;
+  playerMp: number;
+  playerMaxMp: number;
+  currentBoss: {
+    id: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    attack: number;
+    defense: number;
+    currentPhase: number;
+    mechanicActive: RelicDungeonBossMechanic | null;
+  } | null;
+  bossLog: string[];
+  settlement: RelicDungeonSettlement | null;
+  history: RelicDungeonSettlement[];
+  highestFloorReached: number;
+  totalRuns: number;
+  totalBossesDefeated: number;
+  unlockedDifficulties: RelicDungeonDifficulty[];
+  tempGold: number;
+  tempSoulOrbs: number;
+  tempExp: number;
+  visitedRoomIds: string[];
+  replayBuffer: RelicDungeonReplayEvent[];
+  currentShopInventory: RelicDungeonShopItem[];
+  viewingReplay: RelicDungeonSettlement | null;
+  replayIndex: number;
+  replayPlaying: boolean;
+}
+
+export const RELIC_DUNGEON_BUFF_RARITY_COLORS: Record<RelicDungeonBuff['rarity'], string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#8b5cf6',
+  legendary: '#f59e0b',
+};
+
+export const RELIC_DUNGEON_BUFF_RARITY_NAMES: Record<RelicDungeonBuff['rarity'], string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
+
+export const RELIC_DUNGEON_RANK_COLORS: Record<RelicDungeonSettlement['rank'], string> = {
+  S: '#ef4444',
+  A: '#f59e0b',
+  B: '#3b82f6',
+  C: '#22c55e',
+  D: '#9ca3af',
 };
