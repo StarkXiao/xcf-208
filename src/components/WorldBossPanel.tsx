@@ -211,6 +211,7 @@ export default function WorldBossPanel() {
         <div className="worldboss-hp-section">
           <div className="worldboss-hp-label">
             <span>❤️ {formatNumber(session.currentHp)} / {formatNumber(session.maxHp)}</span>
+            <span>⏱️ {formatTime(timeRemaining)}</span>
             <span>{hpPercent.toFixed(1)}%</span>
           </div>
           <div className="worldboss-hp-bar">

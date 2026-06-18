@@ -4773,7 +4773,7 @@ export const useGameStore = create<GameState>()(
         const phaseDefMult = phase ? phase.defenseMultiplier : 1;
 
         const defense = boss.defense * phaseDefMult;
-        const actualDamage = Math.max(1, Math.floor(totalDamage - defense * 0.5));
+        const actualDamage = Math.max(1, Math.floor(totalDamage / phaseAtkMult - defense * 0.5));
 
         const isCritical = Math.random() < (state.player.stats.luck * 0.01 + 0.05);
         const finalDamage = isCritical ? Math.floor(actualDamage * 1.5) : actualDamage;
