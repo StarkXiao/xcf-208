@@ -1226,7 +1226,7 @@ export type RelicElement = 'fire' | 'water' | 'earth' | 'wind' | 'light' | 'dark
 export type RelicCategory = 'weapon' | 'armor' | 'accessory' | 'treasure' | 'rune';
 
 export interface RelicStatBonus {
-  stat: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'goldBonus' | 'expBonus' | 'soulOrbBonus';
+  stat: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'goldBonus' | 'expBonus' | 'soulOrbBonus';
   value: number;
   isPercent: boolean;
 }

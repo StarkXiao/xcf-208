@@ -56,7 +56,6 @@ export default function RelicPanel() {
     unequipRelic,
     upgradeRelic,
     awakenRelic,
-    synthesizeRelic,
   } = useGameStore();
 
   const [activeSubTab, setActiveSubTab] = useState<'owned' | 'codex' | 'sets'>('owned');
@@ -67,16 +66,18 @@ export default function RelicPanel() {
 
   const codexProgress = useMemo(() => getRelicCodexProgress(), [getRelicCodexProgress, relicCodex]);
 
-  const filteredRelics = useMemo(() => {
-    let relics = activeSubTab === 'owned' ? ownedRelics : RELICS;
-    if (categoryFilter !== 'all') {
-      relics = relics.filter((r: OwnedRelic | Relic) => {
-        const relicData = 'relicId' in r ? getRelic(r.relicId) : r;
-        return relicData?.category === categoryFilter;
-      });
-    }
-    return relics;
-  }, [activeSubTab, ownedRelics, categoryFilter, getRelic]);
+  const filteredOwnedRelics = useMemo(() => {
+    if (categoryFilter === 'all') return ownedRelics;
+    return ownedRelics.filter((r) => {
+      const relicData = getRelic(r.relicId);
+      return relicData?.category === categoryFilter;
+    });
+  }, [ownedRelics, categoryFilter, getRelic]);
+
+  const filteredCodexRelics = useMemo(() => {
+    if (categoryFilter === 'all') return RELICS;
+    return RELICS.filter((r) => r.category === categoryFilter);
+  }, [categoryFilter]);
 
   const renderStatLine = (stat: RelicStatBonus) => {
     const name = STAT_NAMES[stat.stat] || stat.stat;
@@ -133,7 +134,7 @@ export default function RelicPanel() {
           {baseStats.map((s, i) => (
             <span key={i} className="relic-stat-line base">{renderStatLine(s)}</span>
           ))}
-          {owned.awakened && stats.filter((s, i) => i >= baseStats.length).map((s, i) => (
+          {owned.awakened && stats.slice(baseStats.length).map((s, i) => (
             <span key={`aw-${i}`} className="relic-stat-line awakened">✨ {renderStatLine(s)}</span>
           ))}
         </div>
@@ -335,7 +336,7 @@ export default function RelicPanel() {
             className={`relic-companion-btn ${selectedCompanionId === c.id ? 'selected' : ''}`}
             onClick={() => setSelectedCompanionId(c.id)}
           >
-            {c.icon} {c.name}
+            👤 {c.name}
           </button>
         ))}
       </div>
@@ -428,21 +429,21 @@ export default function RelicPanel() {
 
       <div className="relic-content">
         {activeSubTab === 'owned' && (
-          filteredRelics.length === 0 ? (
+          filteredOwnedRelics.length === 0 ? (
             <div className="empty-state">
               <span>暂无神器</span>
               <span className="hint">击败精英或BOSS怪物有几率获得神器</span>
             </div>
           ) : (
             <div className="relic-grid">
-              {(filteredRelics as OwnedRelic[]).map((owned) => renderRelicCardOwned(owned))}
+              {filteredOwnedRelics.map((owned) => renderRelicCardOwned(owned))}
             </div>
           )
         )}
 
         {activeSubTab === 'codex' && (
           <div className="relic-grid">
-            {(filteredRelics as Relic[]).map((relic) => renderRelicCardCodex(relic))}
+            {filteredCodexRelics.map((relic) => renderRelicCardCodex(relic))}
           </div>
         )}
 
