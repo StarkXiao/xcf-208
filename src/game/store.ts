@@ -113,8 +113,19 @@ import type {
   FactionType,
   FactionIncomeBreakdown,
   FactionBattleLog,
+  Storyline,
+  Ending,
+  InheritedBonus,
+  StorylineProgress,
+  EndingProgress,
+  FateAlignment,
+  FateState,
+  FateTab,
+  PlaythroughRecord,
+  StorylineNode,
+  StorylineChoice,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES, getFactionReputationLevel, FACTION_REPUTATION_LEVELS } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES, getFactionReputationLevel, FACTION_REPUTATION_LEVELS, STORYLINE_TYPE_NAMES, STORYLINE_TYPE_COLORS, STORYLINE_TYPE_ICONS, ENDING_TYPE_NAMES, ENDING_TYPE_COLORS, ENDING_TYPE_ICONS, FATE_ALIGNMENT_NAMES, FATE_ALIGNMENT_COLORS, FATE_ALIGNMENT_ICONS, FATE_TAB_NAMES, FATE_TAB_ICONS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -180,6 +191,9 @@ import {
   getInitialFactionState,
   FACTION_SETTLEMENT_INTERVAL,
   FACTION_MAX_BATTLE_LOGS,
+  STORYLINES,
+  ENDINGS,
+  INHERITED_BONUSES,
 } from './data';
 
 interface GameState {
@@ -753,6 +767,35 @@ interface GameState {
   getFactionBonus: (stat: 'attack' | 'defense' | 'maxHp' | 'speed' | 'luck' | 'hp' | 'maxMp' | 'mp') => number;
   getFactionReputationMultiplier: () => number;
   getCompanionFactionBonus: (companion: Companion) => { attackMultiplier: number; defenseMultiplier: number };
+
+  fate: FateState;
+  getStoryline: (storylineId: string) => Storyline | undefined;
+  getStorylineProgress: (storylineId: string) => StorylineProgress;
+  getAvailableStorylines: () => Storyline[];
+  startStoryline: (storylineId: string) => boolean;
+  canStartStoryline: (storylineId: string) => boolean;
+  advanceStorylineNode: (storylineId: string, choiceId?: string) => void;
+  completeStorylineNode: (storylineId: string) => void;
+  getCurrentStorylineNode: (storylineId: string) => StorylineNode | null;
+  getNextStorylineNodes: (storylineId: string) => StorylineNode[];
+  setFateTab: (tab: FateTab) => void;
+  unlockEnding: (endingId: string) => void;
+  getEnding: (endingId: string) => Ending | undefined;
+  getEndingProgress: (endingId: string) => EndingProgress;
+  getUnlockedEndings: () => Ending[];
+  canUnlockEnding: (endingId: string) => boolean;
+  addAlignment: (alignment: FateChoiceAlignment, value: number) => void;
+  getAlignment: () => FateAlignment;
+  getInheritedBonuses: () => InheritedBonus[];
+  isBonusInherited: (bonusId: string) => boolean;
+  addPlaythroughRecord: (record: Omit<PlaythroughRecord, 'id'>) => void;
+  getPlaythroughRecords: () => PlaythroughRecord[];
+  getCurrentPlaythrough: () => PlaythroughRecord | null;
+  getTotalPlaythroughCount: () => number;
+  isStorylineNodeAccessible: (storylineId: string, nodeId: string) => boolean;
+  getStorylineCompletedCount: () => number;
+  getEndingUnlockedCount: () => number;
+  resetFateProgress: () => void;
 }
 
 let logIdCounter = 0;
@@ -914,6 +957,57 @@ function initAchievementProgresses(): AchievementProgress[] {
     claimedAt: null,
     progress: 0,
   }));
+}
+
+function initStorylineProgresses(): StorylineProgress[] {
+  return STORYLINES.map((s) => ({
+    storylineId: s.id,
+    currentNodeId: null,
+    completedNodeIds: [],
+    unlocked: !s.hidden,
+    completed: false,
+    completedAt: null,
+    visitedNodeIds: [],
+    chosenBranchIds: [],
+  }));
+}
+
+function initEndingProgresses(): EndingProgress[] {
+  return ENDINGS.map((e) => ({
+    endingId: e.id,
+    unlocked: false,
+    unlockedAt: null,
+    viewed: false,
+    viewedAt: null,
+    playthroughCount: 0,
+  }));
+}
+
+function initFateAlignment(): FateAlignment {
+  return {
+    light: 0,
+    shadow: 0,
+    order: 0,
+    chaos: 0,
+    total: 0,
+  };
+}
+
+function initFateState(): FateState {
+  return {
+    activeStorylineId: null,
+    currentNodeId: null,
+    storylineProgresses: initStorylineProgresses(),
+    endingProgresses: initEndingProgresses(),
+    alignment: initFateAlignment(),
+    playthroughRecords: [],
+    currentPlaythroughId: 0,
+    inheritedBonusIds: [],
+    totalPlaythroughCount: 0,
+    unlockedEndingCount: 0,
+    completedStorylineCount: 0,
+    activeTab: 'storylines',
+  };
 }
 
 function getRelicLevelFromExp(exp: number): { level: number; currentExp: number; nextExp: number } {
@@ -1107,6 +1201,8 @@ export const useGameStore = create<GameState>()(
       },
 
       faction: getInitialFactionState(),
+
+      fate: initFateState(),
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -8754,6 +8850,549 @@ export const useGameStore = create<GameState>()(
         }
 
         return { attackMultiplier, defenseMultiplier };
+      },
+
+      getStoryline: (storylineId) => {
+        return STORYLINES.find((s) => s.id === storylineId);
+      },
+
+      getStorylineProgress: (storylineId) => {
+        const state = get();
+        const progress = state.fate.storylineProgresses.find((p) => p.storylineId === storylineId);
+        if (progress) return progress;
+        return {
+          storylineId,
+          currentNodeId: null,
+          completedNodeIds: [],
+          unlocked: false,
+          completed: false,
+          completedAt: null,
+          visitedNodeIds: [],
+          chosenBranchIds: [],
+        };
+      },
+
+      getAvailableStorylines: () => {
+        const state = get();
+        return STORYLINES.filter((s) => {
+          if (s.hidden) {
+            const progress = state.fate.storylineProgresses.find((p) => p.storylineId === s.id);
+            return progress?.unlocked || false;
+          }
+          if (s.requiredLevel && state.player.stats.level < s.requiredLevel) return false;
+          if (s.requiredTags && s.requiredTags.length > 0) {
+            if (!s.requiredTags.every((tag) => state.consequenceTags.includes(tag))) return false;
+          }
+          if (s.companionId) {
+            if (!state.ownedCompanions.some((c) => c.id === s.companionId)) return false;
+          }
+          return true;
+        }).sort((a, b) => a.order - b.order);
+      },
+
+      canStartStoryline: (storylineId) => {
+        const state = get();
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return false;
+        if (storyline.requiredLevel && state.player.stats.level < storyline.requiredLevel) return false;
+        if (storyline.requiredTags && storyline.requiredTags.length > 0) {
+          if (!storyline.requiredTags.every((tag) => state.consequenceTags.includes(tag))) return false;
+        }
+        if (storyline.companionId) {
+          if (!state.ownedCompanions.some((c) => c.id === storyline.companionId)) return false;
+        }
+        const progress = state.fate.storylineProgresses.find((p) => p.storylineId === storylineId);
+        if (progress?.completed) return false;
+        return true;
+      },
+
+      startStoryline: (storylineId) => {
+        const state = get();
+        if (!get().canStartStoryline(storylineId)) return false;
+
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return false;
+
+        const startNode = storyline.nodes.find((n) => n.id === storyline.startNodeId);
+        if (!startNode) return false;
+
+        set((state) => ({
+          fate: {
+            ...state.fate,
+            activeStorylineId: storylineId,
+            currentNodeId: storyline.startNodeId,
+            storylineProgresses: state.fate.storylineProgresses.map((p) =>
+              p.storylineId === storylineId
+                ? {
+                    ...p,
+                    currentNodeId: storyline.startNodeId,
+                    visitedNodeIds: [...p.visitedNodeIds, storyline.startNodeId],
+                    unlocked: true,
+                  }
+                : p
+            ),
+          },
+        }));
+
+        if (startNode.rewards) {
+          startNode.rewards.forEach((reward) => {
+            if (reward.type === 'exp') get().addExp(reward.value);
+            else if (reward.type === 'gold') get().addGold(reward.value);
+            else if (reward.type === 'soulOrbs') get().addSoulOrbs(reward.value);
+            else if (reward.type === 'attack') get().upgradeStat('attack', Math.floor(reward.value / 2));
+            else if (reward.type === 'defense') get().upgradeStat('defense', Math.floor(reward.value / 2));
+            else if (reward.type === 'hp') get().upgradeStat('maxHp', Math.floor(reward.value / 10));
+          });
+        }
+
+        get().addBattleLog(`📖 开始剧情：${storyline.name}`, 'event');
+        return true;
+      },
+
+      getCurrentStorylineNode: (storylineId) => {
+        const state = get();
+        const progress = state.fate.storylineProgresses.find((p) => p.storylineId === storylineId);
+        if (!progress?.currentNodeId) return null;
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        return storyline?.nodes.find((n) => n.id === progress.currentNodeId) || null;
+      },
+
+      getNextStorylineNodes: (storylineId) => {
+        const state = get();
+        const currentNode = get().getCurrentStorylineNode(storylineId);
+        if (!currentNode) return [];
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return [];
+        
+        if (currentNode.choices && currentNode.choices.length > 0) {
+          return [];
+        }
+        
+        return currentNode.nextNodeIds
+          ? currentNode.nextNodeIds
+              .map((id) => storyline.nodes.find((n) => n.id === id))
+              .filter((n): n is StorylineNode => n !== undefined)
+          : [];
+      },
+
+      isStorylineNodeAccessible: (storylineId, nodeId) => {
+        const state = get();
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return false;
+        const node = storyline.nodes.find((n) => n.id === nodeId);
+        if (!node) return false;
+
+        if (node.requiredLevel && state.player.stats.level < node.requiredLevel) return false;
+        if (node.requiredTags && node.requiredTags.length > 0) {
+          if (!node.requiredTags.every((tag) => state.consequenceTags.includes(tag))) return false;
+        }
+        if (node.blockedByTags && node.blockedByTags.length > 0) {
+          if (node.blockedByTags.some((tag) => state.consequenceTags.includes(tag))) return false;
+        }
+        if (node.requiredCompanions && node.requiredCompanions.length > 0) {
+          if (!node.requiredCompanions.every((cid) => state.ownedCompanions.some((c) => c.id === cid))) return false;
+        }
+        if (node.requiredAffinity && node.requiredAffinity.length > 0) {
+          for (const req of node.requiredAffinity) {
+            const affinity = get().getCompanionAffinity(req.companionId);
+            if (affinity.value < req.minValue) return false;
+          }
+        }
+
+        return true;
+      },
+
+      advanceStorylineNode: (storylineId, choiceId) => {
+        const state = get();
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return;
+
+        const currentNode = get().getCurrentStorylineNode(storylineId);
+        if (!currentNode) return;
+
+        let nextNodeId: string | undefined;
+
+        if (choiceId && currentNode.choices) {
+          const choice = currentNode.choices.find((c) => c.id === choiceId);
+          if (choice) {
+            nextNodeId = choice.nextNodeId;
+            
+            if (choice.alignment) {
+              get().addAlignment(choice.alignment, 1);
+            }
+            
+            if (choice.effects) {
+              choice.effects.forEach((effect) => {
+                if (effect.type === 'gold') get().addGold(effect.value);
+                else if (effect.type === 'exp') get().addExp(effect.value);
+                else if (effect.type === 'hp') {
+                  if (effect.value > 0) get().healHp(effect.value);
+                  else get().takeDamage(Math.abs(effect.value));
+                }
+                else if (effect.type === 'mp') {
+                  if (effect.value > 0) get().healMp(effect.value);
+                }
+                else if (effect.type === 'soulOrbs') get().addSoulOrbs(effect.value);
+              });
+            }
+
+            if (choice.consequences) {
+              if (choice.consequences.tags) {
+                choice.consequences.tags.forEach((tag) => get().addConsequenceTag(tag));
+              }
+              if (choice.consequences.companionAffinity) {
+                choice.consequences.companionAffinity.forEach((ca) => {
+                  get().addCompanionAffinity(ca.companionId, ca.value);
+                });
+              }
+              if (choice.consequences.mapModifiers) {
+                choice.consequences.mapModifiers.forEach((mod) => get().addMapAreaModifier(mod));
+              }
+              if (choice.consequences.eventWeights) {
+                choice.consequences.eventWeights.forEach((ew) => get().addEventWeightModifier(ew));
+              }
+            }
+          }
+        } else {
+          if (currentNode.nextNodeIds && currentNode.nextNodeIds.length > 0) {
+            nextNodeId = currentNode.nextNodeIds[0];
+          }
+        }
+
+        if (currentNode.alignment) {
+          get().addAlignment(currentNode.alignment, 1);
+        }
+
+        if (currentNode.consequenceTags) {
+          currentNode.consequenceTags.forEach((tag) => get().addConsequenceTag(tag));
+        }
+
+        if (currentNode.companionAffinity) {
+          currentNode.companionAffinity.forEach((ca) => {
+            get().addCompanionAffinity(ca.companionId, ca.value);
+          });
+        }
+
+        if (currentNode.mapModifiers) {
+          currentNode.mapModifiers.forEach((mod) => get().addMapAreaModifier(mod));
+        }
+
+        if (currentNode.rewards) {
+          currentNode.rewards.forEach((reward) => {
+            if (reward.type === 'exp') get().addExp(reward.value);
+            else if (reward.type === 'gold') get().addGold(reward.value);
+            else if (reward.type === 'soulOrbs') get().addSoulOrbs(reward.value);
+            else if (reward.type === 'reputation') get().addAreaReputation(storyline.requiredAreaId || state.currentAreaId, reward.value);
+          });
+        }
+
+        if (currentNode.branchId) {
+          set((state) => ({
+            fate: {
+              ...state.fate,
+              storylineProgresses: state.fate.storylineProgresses.map((p) =>
+                p.storylineId === storylineId
+                  ? {
+                      ...p,
+                      chosenBranchIds: p.chosenBranchIds.includes(currentNode.branchId!)
+                        ? p.chosenBranchIds
+                        : [...p.chosenBranchIds, currentNode.branchId!],
+                    }
+                  : p
+              ),
+            },
+          }));
+        }
+
+        if (currentNode.isEnding && currentNode.unlockEndingIds) {
+          currentNode.unlockEndingIds.forEach((endingId) => {
+            get().unlockEnding(endingId);
+          });
+        }
+
+        if (nextNodeId) {
+          const nextNode = storyline.nodes.find((n) => n.id === nextNodeId);
+          
+          set((state) => ({
+            fate: {
+              ...state.fate,
+              currentNodeId: nextNodeId,
+              storylineProgresses: state.fate.storylineProgresses.map((p) =>
+                p.storylineId === storylineId
+                  ? {
+                      ...p,
+                      currentNodeId: nextNodeId,
+                      completedNodeIds: [...new Set([...p.completedNodeIds, currentNode.id])],
+                      visitedNodeIds: [...new Set([...p.visitedNodeIds, nextNodeId])],
+                    }
+                  : p
+              ),
+            },
+          }));
+
+          if (nextNode?.rewards) {
+            nextNode.rewards.forEach((reward) => {
+              if (reward.type === 'exp') get().addExp(reward.value);
+              else if (reward.type === 'gold') get().addGold(reward.value);
+              else if (reward.type === 'soulOrbs') get().addSoulOrbs(reward.value);
+            });
+          }
+
+          if (nextNode?.isEnding) {
+            set((state) => ({
+              fate: {
+                ...state.fate,
+                storylineProgresses: state.fate.storylineProgresses.map((p) =>
+                  p.storylineId === storylineId
+                    ? {
+                        ...p,
+                        completed: true,
+                        completedAt: Date.now(),
+                        completedNodeIds: [...new Set([...p.completedNodeIds, nextNodeId])],
+                      }
+                    : p
+                ),
+                completedStorylineCount: state.fate.storylineProgresses.filter((p) => p.completed).length + (state.fate.storylineProgresses.find((p) => p.storylineId === storylineId)?.completed ? 0 : 1),
+              },
+            }));
+            get().addBattleLog(`🏆 完成剧情：${storyline.name}`, 'event');
+          }
+        }
+      },
+
+      completeStorylineNode: (storylineId) => {
+        const state = get();
+        const currentNode = get().getCurrentStorylineNode(storylineId);
+        if (!currentNode) return;
+
+        const storyline = STORYLINES.find((s) => s.id === storylineId);
+        if (!storyline) return;
+
+        if (currentNode.rewards) {
+          currentNode.rewards.forEach((reward) => {
+            if (reward.type === 'exp') get().addExp(reward.value);
+            else if (reward.type === 'gold') get().addGold(reward.value);
+            else if (reward.type === 'soulOrbs') get().addSoulOrbs(reward.value);
+          });
+        }
+
+        if (currentNode.isEnding && currentNode.unlockEndingIds) {
+          currentNode.unlockEndingIds.forEach((endingId) => {
+            get().unlockEnding(endingId);
+          });
+        }
+
+        if (currentNode.nextNodeIds && currentNode.nextNodeIds.length > 0) {
+          const nextNodeId = currentNode.nextNodeIds[0];
+          set((state) => ({
+            fate: {
+              ...state.fate,
+              currentNodeId: nextNodeId,
+              storylineProgresses: state.fate.storylineProgresses.map((p) =>
+                p.storylineId === storylineId
+                  ? {
+                      ...p,
+                      currentNodeId: nextNodeId,
+                      completedNodeIds: [...new Set([...p.completedNodeIds, currentNode.id])],
+                      visitedNodeIds: [...new Set([...p.visitedNodeIds, nextNodeId])],
+                    }
+                  : p
+              ),
+            },
+          }));
+        } else {
+          set((state) => ({
+            fate: {
+              ...state.fate,
+              storylineProgresses: state.fate.storylineProgresses.map((p) =>
+                p.storylineId === storylineId
+                  ? {
+                      ...p,
+                      completed: true,
+                      completedAt: Date.now(),
+                      completedNodeIds: [...new Set([...p.completedNodeIds, currentNode.id])],
+                    }
+                  : p
+              ),
+            },
+          }));
+        }
+      },
+
+      setFateTab: (tab) => {
+        set((state) => ({
+          fate: { ...state.fate, activeTab: tab },
+        }));
+      },
+
+      unlockEnding: (endingId) => {
+        const state = get();
+        const endingProgress = state.fate.endingProgresses.find((e) => e.endingId === endingId);
+        if (endingProgress?.unlocked) return;
+
+        const ending = ENDINGS.find((e) => e.id === endingId);
+        if (!ending) return;
+
+        set((state) => ({
+          fate: {
+            ...state.fate,
+            endingProgresses: state.fate.endingProgresses.map((e) =>
+              e.endingId === endingId
+                ? { ...e, unlocked: true, unlockedAt: Date.now(), playthroughCount: e.playthroughCount + 1 }
+                : e
+            ),
+            unlockedEndingCount: state.fate.endingProgresses.filter((e) => e.unlocked).length + 1,
+          },
+        }));
+
+        if (ending.rewards) {
+          ending.rewards.forEach((reward) => {
+            if (reward.type === 'exp') get().addExp(reward.value);
+            else if (reward.type === 'gold') get().addGold(reward.value);
+            else if (reward.type === 'soulOrbs') get().addSoulOrbs(reward.value);
+            else if (reward.type === 'attack') get().upgradeStat('attack', Math.floor(reward.value / 2));
+            else if (reward.type === 'defense') get().upgradeStat('defense', Math.floor(reward.value / 2));
+            else if (reward.type === 'hp') get().upgradeStat('maxHp', Math.floor(reward.value / 10));
+          });
+        }
+
+        if (ending.inheritBonuses) {
+          ending.inheritBonuses.forEach((bonus) => {
+            set((state) => ({
+              fate: {
+                ...state.fate,
+                inheritedBonusIds: state.fate.inheritedBonusIds.includes(bonus.id)
+                  ? state.fate.inheritedBonusIds
+                  : [...state.fate.inheritedBonusIds, bonus.id],
+              },
+            }));
+          });
+        }
+
+        get().addBattleLog(`🎉 解锁结局：${ending.name}`, 'event');
+        get().checkAchievements();
+      },
+
+      getEnding: (endingId) => {
+        return ENDINGS.find((e) => e.id === endingId);
+      },
+
+      getEndingProgress: (endingId) => {
+        const state = get();
+        const progress = state.fate.endingProgresses.find((e) => e.endingId === endingId);
+        if (progress) return progress;
+        return {
+          endingId,
+          unlocked: false,
+          unlockedAt: null,
+          viewed: false,
+          viewedAt: null,
+          playthroughCount: 0,
+        };
+      },
+
+      getUnlockedEndings: () => {
+        const state = get();
+        return ENDINGS.filter((e) => {
+          if (e.hidden) {
+            const progress = state.fate.endingProgresses.find((p) => p.endingId === e.id);
+            return progress?.unlocked || false;
+          }
+          return true;
+        }).sort((a, b) => a.order - b.order);
+      },
+
+      canUnlockEnding: (endingId) => {
+        const state = get();
+        const ending = ENDINGS.find((e) => e.id === endingId);
+        if (!ending) return false;
+        if (ending.requiredLevel && state.player.stats.level < ending.requiredLevel) return false;
+        if (ending.requiredTags && ending.requiredTags.length > 0) {
+          if (!ending.requiredTags.every((tag) => state.consequenceTags.includes(tag))) return false;
+        }
+        if (ending.requiredCompanions && ending.requiredCompanions.length > 0) {
+          if (!ending.requiredCompanions.every((cid) => state.ownedCompanions.some((c) => c.id === cid))) return false;
+        }
+        if (ending.requiredAffinity && ending.requiredAffinity.length > 0) {
+          for (const req of ending.requiredAffinity) {
+            const affinity = get().getCompanionAffinity(req.companionId);
+            if (affinity.value < req.minValue) return false;
+          }
+        }
+        return true;
+      },
+
+      addAlignment: (alignment, value) => {
+        set((state) => {
+          const newAlignment = { ...state.fate.alignment };
+          newAlignment[alignment] = (newAlignment[alignment] || 0) + value;
+          newAlignment.total += value;
+          return {
+            fate: { ...state.fate, alignment: newAlignment },
+          };
+        });
+      },
+
+      getAlignment: () => {
+        return get().fate.alignment;
+      },
+
+      getInheritedBonuses: () => {
+        const state = get();
+        return INHERITED_BONUSES.filter((b) => state.fate.inheritedBonusIds.includes(b.id));
+      },
+
+      isBonusInherited: (bonusId) => {
+        return get().fate.inheritedBonusIds.includes(bonusId);
+      },
+
+      addPlaythroughRecord: (record) => {
+        const state = get();
+        const newId = state.fate.playthroughRecords.length + 1;
+        set((state) => ({
+          fate: {
+            ...state.fate,
+            playthroughRecords: [
+              ...state.fate.playthroughRecords,
+              { ...record, id: newId },
+            ],
+            totalPlaythroughCount: state.fate.totalPlaythroughCount + 1,
+            currentPlaythroughId: newId,
+          },
+        }));
+      },
+
+      getPlaythroughRecords: () => {
+        return get().fate.playthroughRecords;
+      },
+
+      getCurrentPlaythrough: () => {
+        const state = get();
+        return state.fate.playthroughRecords.find((r) => r.id === state.fate.currentPlaythroughId) || null;
+      },
+
+      getTotalPlaythroughCount: () => {
+        return get().fate.totalPlaythroughCount;
+      },
+
+      getStorylineCompletedCount: () => {
+        return get().fate.storylineProgresses.filter((p) => p.completed).length;
+      },
+
+      getEndingUnlockedCount: () => {
+        return get().fate.endingProgresses.filter((e) => e.unlocked).length;
+      },
+
+      resetFateProgress: () => {
+        set((state) => ({
+          fate: {
+            ...state.fate,
+            activeStorylineId: null,
+            currentNodeId: null,
+            storylineProgresses: initStorylineProgresses(),
+            alignment: initFateAlignment(),
+          },
+        }));
       },
     }),
     {

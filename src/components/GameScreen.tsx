@@ -23,6 +23,7 @@ import AchievementPanel from './AchievementPanel';
 import RelicDungeonPanel from './RelicDungeonPanel';
 import SeasonChallengePanel from './SeasonChallengePanel';
 import FactionPanel from './FactionPanel';
+import FatePanel from './FatePanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -113,6 +114,7 @@ export default function GameScreen() {
     { id: 'relicdungeon' as const, label: '🏛️ 秘境', icon: '🏛️' },
     { id: 'season' as const, label: '⚔️ 赛季', icon: '⚔️' },
     { id: 'faction' as const, label: '🏛️ 阵营', icon: '🏛️' },
+    { id: 'fate' as const, label: '🎭 命运', icon: '🎭' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -759,6 +761,8 @@ export default function GameScreen() {
         return <SeasonChallengePanel />;
       case 'faction':
         return <FactionPanel />;
+      case 'fate':
+        return <FatePanel />;
       case 'events':
         return (
           <div className="rebirth-panel">

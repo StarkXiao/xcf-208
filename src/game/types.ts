@@ -2329,3 +2329,279 @@ export function getFactionReputationLevel(points: number): number {
   }
   return 0;
 }
+
+export type StorylineType = 'main' | 'side' | 'companion' | 'secret' | 'ending';
+export type EndingType = 'good' | 'neutral' | 'bad' | 'true' | 'secret' | 'normal';
+export type FateChoiceAlignment = 'light' | 'shadow' | 'neutral' | 'chaos' | 'order';
+
+export interface StorylineNode {
+  id: string;
+  nodeType: 'event' | 'battle' | 'dialogue' | 'choice' | 'ending' | 'branch';
+  title: string;
+  description: string;
+  icon?: string;
+  bgColor?: string;
+  nextNodeIds?: string[];
+  previousNodeIds?: string[];
+  requiredTags?: string[];
+  blockedByTags?: string[];
+  requiredCompanions?: string[];
+  requiredAffinity?: { companionId: string; minValue: number }[];
+  requiredAreas?: string[];
+  requiredLevel?: number;
+  requiredReputation?: { areaId: string; minLevel: number }[];
+  eventId?: string;
+  battleConfig?: {
+    areaId: string;
+    monsterId?: string;
+    minTier?: MonsterTier;
+    bossOnly?: boolean;
+  };
+  dialogueId?: string;
+  choices?: StorylineChoice[];
+  rewards?: EventEffect[];
+  consequenceTags?: string[];
+  companionAffinity?: CompanionAffinityChange[];
+  mapModifiers?: MapAreaModifier[];
+  unlockEndingIds?: string[];
+  isEnding?: boolean;
+  endingType?: EndingType;
+  alignment?: FateChoiceAlignment;
+  branchId?: string;
+}
+
+export interface StorylineChoice {
+  id: string;
+  text: string;
+  nextNodeId?: string;
+  effects?: EventEffect[];
+  consequences?: EventConsequence;
+  alignment?: FateChoiceAlignment;
+  requiredTags?: string[];
+  requiredAffinity?: { companionId: string; minValue: number }[];
+}
+
+export interface StorylineBranch {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  startNodeId: string;
+  endNodeId: string;
+  alignment?: FateChoiceAlignment;
+}
+
+export interface Storyline {
+  id: string;
+  name: string;
+  subtitle?: string;
+  description: string;
+  type: StorylineType;
+  icon: string;
+  color: string;
+  bgColor?: string;
+  startNodeId: string;
+  endNodeIds: string[];
+  nodes: StorylineNode[];
+  branches?: StorylineBranch[];
+  requiredTags?: string[];
+  requiredLevel?: number;
+  requiredAreaId?: string;
+  companionId?: string;
+  rewards?: EventEffect[];
+  unlockEndingIds?: string[];
+  order: number;
+  hidden?: boolean;
+}
+
+export interface Ending {
+  id: string;
+  name: string;
+  subtitle?: string;
+  description: string;
+  type: EndingType;
+  icon: string;
+  color: string;
+  bgColor?: string;
+  storylineId?: string;
+  requiredTags?: string[];
+  requiredCompanions?: string[];
+  requiredAffinity?: { companionId: string; minValue: number }[];
+  requiredAreas?: string[];
+  requiredLevel?: number;
+  rewards?: EventEffect[];
+  inheritBonuses?: InheritedBonus[];
+  epilogueText: string;
+  order: number;
+  hidden?: boolean;
+}
+
+export interface InheritedBonus {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  type: 'stat' | 'talent' | 'item' | 'companion' | 'starting_gold' | 'starting_level';
+  stat?: keyof PlayerStats;
+  value?: number;
+  isPercent?: boolean;
+  talentId?: string;
+  itemId?: string;
+  companionId?: string;
+  requiredEndingId?: string;
+}
+
+export interface StorylineProgress {
+  storylineId: string;
+  currentNodeId: string | null;
+  completedNodeIds: string[];
+  unlocked: boolean;
+  completed: boolean;
+  completedAt: number | null;
+  visitedNodeIds: string[];
+  chosenBranchIds: string[];
+}
+
+export interface EndingProgress {
+  endingId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  viewed: boolean;
+  viewedAt: number | null;
+  playthroughCount: number;
+}
+
+export interface FateAlignment {
+  light: number;
+  shadow: number;
+  order: number;
+  chaos: number;
+  total: number;
+}
+
+export const FATE_ALIGNMENT_NAMES: Record<FateChoiceAlignment, string> = {
+  light: '光明',
+  shadow: '暗影',
+  neutral: '中立',
+  order: '秩序',
+  chaos: '混沌',
+};
+
+export const FATE_ALIGNMENT_COLORS: Record<FateChoiceAlignment, string> = {
+  light: '#fbbf24',
+  shadow: '#7c3aed',
+  neutral: '#9ca3af',
+  order: '#3b82f6',
+  chaos: '#ef4444',
+};
+
+export const FATE_ALIGNMENT_ICONS: Record<FateChoiceAlignment, string> = {
+  light: '☀️',
+  shadow: '🌙',
+  neutral: '⚖️',
+  order: '📜',
+  chaos: '🌀',
+};
+
+export const ENDING_TYPE_NAMES: Record<EndingType, string> = {
+  good: '好结局',
+  neutral: '普通结局',
+  bad: '坏结局',
+  true: '真结局',
+  secret: '隐藏结局',
+  normal: '常规结局',
+};
+
+export const ENDING_TYPE_COLORS: Record<EndingType, string> = {
+  good: '#22c55e',
+  neutral: '#9ca3af',
+  bad: '#ef4444',
+  true: '#fbbf24',
+  secret: '#8b5cf6',
+  normal: '#6b7280',
+};
+
+export const ENDING_TYPE_ICONS: Record<EndingType, string> = {
+  good: '🌟',
+  neutral: '🌤️',
+  bad: '💀',
+  true: '👑',
+  secret: '🔮',
+  normal: '📖',
+};
+
+export const STORYLINE_TYPE_NAMES: Record<StorylineType, string> = {
+  main: '主线剧情',
+  side: '支线剧情',
+  companion: '伙伴剧情',
+  secret: '隐藏剧情',
+  ending: '结局路线',
+};
+
+export const STORYLINE_TYPE_COLORS: Record<StorylineType, string> = {
+  main: '#f59e0b',
+  side: '#3b82f6',
+  companion: '#ec4899',
+  secret: '#8b5cf6',
+  ending: '#10b981',
+};
+
+export const STORYLINE_TYPE_ICONS: Record<StorylineType, string> = {
+  main: '⚔️',
+  side: '📜',
+  companion: '💝',
+  secret: '🔒',
+  ending: '🏆',
+};
+
+export interface PlaythroughRecord {
+  id: number;
+  timestamp: number;
+  playerName: string;
+  playerRace: string;
+  playerClass: string;
+  level: number;
+  endingsUnlocked: string[];
+  storylinesCompleted: string[];
+  consequenceTags: string[];
+  companionAffinities: { companionId: string; value: number }[];
+  alignment: FateAlignment;
+  totalPlayTime: number;
+  totalKills: number;
+  totalGold: number;
+  inheritedBonuses: string[];
+}
+
+export interface FateState {
+  activeStorylineId: string | null;
+  currentNodeId: string | null;
+  storylineProgresses: StorylineProgress[];
+  endingProgresses: EndingProgress[];
+  alignment: FateAlignment;
+  playthroughRecords: PlaythroughRecord[];
+  currentPlaythroughId: number;
+  inheritedBonusIds: string[];
+  totalPlaythroughCount: number;
+  unlockedEndingCount: number;
+  completedStorylineCount: number;
+  activeTab: FateTab;
+}
+
+export type FateTab = 'storylines' | 'endings' | 'alignment' | 'inheritance' | 'records';
+
+export const FATE_TAB_NAMES: Record<FateTab, string> = {
+  storylines: '剧情线',
+  endings: '结局',
+  alignment: '命运轨迹',
+  inheritance: '周目继承',
+  records: '轮回记录',
+};
+
+export const FATE_TAB_ICONS: Record<FateTab, string> = {
+  storylines: '📚',
+  endings: '🏆',
+  alignment: '🌟',
+  inheritance: '🔄',
+  records: '📋',
+};
