@@ -67,6 +67,7 @@ export default function RelicDungeonPanel() {
     viewRelicDungeonReplay,
     closeRelicDungeonReplay,
     stepRelicDungeonReplay,
+    gotoRelicDungeonReplayIndex,
     toggleRelicDungeonReplayPlaying,
     buyRelicDungeonShopItem,
   } = useGameStore();
@@ -906,7 +907,7 @@ export default function RelicDungeonPanel() {
               <button
                 key={ev.id}
                 className={`timeline-dot ${idx === relicDungeon.replayIndex ? 'active' : ''} ${idx < relicDungeon.replayIndex ? 'passed' : ''}`}
-                onClick={() => stepRelicDungeonReplay('first')}
+                onClick={() => gotoRelicDungeonReplayIndex(idx)}
                 title={`步骤 ${idx + 1}: ${ev.description}`}
               >
                 {idx + 1}

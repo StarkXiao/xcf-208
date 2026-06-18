@@ -679,6 +679,7 @@ interface GameState {
   viewRelicDungeonReplay: (runId: string) => void;
   closeRelicDungeonReplay: () => void;
   stepRelicDungeonReplay: (direction: 'prev' | 'next' | 'first' | 'last') => void;
+  gotoRelicDungeonReplayIndex: (index: number) => void;
   toggleRelicDungeonReplayPlaying: () => void;
   generateRelicDungeonShop: () => RelicDungeonShopItem[];
   buyRelicDungeonShopItem: (itemId: string) => boolean;
@@ -7087,7 +7088,7 @@ export const useGameStore = create<GameState>()(
         state.relicDungeon.activeBuffs.forEach(buff => {
           buff.effects.forEach(e => {
             if (e.stat === stat) {
-              if (e.isPercent) percent += e.value;
+              if (e.isPercent) percent += e.value / 100;
               else flat += e.value;
             }
           });
@@ -7553,6 +7554,14 @@ export const useGameStore = create<GameState>()(
         else if (direction === 'last') idx = total - 1;
         else if (direction === 'prev') idx = Math.max(0, idx - 1);
         else idx = Math.min(total - 1, idx + 1);
+        set(s => ({ relicDungeon: { ...s.relicDungeon, replayIndex: idx } }));
+      },
+
+      gotoRelicDungeonReplayIndex: (index) => {
+        const state = get();
+        if (!state.relicDungeon.viewingReplay) return;
+        const total = state.relicDungeon.viewingReplay.replay.length;
+        const idx = Math.max(0, Math.min(total - 1, index));
         set(s => ({ relicDungeon: { ...s.relicDungeon, replayIndex: idx } }));
       },
 
