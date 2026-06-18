@@ -42,9 +42,10 @@ export default function EquipmentPanel() {
   const unequippedItems = equipmentInventory.filter((e) => !e.equippedBy);
   const selectedCompanion = ownedCompanions.find((c) => c.id === selectedCompanionId);
 
-  const renderStatLine = (stat: string, value: number, isPercent: boolean) => {
+  const renderStatLine = (stat: string, value: number | undefined, isPercent: boolean) => {
     const name = AFFIX_STAT_NAMES[stat] || stat;
-    return `${name} +${value}${isPercent ? '%' : ''}`;
+    const v = value || 0;
+    return `${name} +${v}${isPercent ? '%' : ''}`;
   };
 
   const renderEquipmentCard = (eq: Equipment, showActions = true) => {
@@ -77,7 +78,7 @@ export default function EquipmentPanel() {
           ))}
           {eq.affixes.map((affix, i) => (
             <div key={i} className="eq-affix-group">
-              {affix.stats.map((s, j) => (
+              {(affix.stats || []).map((s, j) => (
                 <span key={j} className="eq-stat-line affix">{renderStatLine(s.stat, s.value, s.isPercent)}</span>
               ))}
             </div>
@@ -135,7 +136,7 @@ export default function EquipmentPanel() {
         )}
         {eq.level < 10 && (
           <div className="eq-forge-exp-bar">
-            <div className="eq-forge-exp-fill" style={{ width: `${(eq.forgeExp / eq.forgeExpToNext) * 100}%` }} />
+            <div className="eq-forge-exp-fill" style={{ width: `${(eq.forgeExp / (eq.forgeExpToNext || 1)) * 100}%` }} />
           </div>
         )}
       </div>

@@ -121,10 +121,10 @@ export default function GuildPanel() {
         <div className="guild-exp-bar">
           <div
             className="guild-exp-fill"
-            style={{ width: `${expToNext > 0 ? ((guildExp - levelConfig.expRequired) / expToNext) * 100 : 100}%` }}
+            style={{ width: `${expToNext > 0 ? ((guildExp - (levelConfig?.expRequired || 0)) / expToNext) * 100 : 100}%` }}
           />
           <span className="guild-exp-text">
-            {guildExp - levelConfig.expRequired} / {expToNext || 'MAX'}
+            {guildExp - (levelConfig?.expRequired || 0)} / {expToNext || 'MAX'}
           </span>
         </div>
       </div>

@@ -96,7 +96,7 @@ export interface StarCondition {
 }
 
 export interface StarReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'maxHp' | 'mp' | 'speed' | 'luck' | 'reputation' | 'guildExp' | 'guildContribution' | 'stamina';
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed';
   value: number;
 }
 
@@ -205,7 +205,7 @@ export interface MapArea {
 
 export interface RebirthChallengeTarget {
   id: string;
-  type: 'bossKills' | 'eliteKills' | 'areaClear' | 'totalPower' | 'level' | 'totalKills' | 'chapterClear' | 'chapterStars' | 'bossDefeated';
+  type: 'bossKills' | 'eliteKills' | 'areaClear' | 'totalPower' | 'level' | 'totalKills' | 'chapterClear' | 'commissionsDone' | 'rebirthCount' | 'bossDefeated' | 'chapterStars';
   target: number;
   areaId?: string;
   chapterId?: string;
@@ -416,9 +416,12 @@ export interface EventChoice {
 }
 
 export interface EventEffect {
-  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation' | 'speed' | 'luck' | 'guildExp' | 'guildContribution' | 'stamina';
+  type: 'gold' | 'exp' | 'hp' | 'mp' | 'attack' | 'defense' | 'soulOrbs' | 'reputation' | 'speed' | 'luck' | 'maxHp' | 'guildExp' | 'guildContribution' | 'stamina' | 'material' | 'success_rate' | 'failure_rate';
   value: number;
+  isPercent?: boolean;
+  materialId?: string;
 }
+
 export interface RebirthOption {
   id: string;
   name: string;
@@ -436,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'chapters' | 'companions' | 'events' | 'expedition' | 'talents' | 'guild' | 'equipment' | 'commissions' | 'trade' | 'blackmarket' | 'skilltree';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -591,7 +594,7 @@ export type TalentCategory = 'combat' | 'survival' | 'growth' | 'fortune' | 'cla
 export type TalentRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export interface TalentEffect {
-  type: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs' | 'critRate' | 'critDamage' | 'dodge';
+  type: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs' | 'critRate' | 'critDamage' | 'dodge' | 'skillDamage' | 'companionAttack' | 'companionDefense' | 'companionHp' | 'expBonus' | 'goldBonus';
   value: number;
   isPercent: boolean;
 }
@@ -736,147 +739,8 @@ export interface ClassPassive {
   companionBonus: ClassPassiveCompanionBonus;
 }
 
-export type GuildNodeType = 'start' | 'normal' | 'elite' | 'boss' | 'treasure' | 'shrine' | 'shop' | 'rest';
-
-export interface GuildMapNode {
-  id: string;
-  name: string;
-  type: GuildNodeType;
-  description: string;
-  x: number;
-  y: number;
-  connections: string[];
-  minLevel: number;
-  rewards: StarReward[];
-  enemies?: string[];
-  eventId?: string;
-  icon: string;
-  bgColor: string;
-  staminaCost: number;
-}
-
-export interface GuildMapProgress {
-  nodeId: string;
-  cleared: boolean;
-  bestStars: number;
-  claimed: boolean;
-  firstClearedAt: number | null;
-}
-
-export interface GuildChapter {
-  id: string;
-  name: string;
-  description: string;
-  chapterNumber: number;
-  areaId: string;
-  nodes: GuildMapNode[];
-  startNodeId: string;
-  bossNodeId: string;
-  minLevel: number;
-  bgColor: string;
-  icon: string;
-}
-
-export interface GuildExpeditionState {
-  currentChapterId: string;
-  currentNodeId: string | null;
-  chapterProgress: Record<string, GuildMapProgress[]>;
-  totalStamina: number;
-  currentStamina: number;
-  maxStamina: number;
-  staminaRegenRate: number;
-  lastStaminaRegen: number;
-  guildExp: number;
-  guildLevel: number;
-  guildContribution: number;
-  activeFormation: string[];
-  isInBattle: boolean;
-  currentBattleEnemy: string | null;
-}
-
-export interface GuildLevelConfig {
-  level: number;
-  expRequired: number;
-  maxStaminaBonus: number;
-  staminaRegenBonus: number;
-  attackBonus: number;
-  defenseBonus: number;
-  hpBonus: number;
-  goldBonus: number;
-  expBonus: number;
-  unlockFeature: string | null;
-}
-
-export interface GuildDailyReward {
-  day: number;
-  claimed: boolean;
-  rewards: StarReward[];
-}
-
-export interface GuildTechTree {
-  id: string;
-  name: string;
-  description: string;
-  category: 'combat' | 'economy' | 'support';
-  maxLevel: number;
-  costPerLevel: number;
-  effectType: 'attack' | 'defense' | 'hp' | 'gold' | 'exp' | 'stamina' | 'luck';
-  effectValuePerLevel: number;
-  icon: string;
-  prerequisites: string[];
-}
-
-export interface GuildTechProgress {
-  techId: string;
-  level: number;
-}
-
-export type GuildTab = 'map' | 'formation' | 'tech' | 'daily' | 'info';
-
 export type EquipmentSlotType = 'weapon' | 'helmet' | 'armor' | 'boots' | 'accessory';
 export type EquipmentRarity = 'common' | 'rare' | 'epic' | 'legendary';
-export type AffixType = 'prefix' | 'suffix';
-export type AffixStat = 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'goldBonus' | 'expBonus';
-
-export interface EquipmentAffix {
-  id: string;
-  name: string;
-  type: AffixType;
-  stats: { stat: AffixStat; minValue: number; maxValue: number; isPercent: boolean }[];
-  rarityWeights: Record<EquipmentRarity, number>;
-  slotRestrictions?: EquipmentSlotType[];
-}
-
-export interface EquipmentAffixInstance {
-  affixId: string;
-  name: string;
-  stats: { stat: AffixStat; value: number; isPercent: boolean }[];
-}
-
-export interface Equipment {
-  uid: string;
-  baseId: string;
-  name: string;
-  slot: EquipmentSlotType;
-  rarity: EquipmentRarity;
-  level: number;
-  icon: string;
-  baseStats: { stat: AffixStat; value: number; isPercent: boolean }[];
-  affixes: EquipmentAffixInstance[];
-  equippedBy: string | null;
-  forgeExp: number;
-  forgeExpToNext: number;
-}
-
-export interface EquipmentBase {
-  id: string;
-  name: string;
-  slot: EquipmentSlotType;
-  icon: string;
-  baseStats: { stat: AffixStat; value: number; isPercent: boolean }[];
-  minAreaLevel: number;
-  rarityWeights: Record<EquipmentRarity, number>;
-}
 
 export interface EquipmentRarityConfig {
   rarity: EquipmentRarity;
@@ -888,6 +752,34 @@ export interface EquipmentRarityConfig {
   recycleGoldBase: number;
   recycleGoldPerLevel: number;
   forgeCostMultiplier: number;
+}
+
+export interface EquipmentStat {
+  stat: 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'goldBonus' | 'expBonus';
+  value?: number;
+  minValue?: number;
+  maxValue?: number;
+  isPercent: boolean;
+  stats?: EquipmentStat[];
+}
+
+export interface EquipmentBase {
+  id: string;
+  name: string;
+  slot: EquipmentSlotType;
+  icon: string;
+  baseStats: EquipmentStat[];
+  minAreaLevel: number;
+  rarityWeights: Record<EquipmentRarity, number>;
+}
+
+export interface EquipmentAffix {
+  id: string;
+  name: string;
+  type: 'prefix' | 'suffix';
+  stats: EquipmentStat[];
+  rarityWeights: Record<EquipmentRarity, number>;
+  slotRestrictions?: EquipmentSlotType[];
 }
 
 export interface EquipmentDropConfig {
@@ -908,48 +800,41 @@ export interface ForgeRecipe {
   rerollAffixes: boolean;
 }
 
-export interface EquipmentEquipResult {
-  success: boolean;
-  message: string;
+export interface StoryDialogueChoice {
+  id: string;
+  text: string;
+  nextDialogueId?: string;
+  effects?: EventEffect[];
 }
-
-export type StageType = 'normal' | 'elite' | 'boss' | 'story' | 'treasure' | 'shrine' | 'rest';
 
 export interface StoryDialogue {
   id: string;
   speaker: string;
   speakerAvatar?: string;
   text: string;
-  choices?: {
-    id: string;
-    text: string;
-    nextDialogueId?: string;
-    effects?: EventEffect[];
-  }[];
   nextDialogueId?: string;
+  choices?: StoryDialogueChoice[];
 }
 
-export interface BossMechanic {
-  id: string;
-  name: string;
-  description: string;
-  type: 'phase_transition' | 'enrage' | 'summon' | 'shield' | 'berserk' | 'heal';
-  hpThreshold?: number;
-  attackMultiplier?: number;
-  defenseMultiplier?: number;
-  speedMultiplier?: number;
-  summonMonsterIds?: string[];
-  shieldAmount?: number;
-  healAmount?: number;
-  cooldown?: number;
-  icon: string;
+export interface DialogueState {
+  dialogueId: string;
+  currentIndex: number;
 }
+
+export interface ChapterUnlockCondition {
+  type: 'level' | 'stage' | 'quest' | 'reputation' | 'bossKills';
+  threshold: number;
+  description: string;
+  areaId?: string;
+}
+
+export type ChapterStageType = 'story' | 'normal' | 'elite' | 'boss' | 'treasure' | 'shrine' | 'rest';
 
 export interface ChapterStage {
   id: string;
   name: string;
   description: string;
-  type: StageType;
+  type: ChapterStageType;
   chapterId: string;
   position: { x: number; y: number };
   connections: string[];
@@ -961,115 +846,71 @@ export interface ChapterStage {
   bossMonsterId?: string;
   bossMechanics?: BossMechanic[];
   storyDialogueId?: string;
-  rewards: StarReward[];
-  firstClearRewards?: StarReward[];
+  rewards: EventEffect[];
+  firstClearRewards?: EventEffect[];
   starConditions?: StarCondition[];
   staminaCost: number;
   requiredStageIds?: string[];
-  unlockConditions?: AreaUnlockCondition[];
   icon: string;
   bgColor: string;
+}
+
+export interface BossMechanic {
+  id: string;
+  name: string;
+  description: string;
+  type: 'phase_transition' | 'heal' | 'attack' | 'buff' | 'shield' | 'summon' | 'berserk';
+  hpThreshold?: number;
+  attackMultiplier?: number;
+  defenseMultiplier?: number;
+  speedMultiplier?: number;
+  healAmount?: number;
+  shieldAmount?: number;
+  cooldown?: number;
+  summonMonsterIds?: string[];
+  icon: string;
+  [key: string]: unknown;
 }
 
 export interface Chapter {
   id: string;
   name: string;
-  subtitle: string;
+  subtitle?: string;
   description: string;
   chapterNumber: number;
   areaId: string;
   minLevel: number;
   icon: string;
   bgColor: string;
-  stages: ChapterStage[];
-  startStageId: string;
-  bossStageId: string;
-  unlockConditions: AreaUnlockCondition[];
+  unlockConditions: ChapterUnlockCondition[];
   prologueDialogueId?: string;
   epilogueDialogueId?: string;
-  chapterRewards: StarReward[];
+  startStageId: string;
+  bossStageId: string;
+  chapterRewards?: EventEffect[];
+  stages: ChapterStage[];
 }
-
-export interface StageProgress {
-  stageId: string;
-  chapterId: string;
-  cleared: boolean;
-  firstClearedAt: number | null;
-  bestStars: number;
-  currentStars: number;
-  claimedRewards: boolean;
-  claimedFirstClear: boolean;
-  bestStats: LevelStats;
-  attempts: number;
-}
-
-export interface ChapterProgress {
-  chapterId: string;
-  unlocked: boolean;
-  unlockedAt: number | null;
-  completed: boolean;
-  completedAt: number | null;
-  stageProgresses: StageProgress[];
-  currentStageId: string | null;
-  totalStars: number;
-  maxStars: number;
-  claimedChapterReward: boolean;
-  storyProgress: string[];
-}
-
-export type ChapterTab = 'chapters' | 'stages' | 'bosses';
-
-export interface BattleMonster {
-  id: string;
-  name: string;
-  hp: number;
-  maxHp: number;
-  attack: number;
-  defense: number;
-  speed: number;
-  expReward: number;
-  goldReward: number;
-  color: string;
-  baseAttack: number;
-  baseDefense: number;
-  baseSpeed: number;
-  currentPhase: number;
-  tier: MonsterTier;
-  baseMaxHp: number;
-  baseExpReward: number;
-  baseGoldReward: number;
-}
-
-export interface ActiveStageBattle {
-  chapterId: string;
-  stageId: string;
-  phase: 'preparing' | 'fighting' | 'victory' | 'defeat';
-  currentWave: number;
-  totalWaves: number;
-  currentMonster: BattleMonster | null;
-  battleStats: LevelStats;
-}
-
-export type CommissionRarity = 'common' | 'rare' | 'epic' | 'legendary';
-export type CommissionType = 'gather' | 'combat' | 'explore' | 'escort' | 'hunt' | 'mystery';
-export type CommissionStatus = 'available' | 'in_progress' | 'completed' | 'failed';
 
 export interface RareMaterial {
   id: string;
   name: string;
   description: string;
   icon: string;
-  rarity: CommissionRarity;
+  rarity: TalentRarity;
   sellPrice: number;
   categories: string[];
 }
 
+export type CommissionType = 'gather' | 'combat' | 'explore' | 'escort' | 'hunt' | 'mystery';
+export type CommissionRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
 export interface CommissionReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'material' | 'reputation';
-  materialId?: string;
-  minAmount: number;
-  maxAmount: number;
+  type: 'gold' | 'exp' | 'material' | 'soulOrbs' | 'reputation';
+  minAmount?: number;
+  maxAmount?: number;
+  value?: number;
   chance: number;
+  materialId?: string;
 }
 
 export interface Commission {
@@ -1089,60 +930,22 @@ export interface Commission {
   failureChance: number;
   icon: string;
   bgColor: string;
-  generatedAt: number;
+  generatedAt?: number;
 }
 
-export interface ActiveCommission {
-  commissionId: string;
-  title: string;
-  type: CommissionType;
-  companionIds: string[];
-  startTime: number;
-  durationSeconds: number;
-  currentEvent: CommissionEvent | null;
-  eventLog: string[];
-  rewards: CommissionRewardResult[];
-  status: 'in_progress' | 'event' | 'completed' | 'failed';
-  progress: number;
-  generatedAt: number;
+export interface CommissionEventChoice {
+  id: string;
+  text: string;
+  effects: EventEffect[];
 }
 
 export interface CommissionEvent {
   id: string;
   title: string;
   description: string;
-  type: 'treasure' | 'combat' | 'trap' | 'shrine' | 'merchant' | 'ambush' | 'mystery';
-  choices: CommissionEventChoice[];
+  type: 'treasure' | 'trap' | 'shrine' | 'merchant' | 'ambush' | 'mystery';
   icon: string;
-}
-
-export interface CommissionEventChoice {
-  id: string;
-  text: string;
-  effects: CommissionEventEffect[];
-}
-
-export interface CommissionEventEffect {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'material' | 'hp' | 'success_rate' | 'failure_rate';
-  value: number;
-  materialId?: string;
-  isPercent?: boolean;
-}
-
-export interface CommissionRewardResult {
-  type: string;
-  materialId?: string;
-  amount: number;
-}
-
-export interface InventoryMaterial {
-  materialId: string;
-  count: number;
-}
-
-export interface CommissionDailyRefresh {
-  lastRefreshTime: number;
-  commissions: Commission[];
+  choices: CommissionEventChoice[];
 }
 
 export type TradeItemRarity = 'common' | 'rare' | 'epic' | 'legendary';
@@ -1152,40 +955,21 @@ export interface TradeItem {
   id: string;
   name: string;
   description: string;
+  icon: string;
   category: TradeItemCategory;
   rarity: TradeItemRarity;
   basePrice: number;
-  currency: 'gold' | 'soulOrbs';
-  icon: string;
-  minPlayerLevel: number;
-  maxStockPerRefresh: number;
-  weight: number;
+  minStock?: number;
+  maxStock?: number;
+  maxStockPerRefresh?: number;
+  weight?: number;
   areaId?: string;
-  minReputationLevel?: number;
-  isBlackMarketOnly?: boolean;
-  requiredTags?: string[];
-  effect?: {
-    type: 'hp' | 'mp' | 'attack' | 'defense' | 'speed' | 'luck' | 'exp' | 'gold' | 'soulOrbs';
-    value: number;
-  };
+  minPlayerLevel?: number;
+  effects?: EventEffect[];
+  effect?: EventEffect;
   materialId?: string;
-  equipmentBaseId?: string;
-  companionId?: string;
-}
-
-export interface TradeInventoryItem {
-  itemId: string;
-  currentStock: number;
-  currentPrice: number;
-  priceModifier: number;
-  lastPriceChange: number;
-}
-
-export interface TradeInventory {
-  areaId: string;
-  items: TradeInventoryItem[];
-  lastRefreshTime: number;
-  refreshCount: number;
+  currency?: 'gold' | 'soulOrbs';
+  isBlackMarketOnly?: boolean;
 }
 
 export interface PriceFluctuationConfig {
@@ -1197,55 +981,18 @@ export interface PriceFluctuationConfig {
   areaDemandMultiplier: number;
 }
 
-export type TradeEventType =
-  | 'merchant_arrival'
-  | 'caravan_attack'
-  | 'festival'
-  | 'drought'
-  | 'war'
-  | 'plague'
-  | 'discovery'
-  | 'bubble'
-  | 'crash';
-
 export interface TradeEvent {
   id: string;
-  type: TradeEventType;
+  type: string;
   title: string;
   description: string;
   durationSeconds: number;
   priceModifiers: Record<string, number>;
-  categoryModifiers: Record<TradeItemCategory, number>;
-  rarityModifiers: Record<TradeItemRarity, number>;
+  categoryModifiers: Partial<Record<TradeItemCategory, number>>;
+  rarityModifiers: Partial<Record<TradeItemRarity, number>>;
   icon: string;
   isPositive: boolean;
 }
-
-export interface ActiveTradeEvent {
-  eventId: string;
-  startTime: number;
-  endTime: number;
-}
-
-export interface TradeRecord {
-  id: number;
-  itemId: string;
-  itemName: string;
-  type: 'buy' | 'sell';
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  currency: 'gold' | 'soulOrbs';
-  timestamp: number;
-  areaId: string;
-}
-
-export interface PlayerTradeInventory {
-  materials: Record<string, number>;
-  consumables: Record<string, number>;
-}
-
-export type TradeTab = 'market' | 'blackmarket' | 'inventory' | 'history';
 
 export interface BlackMarketConfig {
   unlockLevel: number;
@@ -1258,25 +1005,88 @@ export interface BlackMarketConfig {
   riskEventChance: number;
 }
 
-export type SkillNodeEffectType = 'attack' | 'defense' | 'hp' | 'mp' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'exp' | 'gold' | 'soulOrbs' | 'skillDamage' | 'companionAttack' | 'companionDefense' | 'companionHp';
-
-export interface SkillNodeEffect {
-  type: SkillNodeEffectType;
-  value: number;
-  isPercent: boolean;
+export interface GuildLevelConfig {
+  level: number;
+  expRequired: number;
+  maxStaminaBonus: number;
+  staminaRegenBonus: number;
+  attackBonus: number;
+  defenseBonus: number;
+  hpBonus: number;
+  goldBonus: number;
+  expBonus: number;
+  unlockFeature: string | null;
 }
 
-export type SkillNodeRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type GuildNodeType = 'start' | 'normal' | 'elite' | 'boss' | 'treasure' | 'shrine' | 'shop' | 'rest';
+
+export interface GuildNode {
+  id: string;
+  name: string;
+  type: GuildNodeType;
+  description: string;
+  x: number;
+  y: number;
+  connections: string[];
+  minLevel: number;
+  rewards: EventEffect[];
+  icon: string;
+  bgColor: string;
+  staminaCost: number;
+}
+
+export interface GuildChapter {
+  id: string;
+  name: string;
+  description: string;
+  chapterNumber: number;
+  areaId: string;
+  nodes: GuildNode[];
+  startNodeId: string;
+  bossNodeId: string;
+  minLevel: number;
+  bgColor: string;
+  icon: string;
+}
+
+export type GuildTechCategory = 'combat' | 'economy' | 'support';
+
+export interface GuildTechTree {
+  id: string;
+  name: string;
+  description: string;
+  category: GuildTechCategory;
+  maxLevel: number;
+  costPerLevel: number;
+  effectType: 'attack' | 'defense' | 'hp' | 'gold' | 'exp' | 'stamina' | 'luck';
+  effectValuePerLevel: number;
+  icon: string;
+  prerequisites: string[];
+}
+
+export interface GuildDailyReward {
+  day: number;
+  rewards: EventEffect[];
+  claimed?: boolean;
+}
+
+export interface SkillTreeBranch {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+}
 
 export interface SkillTreeNode {
   id: string;
   name: string;
   description: string;
-  branch: SkillTreeBranchId;
-  rarity: SkillNodeRarity;
+  branch: string;
+  rarity: TalentRarity;
   maxLevel: number;
   pointCostPerLevel: number;
-  effects: SkillNodeEffect[];
+  effects: TalentEffect[];
   prerequisiteIds?: string[];
   classRestriction?: string[];
   minPlayerLevel?: number;
@@ -1285,34 +1095,17 @@ export interface SkillTreeNode {
   col: number;
 }
 
-export type SkillTreeBranchId = 'offense' | 'defense' | 'utility' | 'special';
-
-export interface SkillTreeBranch {
-  id: SkillTreeBranchId;
-  name: string;
-  description: string;
-  icon: string;
-  color: string;
-}
-
-export interface SkillTreeAllocation {
-  nodeId: string;
-  level: number;
-}
-
-export type ProfessionSpecId = 'berserker' | 'guardian' | 'archmage' | 'shadow_dancer' | 'inquisitor' | 'ranger_lord';
-
 export interface ProfessionSpec {
-  id: ProfessionSpecId;
+  id: string;
   name: string;
   description: string;
   icon: string;
   baseClass: string;
   minLevel: number;
   minRebirthCount: number;
-  requiredBranchId: SkillTreeBranchId;
+  requiredBranchId: string;
   requiredBranchPoints: number;
-  passiveEffects: SkillNodeEffect[];
+  passiveEffects: TalentEffect[];
   combatBonus: {
     damageMultiplier: number;
     defenseMultiplier: number;
@@ -1321,39 +1114,107 @@ export interface ProfessionSpec {
   rebirthInheritRate: number;
   companionSynergy: {
     preferredClasses: string[];
-    bonusPerCompanion: SkillNodeEffect[];
+    bonusPerCompanion: TalentEffect[];
     description: string;
   };
   color: string;
 }
 
-export interface ActiveProfessionSpec {
-  specId: ProfessionSpecId;
-  activatedAt: number;
-}
-
 export interface SkillTreeCompanionSynergy {
   companionClass: string;
-  bonusPerStar: SkillNodeEffect[];
+  bonusPerStar: TalentEffect[];
   description: string;
 }
 
-export const SKILL_NODE_RARITY_COLORS: Record<SkillNodeRarity, string> = {
+export type SkillTreeBranchId = 'offense' | 'defense' | 'utility' | 'special' | string;
+export type SkillNodeEffect = TalentEffect;
+
+export const SKILL_NODE_RARITY_COLORS: Record<TalentRarity, string> = {
   common: '#9ca3af',
   rare: '#3b82f6',
-  epic: '#a855f7',
+  epic: '#8b5cf6',
   legendary: '#f59e0b',
 };
 
-export const SKILL_NODE_RARITY_NAMES: Record<SkillNodeRarity, string> = {
+export const SKILL_NODE_RARITY_NAMES: Record<TalentRarity, string> = {
   common: '普通',
   rare: '稀有',
   epic: '史诗',
   legendary: '传说',
 };
 
-declare module './types' {
-  interface GameState {
-    activeStageBattle?: ActiveStageBattle | null;
-  }
+export interface Equipment {
+  uid: string;
+  baseId: string;
+  name: string;
+  slot: EquipmentSlotType;
+  rarity: EquipmentRarity;
+  level: number;
+  baseStats: EquipmentStat[];
+  affixes: EquipmentStat[];
+  icon: string;
+  equippedBy: string | null;
+  forgeExp: number;
+  forgeExpToNext?: number;
+  [key: string]: unknown;
+}
+
+export type StageType = ChapterStageType;
+
+export interface ActiveCommission {
+  commissionId: string;
+  title: string;
+  type: CommissionType;
+  rarity: CommissionRarity;
+  durationSeconds: number;
+  progressSeconds: number;
+  selectedCompanionIds: string[];
+  companionIds: string[];
+  eventLog: string[];
+  currentEvent: CommissionEvent | null;
+  status: 'in_progress' | 'event_pending' | 'completed' | 'failed' | 'event';
+  startedAt: number;
+  startTime: number;
+  progress: number;
+}
+
+export interface CommissionRewardResult {
+  type: 'gold' | 'exp' | 'material' | 'soulOrbs' | 'reputation';
+  value: number;
+  amount: number;
+  materialId?: string;
+}
+
+export type GuildTab = 'chapter' | 'tech' | 'daily' | 'formation' | 'map';
+export type GuildMapNode = GuildNode;
+
+export interface TradeRecord {
+  id: string;
+  type: 'buy' | 'sell';
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  price: number;
+  totalPrice: number;
+  currency: 'gold' | 'soulOrbs';
+  areaId: string;
+  timestamp: number;
+}
+
+export interface TradeInventoryItem {
+  itemId: string;
+  currentStock: number;
+  averageCost: number;
+  currentPrice: number;
+  priceModifier: number;
+}
+
+export interface TradeInventory {
+  gold: number;
+  items: TradeInventoryItem[];
+}
+
+export interface MaterialInventoryItem {
+  materialId: string;
+  count: number;
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGameStore } from '../game/store';
 import { SKILL_TREE_BRANCHES, SKILL_TREE_NODES, PROFESSION_SPECS, SKILL_TREE_COMPANION_SYNERGIES } from '../game/data';
 import { SKILL_NODE_RARITY_COLORS, SKILL_NODE_RARITY_NAMES } from '../game/types';
-import type { SkillTreeNode, SkillTreeBranchId, SkillNodeEffect } from '../game/types';
+import type { SkillTreeNode, SkillTreeBranchId, SkillNodeEffect, ProfessionSpec } from '../game/types';
 
 function getEffectText(effect: SkillNodeEffect, level: number): string {
   const value = effect.value * level;
