@@ -739,7 +739,8 @@ interface GameState {
   getGarrisonedCompanions: (strongholdId: string) => GarrisonedCompanion[];
   getStrongholdPower: (strongholdId: string) => number;
   triggerFactionEvent: () => void;
-  handleFactionEventChoice: (choiceId: string) => void;
+  handleFactionEventChoice: (choiceId: string) => boolean;
+  canChooseFactionEventOption: (choiceId: string) => { canChoose: boolean; reason?: string };
   closeFactionEvent: () => void;
   performFactionSettlement: () => FactionSettlement | null;
   canSettle: () => boolean;
@@ -749,6 +750,9 @@ interface GameState {
   buyFactionShopItem: (itemId: string) => boolean;
   setFactionTab: (tab: FactionTab) => void;
   getFactionBonusStats: () => { stat: string; value: number }[];
+  getFactionBonus: (stat: 'attack' | 'defense' | 'maxHp' | 'speed' | 'luck' | 'hp' | 'maxMp' | 'mp') => number;
+  getFactionReputationMultiplier: () => number;
+  getCompanionFactionBonus: (companion: Companion) => { attackMultiplier: number; defenseMultiplier: number };
 }
 
 let logIdCounter = 0;
@@ -2007,8 +2011,9 @@ export const useGameStore = create<GameState>()(
         );
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('attack');
+        const factionBonus = get().getFactionBonus('attack');
         const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
-        return Math.floor((playerAttack + companionAttack + bondBonus.attack + mapModifierBonus) * affinityMultiplier);
+        return Math.floor((playerAttack + companionAttack + bondBonus.attack + mapModifierBonus + factionBonus) * affinityMultiplier);
       },
 
       getTotalDefense: () => {
@@ -2021,8 +2026,9 @@ export const useGameStore = create<GameState>()(
         );
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('defense');
+        const factionBonus = get().getFactionBonus('defense');
         const affinityMultiplier = get().getCompanionAffinityBonusMultiplier();
-        return Math.floor((playerDefense + companionDefense + bondBonus.defense + mapModifierBonus) * affinityMultiplier);
+        return Math.floor((playerDefense + companionDefense + bondBonus.defense + mapModifierBonus + factionBonus) * affinityMultiplier);
       },
 
       getMapModifierTotalBonus: (stat) => {
@@ -3011,10 +3017,11 @@ export const useGameStore = create<GameState>()(
         const baseSpeed = state.player.stats.speed;
         const bondBonus = get().getBondBonus();
         const mapModifierBonus = get().getMapModifierTotalBonus('speed');
+        const factionBonus = get().getFactionBonus('speed');
         const rebirthBonus = state.rebirthBonuses['speed_boost'] || 0;
         const talentPct = get().getTotalTalentBonus('speed').percent;
         const talentFlat = get().getTotalTalentBonus('speed').flat;
-        return Math.floor((baseSpeed + bondBonus.speed + mapModifierBonus + talentFlat) * (1 + rebirthBonus + talentPct));
+        return Math.floor((baseSpeed + bondBonus.speed + mapModifierBonus + factionBonus + talentFlat) * (1 + rebirthBonus + talentPct));
       },
 
       useMp: (amount) => {
@@ -8293,13 +8300,15 @@ export const useGameStore = create<GameState>()(
 
         const playerPower = get().getTotalPower();
         const strongholdPower = stronghold.difficulty * 500;
+        const repMultiplier = get().getFactionReputationMultiplier();
 
         if (playerPower < strongholdPower * 0.8) {
           get().addBattleLog(`战力不足，无法攻占${stronghold.name}`, 'damage');
           return false;
         }
 
-        const successChance = Math.min(0.9, playerPower / (strongholdPower * 2));
+        const baseChance = playerPower / (strongholdPower * 2);
+        const successChance = Math.min(0.95, baseChance * repMultiplier);
         const success = Math.random() < successChance;
 
         if (success) {
@@ -8326,8 +8335,9 @@ export const useGameStore = create<GameState>()(
             },
           }));
 
-          get().addFactionReputation(state.faction.playerFaction, 50);
-          get().addBattleLog(`成功攻占${stronghold.name}！获得50点声望`, 'event');
+          const reputationReward = Math.floor(50 * repMultiplier);
+          get().addFactionReputation(state.faction.playerFaction, reputationReward);
+          get().addBattleLog(`成功攻占${stronghold.name}！获得${reputationReward}点声望`, 'event');
           return true;
         } else {
           const logId = Date.now() - 1;
@@ -8417,10 +8427,14 @@ export const useGameStore = create<GameState>()(
         garrisons.forEach((g) => {
           const companion = state.ownedCompanions.find((c) => c.id === g.companionId);
           if (companion) {
-            power += state.getCompanionEffectiveAttack(companion) + state.getCompanionEffectiveDefense(companion);
+            const factionBonus = get().getCompanionFactionBonus(companion);
+            const atk = state.getCompanionEffectiveAttack(companion) * factionBonus.attackMultiplier;
+            const def = state.getCompanionEffectiveDefense(companion) * factionBonus.defenseMultiplier;
+            power += atk + def;
           }
         });
-        return power;
+        const repMultiplier = get().getFactionReputationMultiplier();
+        return Math.floor(power * repMultiplier);
       },
 
       triggerFactionEvent: () => {
@@ -8447,10 +8461,18 @@ export const useGameStore = create<GameState>()(
       handleFactionEventChoice: (choiceId) => {
         const state = get();
         const event = state.faction.currentFactionEvent;
-        if (!event) return;
+        if (!event) return false;
 
         const choice = event.choices.find((c) => c.id === choiceId);
-        if (!choice) return;
+        if (!choice) return false;
+
+        const canChoose = get().canChooseFactionEventOption(choiceId);
+        if (!canChoose.canChoose) {
+          if (canChoose.reason) {
+            get().addBattleLog(canChoose.reason, 'damage');
+          }
+          return false;
+        }
 
         if (choice.reputationChanges) {
           if (choice.reputationChanges.light) {
@@ -8490,6 +8512,32 @@ export const useGameStore = create<GameState>()(
         }));
 
         get().addBattleLog(`${event.title}: ${choice.text}`, 'event');
+        return true;
+      },
+
+      canChooseFactionEventOption: (choiceId) => {
+        const state = get();
+        const event = state.faction.currentFactionEvent;
+        if (!event) return { canChoose: false, reason: '没有进行中的事件' };
+
+        const choice = event.choices.find((c) => c.id === choiceId);
+        if (!choice) return { canChoose: false, reason: '选项不存在' };
+
+        if (choice.requiredReputation) {
+          const rep = get().getFactionReputation(choice.requiredReputation.faction);
+          if (rep.level < choice.requiredReputation.minLevel) {
+            const factionName = choice.requiredReputation.faction === 'light' ? '光明联盟' : '暗影部落';
+            const reqLevelName = FACTION_REPUTATION_LEVELS.find(
+              (l) => l.level === choice.requiredReputation!.minLevel
+            )?.name || `等级${choice.requiredReputation.minLevel}`;
+            return {
+              canChoose: false,
+              reason: `需要${factionName}声望达到${reqLevelName}（当前：${rep.title}）`,
+            };
+          }
+        }
+
+        return { canChoose: true };
       },
 
       closeFactionEvent: () => {
@@ -8521,15 +8569,16 @@ export const useGameStore = create<GameState>()(
         let totalExp = 0;
         let totalReputation = 0;
         const breakdown: FactionIncomeBreakdown[] = [];
+        const repMultiplier = get().getFactionReputationMultiplier();
 
         controlledStrongholds.forEach((sh) => {
           const garrisonPower = get().getStrongholdPower(sh.id);
           const efficiencyBonus = 1 + garrisonPower / 1000;
 
-          const goldReward = Math.floor(sh.baseIncome.gold * efficiencyBonus);
-          const expReward = Math.floor(sh.baseIncome.exp * efficiencyBonus);
-          const soulOrbsReward = Math.floor(sh.baseIncome.soulOrbs * efficiencyBonus);
-          const repReward = Math.floor(sh.baseIncome.reputation * efficiencyBonus);
+          const goldReward = Math.floor(sh.baseIncome.gold * efficiencyBonus * repMultiplier);
+          const expReward = Math.floor(sh.baseIncome.exp * efficiencyBonus * repMultiplier);
+          const soulOrbsReward = Math.floor(sh.baseIncome.soulOrbs * efficiencyBonus * repMultiplier);
+          const repReward = Math.floor(sh.baseIncome.reputation * efficiencyBonus * repMultiplier);
 
           totalGold += goldReward;
           totalSoulOrbs += soulOrbsReward;
@@ -8666,11 +8715,45 @@ export const useGameStore = create<GameState>()(
         const isPreferredClass = faction.preferredClasses.includes(state.player.class);
 
         const multiplier = (isPreferredRace ? 1.5 : 1) * (isPreferredClass ? 1.5 : 1);
+        const repMultiplier = get().getFactionReputationMultiplier();
 
         return faction.bonusStats.map((bs) => ({
           stat: bs.stat,
-          value: Math.floor(bs.value * multiplier),
+          value: Math.floor(bs.value * multiplier * repMultiplier),
         }));
+      },
+
+      getFactionBonus: (stat) => {
+        const bonusStats = get().getFactionBonusStats();
+        const found = bonusStats.find((bs) => bs.stat === stat);
+        return found ? found.value : 0;
+      },
+
+      getFactionReputationMultiplier: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return 1;
+        const rep = get().getFactionReputation(state.faction.playerFaction);
+        const level = rep.level;
+        return 1 + level * 0.1;
+      },
+
+      getCompanionFactionBonus: (companion) => {
+        const faction = get().getPlayerFaction();
+        if (!faction) return { attackMultiplier: 1, defenseMultiplier: 1 };
+
+        let attackMultiplier = 1;
+        let defenseMultiplier = 1;
+
+        if (faction.preferredRaces.includes(companion.race)) {
+          attackMultiplier *= 1.2;
+          defenseMultiplier *= 1.2;
+        }
+        if (faction.preferredClasses.includes(companion.class)) {
+          attackMultiplier *= 1.2;
+          defenseMultiplier *= 1.2;
+        }
+
+        return { attackMultiplier, defenseMultiplier };
       },
     }),
     {

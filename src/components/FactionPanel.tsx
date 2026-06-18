@@ -51,6 +51,7 @@ export default function FactionPanel() {
     getStrongholdPower,
     triggerFactionEvent,
     handleFactionEventChoice,
+    canChooseFactionEventOption,
     closeFactionEvent,
     performFactionSettlement,
     canSettle,
@@ -538,29 +539,41 @@ export default function FactionPanel() {
             </div>
             <p className="event-description">{currentEvent.description}</p>
             <div className="event-choices">
-              {currentEvent.choices.map((choice) => (
-                <button
-                  key={choice.id}
-                  className="event-choice-btn"
-                  onClick={() => handleFactionEventChoice(choice.id)}
-                >
-                  <span className="choice-text">{choice.text}</span>
-                  {choice.reputationChanges && (
-                    <div className="choice-effects">
-                      {choice.reputationChanges.light !== undefined && (
-                        <span className={`effect-rep ${choice.reputationChanges.light > 0 ? 'positive' : 'negative'}`}>
-                          光明 {choice.reputationChanges.light > 0 ? '+' : ''}{choice.reputationChanges.light}
-                        </span>
-                      )}
-                      {choice.reputationChanges.shadow !== undefined && (
-                        <span className={`effect-rep ${choice.reputationChanges.shadow > 0 ? 'positive' : 'negative'}`}>
-                          暗影 {choice.reputationChanges.shadow > 0 ? '+' : ''}{choice.reputationChanges.shadow}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </button>
-              ))}
+              {currentEvent.choices.map((choice) => {
+                const choiceCheck = canChooseFactionEventOption(choice.id);
+                return (
+                  <button
+                    key={choice.id}
+                    className={`event-choice-btn ${!choiceCheck.canChoose ? 'disabled' : ''}`}
+                    disabled={!choiceCheck.canChoose}
+                    onClick={() => handleFactionEventChoice(choice.id)}
+                  >
+                    <span className="choice-text">{choice.text}</span>
+                    {choice.requiredReputation && (
+                      <div className="choice-requirement">
+                        需要 {choice.requiredReputation.faction === 'light' ? '光明联盟' : '暗影部落'} 声望等级 {choice.requiredReputation.minLevel}+
+                      </div>
+                    )}
+                    {!choiceCheck.canChoose && choiceCheck.reason && (
+                      <div className="choice-disabled-reason">{choiceCheck.reason}</div>
+                    )}
+                    {choice.reputationChanges && (
+                      <div className="choice-effects">
+                        {choice.reputationChanges.light !== undefined && (
+                          <span className={`effect-rep ${choice.reputationChanges.light > 0 ? 'positive' : 'negative'}`}>
+                            光明 {choice.reputationChanges.light > 0 ? '+' : ''}{choice.reputationChanges.light}
+                          </span>
+                        )}
+                        {choice.reputationChanges.shadow !== undefined && (
+                          <span className={`effect-rep ${choice.reputationChanges.shadow > 0 ? 'positive' : 'negative'}`}>
+                            暗影 {choice.reputationChanges.shadow > 0 ? '+' : ''}{choice.reputationChanges.shadow}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <button className="close-event-btn" onClick={closeFactionEvent}>
               忽略事件
