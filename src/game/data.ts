@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement, RelicDungeonBuff, RelicDungeonBoss, RelicDungeonDifficulty, SeasonChallengeSeason, SeasonChallengeLeaderboardEntry } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation, AlchemyRecipe, Potion, AlchemyLevelConfig, Achievement, RelicDungeonBuff, RelicDungeonBoss, RelicDungeonDifficulty, SeasonChallengeSeason, SeasonChallengeLeaderboardEntry, Faction, Stronghold, FactionEvent, FactionState } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -8536,3 +8536,682 @@ export const SEASON_CHALLENGE_SIMULATED_LEADERBOARD: SeasonChallengeLeaderboardE
   { rank: 14, name: '荒野猎人', score: 480, title: '精英挑战者', avatarColor: '#2dd4bf' },
   { rank: 15, name: '岩石守卫', score: 350, title: '精英挑战者', avatarColor: '#4ade80' },
 ];
+
+export const FACTIONS: Faction[] = [
+  {
+    id: 'light',
+    name: '光明联盟',
+    description: '由人类、精灵和矮人组成的正义联盟，致力于守护世界的和平与秩序。',
+    icon: '⚔️',
+    color: '#fbbf24',
+    bgColor: '#1e3a5f',
+    preferredRaces: ['人类', '精灵', '矮人'],
+    preferredClasses: ['骑士', '牧师', '战士'],
+    bonusStats: [
+      { stat: 'defense', value: 5 },
+      { stat: 'maxHp', value: 20 },
+    ],
+    lore: '光明联盟历史悠久，从远古时代就开始守护这片大陆免受黑暗势力的侵袭。联盟的成员以荣誉和正义为信条，相信团结的力量能够战胜一切邪恶。',
+  },
+  {
+    id: 'shadow',
+    name: '暗影部落',
+    description: '由魔族、兽人和龙族组成的强大部落，追求力量与自由，蔑视陈规旧矩。',
+    icon: '🌑',
+    color: '#a78bfa',
+    bgColor: '#2d1b4e',
+    preferredRaces: ['魔族', '兽人', '龙族'],
+    preferredClasses: ['法师', '盗贼', '弓箭手'],
+    bonusStats: [
+      { stat: 'attack', value: 5 },
+      { stat: 'speed', value: 3 },
+    ],
+    lore: '暗影部落在百年前的大战中崛起，他们相信力量才是唯一的真理。部落成员崇尚自由，不受世俗规则的束缚，但在危机时刻，他们也会展现出惊人的团结。',
+  },
+];
+
+export const STRONGHOLDS: Omit<Stronghold, 'controlFaction'>[] = [
+  {
+    id: 'forest_outpost',
+    name: '森林哨站',
+    type: 'tower',
+    description: '位于森林边缘的前哨站，是进入森林的第一道防线。',
+    icon: '🗼',
+    areaId: 'forest',
+    position: { x: 30, y: 50 },
+    difficulty: 1,
+    maxGarrison: 2,
+    baseIncome: {
+      gold: 50,
+      exp: 30,
+      soulOrbs: 0,
+      reputation: 10,
+    },
+    bonusEffect: {
+      type: 'expBonus',
+      value: 0.05,
+      isPercent: true,
+      targetAreas: ['forest'],
+    },
+    unlockLevel: 5,
+    captureCost: 200,
+  },
+  {
+    id: 'forest_mine',
+    name: '林间矿场',
+    type: 'mine',
+    description: '森林中的小型矿场，出产各种珍贵矿石。',
+    icon: '⛏️',
+    areaId: 'forest',
+    position: { x: 70, y: 30 },
+    difficulty: 2,
+    maxGarrison: 2,
+    baseIncome: {
+      gold: 100,
+      exp: 20,
+      soulOrbs: 0,
+      reputation: 15,
+    },
+    bonusEffect: {
+      type: 'goldBonus',
+      value: 0.1,
+      isPercent: true,
+      targetAreas: ['forest'],
+    },
+    unlockLevel: 8,
+    captureCost: 500,
+  },
+  {
+    id: 'cave_entrance_fort',
+    name: '洞穴入口要塞',
+    type: 'fortress',
+    description: '守卫着洞穴入口的重要要塞，战略地位极高。',
+    icon: '🏰',
+    areaId: 'cave',
+    position: { x: 20, y: 60 },
+    difficulty: 3,
+    maxGarrison: 3,
+    baseIncome: {
+      gold: 150,
+      exp: 80,
+      soulOrbs: 1,
+      reputation: 25,
+    },
+    bonusEffect: {
+      type: 'defense',
+      value: 5,
+      isPercent: false,
+      targetAreas: ['cave'],
+    },
+    unlockLevel: 15,
+    captureCost: 1000,
+  },
+  {
+    id: 'cave_deep_shrine',
+    name: '深渊神殿',
+    type: 'shrine',
+    description: '洞穴深处的神秘神殿，蕴含着古老的力量。',
+    icon: '⛩️',
+    areaId: 'cave',
+    position: { x: 80, y: 40 },
+    difficulty: 4,
+    maxGarrison: 2,
+    baseIncome: {
+      gold: 80,
+      exp: 120,
+      soulOrbs: 2,
+      reputation: 30,
+    },
+    bonusEffect: {
+      type: 'soulOrbBonus',
+      value: 0.15,
+      isPercent: true,
+      targetAreas: ['cave'],
+    },
+    unlockLevel: 20,
+    captureCost: 1500,
+  },
+  {
+    id: 'ruins_market',
+    name: '遗迹市集',
+    type: 'market',
+    description: '在遗迹废墟上建立的贸易中心，各种珍稀物品在此交易。',
+    icon: '🏪',
+    areaId: 'ruins',
+    position: { x: 40, y: 70 },
+    difficulty: 5,
+    maxGarrison: 3,
+    baseIncome: {
+      gold: 300,
+      exp: 100,
+      soulOrbs: 1,
+      reputation: 40,
+    },
+    bonusEffect: {
+      type: 'goldBonus',
+      value: 0.15,
+      isPercent: true,
+      targetAreas: ['ruins'],
+    },
+    unlockLevel: 30,
+    captureCost: 3000,
+  },
+  {
+    id: 'ruins_guardian_tower',
+    name: '守护者之塔',
+    type: 'tower',
+    description: '远古守护者建造的高塔，至今仍散发着神秘的能量。',
+    icon: '🗼',
+    areaId: 'ruins',
+    position: { x: 60, y: 30 },
+    difficulty: 6,
+    maxGarrison: 4,
+    baseIncome: {
+      gold: 200,
+      exp: 200,
+      soulOrbs: 3,
+      reputation: 50,
+    },
+    bonusEffect: {
+      type: 'attack',
+      value: 8,
+      isPercent: false,
+      targetAreas: ['ruins'],
+    },
+    unlockLevel: 35,
+    captureCost: 5000,
+  },
+  {
+    id: 'volcano_forge',
+    name: '熔岩熔炉',
+    type: 'fortress',
+    description: '建造在火山边缘的巨大熔炉，能锻造出神兵利器。',
+    icon: '🏰',
+    areaId: 'volcano',
+    position: { x: 25, y: 50 },
+    difficulty: 8,
+    maxGarrison: 5,
+    baseIncome: {
+      gold: 500,
+      exp: 300,
+      soulOrbs: 5,
+      reputation: 80,
+    },
+    bonusEffect: {
+      type: 'attack',
+      value: 15,
+      isPercent: false,
+      targetAreas: ['volcano'],
+    },
+    unlockLevel: 55,
+    captureCost: 10000,
+  },
+  {
+    id: 'volcano_dragon_nest',
+    name: '龙巢圣殿',
+    type: 'shrine',
+    description: '传说中龙族栖息的神圣之地，蕴含着龙族的力量。',
+    icon: '⛩️',
+    areaId: 'volcano',
+    position: { x: 75, y: 45 },
+    difficulty: 10,
+    maxGarrison: 6,
+    baseIncome: {
+      gold: 400,
+      exp: 500,
+      soulOrbs: 10,
+      reputation: 120,
+    },
+    bonusEffect: {
+      type: 'soulOrbBonus',
+      value: 0.25,
+      isPercent: true,
+      targetAreas: ['volcano'],
+    },
+    unlockLevel: 65,
+    captureCost: 20000,
+  },
+];
+
+export const FACTION_EVENTS: FactionEvent[] = [
+  {
+    id: 'faction_skirmish_forest',
+    title: '森林冲突',
+    description: '光明联盟和暗影部落在森林边缘发生了小规模冲突，你碰巧遇到了这场战斗...',
+    areaId: 'forest',
+    minPlayerLevel: 5,
+    baseWeight: 0.8,
+    icon: '⚔️',
+    choices: [
+      {
+        id: 'help_light',
+        text: '帮助光明联盟',
+        type: 'support_light',
+        effects: [
+          { type: 'gold', value: 100 },
+          { type: 'exp', value: 80 },
+          { type: 'hp', value: -30 },
+        ],
+        reputationChanges: {
+          light: 30,
+          shadow: -20,
+        },
+        consequences: {
+          tags: ['light_supporter'],
+          eventWeights: [
+            { eventId: 'faction_skirmish_forest', delta: 0.2, reason: '你在光明联盟中声名鹊起' },
+          ],
+        },
+      },
+      {
+        id: 'help_shadow',
+        text: '帮助暗影部落',
+        type: 'support_shadow',
+        effects: [
+          { type: 'gold', value: 120 },
+          { type: 'exp', value: 70 },
+          { type: 'hp', value: -40 },
+        ],
+        reputationChanges: {
+          light: -20,
+          shadow: 35,
+        },
+        consequences: {
+          tags: ['shadow_supporter'],
+          eventWeights: [
+            { eventId: 'faction_skirmish_forest', delta: 0.2, reason: '你在暗影部落中崭露头角' },
+          ],
+        },
+      },
+      {
+        id: 'stay_neutral',
+        text: '保持中立，坐山观虎斗',
+        type: 'neutral',
+        effects: [
+          { type: 'exp', value: 30 },
+        ],
+        reputationChanges: {
+          light: -5,
+          shadow: -5,
+        },
+        consequences: {
+          tags: ['neutral_observer'],
+        },
+      },
+      {
+        id: 'loot_both',
+        text: '趁机掠夺双方',
+        type: 'exploit',
+        effects: [
+          { type: 'gold', value: 200 },
+          { type: 'soulOrbs', value: 1 },
+          { type: 'hp', value: -60 },
+        ],
+        reputationChanges: {
+          light: -40,
+          shadow: -40,
+        },
+        consequences: {
+          tags: ['opportunist'],
+          eventWeights: [
+            { eventId: 'faction_ambush', delta: 0.3, reason: '双方都想找你报仇' },
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'faction_merchant_caravan',
+    title: '商队遇袭',
+    description: '一支载满货物的商队遭到了怪物的袭击，商队护卫正在求援...',
+    minPlayerLevel: 10,
+    baseWeight: 0.6,
+    icon: '🐪',
+    choices: [
+      {
+        id: 'protect_light_caravan',
+        text: '这是光明联盟的商队，出手相助',
+        type: 'support_light',
+        effects: [
+          { type: 'gold', value: 150 },
+          { type: 'reputation', value: 20 },
+        ],
+        reputationChanges: {
+          light: 40,
+        },
+        consequences: {
+          tags: ['light_merchant_friend'],
+        },
+      },
+      {
+        id: 'protect_shadow_caravan',
+        text: '这是暗影部落的商队，出手相助',
+        type: 'support_shadow',
+        effects: [
+          { type: 'gold', value: 180 },
+          { type: 'soulOrbs', value: 1 },
+        ],
+        reputationChanges: {
+          shadow: 45,
+        },
+        consequences: {
+          tags: ['shadow_merchant_friend'],
+        },
+      },
+      {
+        id: 'protect_neutral',
+        text: '不管是哪边的商队，救人要紧',
+        type: 'neutral',
+        effects: [
+          { type: 'gold', value: 100 },
+          { type: 'exp', value: 100 },
+        ],
+        reputationChanges: {
+          light: 15,
+          shadow: 15,
+        },
+      },
+      {
+        id: 'rob_caravan',
+        text: '趁火打劫，抢走货物',
+        type: 'exploit',
+        effects: [
+          { type: 'gold', value: 500 },
+          { type: 'hp', value: -50 },
+        ],
+        reputationChanges: {
+          light: -60,
+          shadow: -60,
+        },
+        requiredReputation: { faction: 'shadow', minLevel: 2 },
+      },
+    ],
+  },
+  {
+    id: 'faction_secret_meeting',
+    title: '秘密会议',
+    description: '你在偏僻的小巷中发现了一场秘密集会，似乎有人在策划着什么...',
+    minPlayerLevel: 20,
+    baseWeight: 0.5,
+    icon: '🕵️',
+    choices: [
+      {
+        id: 'report_to_light',
+        text: '向光明联盟举报',
+        type: 'support_light',
+        effects: [
+          { type: 'soulOrbs', value: 2 },
+          { type: 'exp', value: 200 },
+        ],
+        reputationChanges: {
+          light: 60,
+          shadow: -80,
+        },
+        consequences: {
+          tags: ['light_informant'],
+        },
+      },
+      {
+        id: 'report_to_shadow',
+        text: '向暗影部落通风报信',
+        type: 'support_shadow',
+        effects: [
+          { type: 'gold', value: 800 },
+          { type: 'exp', value: 150 },
+        ],
+        reputationChanges: {
+          light: -80,
+          shadow: 65,
+        },
+        consequences: {
+          tags: ['shadow_informant'],
+        },
+      },
+      {
+        id: 'ignore',
+        text: '多一事不如少一事，悄悄离开',
+        type: 'neutral',
+        effects: [
+          { type: 'luck', value: 1 },
+        ],
+        reputationChanges: {},
+      },
+      {
+        id: 'join_them',
+        text: '加入他们的计划',
+        type: 'exploit',
+        effects: [
+          { type: 'gold', value: 1000 },
+          { type: 'soulOrbs', value: 3 },
+          { type: 'hp', value: -100 },
+        ],
+        reputationChanges: {
+          light: -100,
+          shadow: 50,
+        },
+        requiredReputation: { faction: 'shadow', minLevel: 3 },
+      },
+    ],
+  },
+  {
+    id: 'faction_ancient_relic',
+    title: '远古遗物',
+    description: '你在探险中发现了一件强大的远古遗物，两大阵营都在寻找它...',
+    areaId: 'ruins',
+    minPlayerLevel: 30,
+    baseWeight: 0.4,
+    icon: '🏺',
+    choices: [
+      {
+        id: 'give_light',
+        text: '将遗物交给光明联盟',
+        type: 'support_light',
+        effects: [
+          { type: 'gold', value: 2000 },
+          { type: 'soulOrbs', value: 5 },
+          { type: 'defense', value: 3 },
+        ],
+        reputationChanges: {
+          light: 100,
+          shadow: -50,
+        },
+        consequences: {
+          tags: ['light_hero'],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'blessing', name: '联盟祝福', description: '光明联盟的祝福使遗迹更加安全', effect: { stat: 'defense', value: 5 } },
+          ],
+        },
+      },
+      {
+        id: 'give_shadow',
+        text: '将遗物交给暗影部落',
+        type: 'support_shadow',
+        effects: [
+          { type: 'gold', value: 2500 },
+          { type: 'soulOrbs', value: 6 },
+          { type: 'attack', value: 4 },
+        ],
+        reputationChanges: {
+          light: -50,
+          shadow: 110,
+        },
+        consequences: {
+          tags: ['shadow_hero'],
+          mapModifiers: [
+            { areaId: 'ruins', type: 'blessing', name: '部落之力', description: '暗影部落的力量加持了遗迹', effect: { stat: 'attack', value: 6 } },
+          ],
+        },
+      },
+      {
+        id: 'keep_secret',
+        text: '隐瞒发现，自己研究',
+        type: 'neutral',
+        effects: [
+          { type: 'exp', value: 500 },
+          { type: 'soulOrbs', value: 3 },
+        ],
+        reputationChanges: {
+          light: -30,
+          shadow: -30,
+        },
+      },
+      {
+        id: 'auction',
+        text: '拍卖给出价更高的一方',
+        type: 'exploit',
+        effects: [
+          { type: 'gold', value: 5000 },
+          { type: 'soulOrbs', value: 2 },
+        ],
+        reputationChanges: {
+          light: -80,
+          shadow: -80,
+        },
+      },
+    ],
+  },
+  {
+    id: 'faction_prisoner_rescue',
+    title: '战俘营救',
+    description: '你发现一个阵营的重要人物被另一个阵营俘虏了，这是一个难得的机会...',
+    minPlayerLevel: 40,
+    baseWeight: 0.35,
+    icon: '🔓',
+    choices: [
+      {
+        id: 'rescue_light_prisoner',
+        text: '营救光明联盟战俘',
+        type: 'support_light',
+        effects: [
+          { type: 'exp', value: 600 },
+          { type: 'soulOrbs', value: 5 },
+          { type: 'hp', value: -80 },
+        ],
+        reputationChanges: {
+          light: 150,
+          shadow: -100,
+        },
+        requiredReputation: { faction: 'light', minLevel: 2 },
+      },
+      {
+        id: 'rescue_shadow_prisoner',
+        text: '营救暗影部落战俘',
+        type: 'support_shadow',
+        effects: [
+          { type: 'gold', value: 3000 },
+          { type: 'soulOrbs', value: 6 },
+          { type: 'hp', value: -90 },
+        ],
+        reputationChanges: {
+          light: -100,
+          shadow: 160,
+        },
+        requiredReputation: { faction: 'shadow', minLevel: 2 },
+      },
+      {
+        id: 'free_both',
+        text: '释放所有人，各回各家',
+        type: 'neutral',
+        effects: [
+          { type: 'exp', value: 400 },
+          { type: 'luck', value: 2 },
+        ],
+        reputationChanges: {
+          light: 50,
+          shadow: 50,
+        },
+      },
+      {
+        id: 'ransom',
+        text: '勒索赎金',
+        type: 'exploit',
+        effects: [
+          { type: 'gold', value: 8000 },
+          { type: 'soulOrbs', value: 4 },
+        ],
+        reputationChanges: {
+          light: -120,
+          shadow: -120,
+        },
+      },
+    ],
+  },
+];
+
+export const FACTION_SETTLEMENT_INTERVAL = 3600;
+export const FACTION_MAX_BATTLE_LOGS = 50;
+export const FACTION_GARRISON_BONUS_PER_COMPANION = 0.1;
+
+export const FACTION_SHOP_ITEMS: ShopItem[] = [
+  {
+    id: 'light_banner',
+    name: '光明战旗',
+    description: '光明联盟的荣耀战旗，永久增加 5 点防御',
+    baseCost: 500,
+    currency: 'gold',
+    areaId: 'forest',
+    minReputationLevel: 2,
+    effect: { type: 'defense', value: 5 },
+    icon: '🚩',
+    rarity: 'rare',
+    isDynamic: false,
+    stock: 1,
+    minPlayerLevel: 10,
+  },
+  {
+    id: 'shadow_cloak',
+    name: '暗影斗篷',
+    description: '暗影部落的神秘斗篷，永久增加 3 点速度',
+    baseCost: 600,
+    currency: 'gold',
+    areaId: 'cave',
+    minReputationLevel: 2,
+    effect: { type: 'speed', value: 3 },
+    icon: '🧥',
+    rarity: 'rare',
+    isDynamic: false,
+    stock: 1,
+    minPlayerLevel: 10,
+  },
+  {
+    id: 'faction_medal',
+    name: '阵营勋章',
+    description: '荣誉的象征，永久增加 10 点最大生命',
+    baseCost: 3,
+    currency: 'soulOrbs',
+    areaId: 'ruins',
+    minReputationLevel: 3,
+    effect: { type: 'hp', value: 10 },
+    icon: '🎖️',
+    rarity: 'epic',
+    isDynamic: false,
+    stock: 1,
+    minPlayerLevel: 25,
+  },
+];
+
+export function getInitialFactionState(): FactionState {
+  const strongholds: Stronghold[] = STRONGHOLDS.map((s, index) => ({
+    ...s,
+    controlFaction: index % 2 === 0 ? 'light' : 'shadow',
+  }));
+
+  return {
+    playerFaction: null,
+    joinedAt: null,
+    reputations: [
+      { faction: 'light', points: 0, level: 0, title: '外人' },
+      { faction: 'shadow', points: 0, level: 0, title: '外人' },
+    ],
+    strongholds,
+    garrisons: [],
+    battleLogs: [],
+    currentFactionEvent: null,
+    lastSettlementTime: Date.now(),
+    settlementHistory: [],
+    totalContribution: 0,
+    factionRank: 0,
+    weeklyScore: 0,
+    activeTab: 'overview',
+  };
+}

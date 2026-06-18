@@ -103,6 +103,15 @@ import type {
   SeasonChallengeTaskProgress,
   SeasonChallengeHistoryEntry,
   SeasonChallengeLeaderboardEntry,
+  FactionState,
+  Faction,
+  FactionReputation,
+  Stronghold,
+  GarrisonedCompanion,
+  FactionEvent,
+  FactionBattleLog,
+  FactionSettlement,
+  FactionTab,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES } from './types';
 import {
@@ -164,6 +173,13 @@ import {
   RELIC_DUNGEON_ROOM_NAMES,
   SEASON_CHALLENGE_SEASONS,
   SEASON_CHALLENGE_SIMULATED_LEADERBOARD,
+  FACTIONS,
+  STRONGHOLDS,
+  FACTION_EVENTS,
+  FACTION_SHOP_ITEMS,
+  getInitialFactionState,
+  FACTION_SETTLEMENT_INTERVAL,
+  FACTION_MAX_BATTLE_LOGS,
 } from './data';
 
 interface GameState {
@@ -707,6 +723,32 @@ interface GameState {
   addSeasonScore: (score: number) => void;
   updateSeasonTaskProgress: (type: string, value: number, mode?: 'add' | 'set') => void;
   syncSeasonChallengeProgress: () => void;
+
+  faction: FactionState;
+  joinFaction: (factionId: string) => boolean;
+  leaveFaction: () => boolean;
+  getPlayerFaction: () => Faction | undefined;
+  getFactionById: (factionId: string) => Faction | undefined;
+  addFactionReputation: (factionId: string, points: number) => void;
+  getFactionReputation: (factionId: string) => FactionReputation;
+  getStrongholdById: (strongholdId: string) => Stronghold | undefined;
+  captureStronghold: (strongholdId: string) => boolean;
+  canCaptureStronghold: (strongholdId: string) => boolean;
+  garrisonCompanion: (strongholdId: string, companionId: string) => boolean;
+  ungarrisonCompanion: (strongholdId: string, companionId: string) => boolean;
+  getGarrisonedCompanions: (strongholdId: string) => GarrisonedCompanion[];
+  getStrongholdPower: (strongholdId: string) => number;
+  triggerFactionEvent: () => void;
+  handleFactionEventChoice: (choiceId: string) => void;
+  closeFactionEvent: () => void;
+  performFactionSettlement: () => FactionSettlement | null;
+  canSettle: () => boolean;
+  getStrongholdsByFaction: (factionId: string) => Stronghold[];
+  getControlledStrongholds: () => Stronghold[];
+  getFactionShopItems: () => typeof FACTION_SHOP_ITEMS;
+  buyFactionShopItem: (itemId: string) => boolean;
+  setFactionTab: (tab: FactionTab) => void;
+  getFactionBonusStats: () => { stat: string; value: number }[];
 }
 
 let logIdCounter = 0;
@@ -1059,6 +1101,8 @@ export const useGameStore = create<GameState>()(
         history: [],
         activeTab: 'tasks',
       },
+
+      faction: getInitialFactionState(),
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -8140,10 +8184,446 @@ export const useGameStore = create<GameState>()(
           get().updateSeasonTaskProgress('collect', state.totalGoldEarned, 'set');
         }
       },
+
+      getFactionById: (factionId) => {
+        return FACTIONS.find((f) => f.id === factionId);
+      },
+
+      getPlayerFaction: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return undefined;
+        return FACTIONS.find((f) => f.id === state.faction.playerFaction);
+      },
+
+      joinFaction: (factionId) => {
+        const state = get();
+        if (state.faction.playerFaction) return false;
+        const faction = FACTIONS.find((f) => f.id === factionId);
+        if (!faction) return false;
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            playerFaction: factionId as FactionType,
+            joinedAt: Date.now(),
+            reputations: state.faction.reputations.map((r) =>
+              r.factionId === factionId ? { ...r, points: r.points + 100 } : r
+            ),
+          },
+        }));
+
+        get().addBattleLog(`加入了${faction.name}！`, 'event');
+        return true;
+      },
+
+      leaveFaction: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            playerFaction: null,
+            joinedAt: null,
+          },
+        }));
+
+        get().addBattleLog('退出了阵营', 'event');
+        return true;
+      },
+
+      addFactionReputation: (factionId, points) => {
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            reputations: state.faction.reputations.map((r) =>
+              r.factionId === factionId
+                ? { ...r, points: Math.max(0, r.points + points) }
+                : r
+            ),
+            totalContribution:
+              state.faction.playerFaction === factionId
+                ? state.faction.totalContribution + Math.max(0, points)
+                : state.faction.totalContribution,
+          },
+        }));
+      },
+
+      getFactionReputation: (factionId) => {
+        const state = get();
+        return (
+          state.faction.reputations.find((r) => r.factionId === factionId) || {
+            factionId,
+            points: 0,
+            level: 0,
+          }
+        );
+      },
+
+      getStrongholdById: (strongholdId) => {
+        const state = get();
+        return state.faction.strongholds.find((s) => s.id === strongholdId);
+      },
+
+      canCaptureStronghold: (strongholdId) => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+        const stronghold = state.faction.strongholds.find((s) => s.id === strongholdId);
+        if (!stronghold) return false;
+        if (stronghold.controllerFaction === state.faction.playerFaction) return false;
+        return true;
+      },
+
+      captureStronghold: (strongholdId) => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+        if (!get().canCaptureStronghold(strongholdId)) return false;
+
+        const stronghold = state.faction.strongholds.find((s) => s.id === strongholdId);
+        if (!stronghold) return false;
+
+        const playerPower = get().getTotalPower();
+        const strongholdPower = stronghold.defensePower;
+
+        if (playerPower < strongholdPower * 0.8) {
+          get().addBattleLog(`战力不足，无法攻占${stronghold.name}`, 'damage');
+          return false;
+        }
+
+        const successChance = Math.min(0.9, playerPower / (strongholdPower * 2));
+        const success = Math.random() < successChance;
+
+        if (success) {
+          set((state) => ({
+            faction: {
+              ...state.faction,
+              strongholds: state.faction.strongholds.map((s) =>
+                s.id === strongholdId
+                  ? { ...s, controllerFaction: state.faction.playerFaction!, lastCapturedAt: Date.now() }
+                  : s
+              ),
+              battleLogs: [
+                {
+                  id: Date.now().toString(),
+                  type: 'capture',
+                  strongholdId,
+                  strongholdName: stronghold.name,
+                  result: 'victory',
+                  timestamp: Date.now(),
+                  description: `成功攻占了${stronghold.name}！`,
+                },
+                ...state.faction.battleLogs,
+              ].slice(0, FACTION_MAX_BATTLE_LOGS),
+            },
+          }));
+
+          get().addFactionReputation(state.faction.playerFaction, 50);
+          get().addBattleLog(`成功攻占${stronghold.name}！获得50点声望`, 'victory');
+          return true;
+        } else {
+          set((state) => ({
+            faction: {
+              ...state.faction,
+              battleLogs: [
+                {
+                  id: Date.now().toString(),
+                  type: 'capture',
+                  strongholdId,
+                  strongholdName: stronghold.name,
+                  result: 'defeat',
+                  timestamp: Date.now(),
+                  description: `攻占${stronghold.name}失败`,
+                },
+                ...state.faction.battleLogs,
+              ].slice(0, FACTION_MAX_BATTLE_LOGS),
+            },
+          }));
+
+          get().addBattleLog(`攻占${stronghold.name}失败`, 'damage');
+          return false;
+        }
+      },
+
+      garrisonCompanion: (strongholdId, companionId) => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+
+        const stronghold = state.faction.strongholds.find((s) => s.id === strongholdId);
+        if (!stronghold || stronghold.controllerFaction !== state.faction.playerFaction) {
+          return false;
+        }
+
+        const companion = state.ownedCompanions.find((c) => c.id === companionId);
+        if (!companion) return false;
+
+        const alreadyGarrisoned = state.faction.garrisons.some(
+          (g) => g.companionId === companionId
+        );
+        if (alreadyGarrisoned) return false;
+
+        const currentGarrison = state.faction.garrisons.filter(
+          (g) => g.strongholdId === strongholdId
+        );
+        if (currentGarrison.length >= 3) return false;
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            garrisons: [
+              ...state.faction.garrisons,
+              {
+                companionId,
+                strongholdId,
+                assignedAt: Date.now(),
+              },
+            ],
+          },
+        }));
+
+        return true;
+      },
+
+      ungarrisonCompanion: (strongholdId, companionId) => {
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            garrisons: state.faction.garrisons.filter(
+              (g) => !(g.strongholdId === strongholdId && g.companionId === companionId)
+            ),
+          },
+        }));
+        return true;
+      },
+
+      getGarrisonedCompanions: (strongholdId) => {
+        const state = get();
+        return state.faction.garrisons.filter((g) => g.strongholdId === strongholdId);
+      },
+
+      getStrongholdPower: (strongholdId) => {
+        const state = get();
+        const garrisons = state.faction.garrisons.filter((g) => g.strongholdId === strongholdId);
+        let power = 0;
+        garrisons.forEach((g) => {
+          const companion = state.ownedCompanions.find((c) => c.id === g.companionId);
+          if (companion) {
+            power += state.getCompanionEffectiveAttack(companion) + state.getCompanionEffectiveDefense(companion);
+          }
+        });
+        return power;
+      },
+
+      triggerFactionEvent: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return;
+        if (state.faction.currentFactionEvent) return;
+
+        const availableEvents = FACTION_EVENTS.filter(
+          (e) => e.factionId === state.faction.playerFaction || e.factionId === 'all'
+        );
+
+        if (availableEvents.length === 0) return;
+
+        const event = availableEvents[Math.floor(Math.random() * availableEvents.length)];
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            currentFactionEvent: event,
+          },
+        }));
+      },
+
+      handleFactionEventChoice: (choiceId) => {
+        const state = get();
+        const event = state.faction.currentFactionEvent;
+        if (!event) return;
+
+        const choice = event.choices.find((c) => c.id === choiceId);
+        if (!choice) return;
+
+        if (choice.effects.reputation) {
+          Object.entries(choice.effects.reputation).forEach(([factionId, points]) => {
+            get().addFactionReputation(factionId, points);
+          });
+        }
+
+        if (choice.effects.gold) {
+          get().addGold(choice.effects.gold);
+        }
+
+        if (choice.effects.soulOrbs) {
+          get().addSoulOrbs(choice.effects.soulOrbs);
+        }
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            currentFactionEvent: null,
+          },
+        }));
+
+        get().addBattleLog(choice.resultText, 'event');
+      },
+
+      closeFactionEvent: () => {
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            currentFactionEvent: null,
+          },
+        }));
+      },
+
+      canSettle: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+        return Date.now() - state.faction.lastSettlementTime >= FACTION_SETTLEMENT_INTERVAL;
+      },
+
+      performFactionSettlement: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return null;
+        if (!get().canSettle()) return null;
+
+        const controlledStrongholds = state.faction.strongholds.filter(
+          (s) => s.controllerFaction === state.faction.playerFaction
+        );
+
+        let totalGold = 0;
+        let totalSoulOrbs = 0;
+        let totalExp = 0;
+        let totalReputation = 0;
+        const strongholdRewards: { strongholdId: string; strongholdName: string; gold: number; soulOrbs: number }[] = [];
+
+        controlledStrongholds.forEach((sh) => {
+          const garrisonPower = get().getStrongholdPower(sh.id);
+          const efficiencyBonus = 1 + garrisonPower / 1000;
+
+          const goldReward = Math.floor(sh.resourceGeneration.gold * efficiencyBonus);
+          const soulOrbsReward = Math.floor(sh.resourceGeneration.soulOrbs * efficiencyBonus);
+
+          totalGold += goldReward;
+          totalSoulOrbs += soulOrbsReward;
+          totalReputation += 10;
+
+          strongholdRewards.push({
+            strongholdId: sh.id,
+            strongholdName: sh.name,
+            gold: goldReward,
+            soulOrbs: soulOrbsReward,
+          });
+        });
+
+        if (totalGold > 0) get().addGold(totalGold);
+        if (totalSoulOrbs > 0) get().addSoulOrbs(totalSoulOrbs);
+        if (totalExp > 0) get().addExp(totalExp);
+        if (totalReputation > 0) get().addFactionReputation(state.faction.playerFaction, totalReputation);
+
+        const settlement: FactionSettlement = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          gold: totalGold,
+          soulOrbs: totalSoulOrbs,
+          exp: totalExp,
+          reputation: totalReputation,
+          strongholdCount: controlledStrongholds.length,
+          strongholdRewards,
+        };
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            lastSettlementTime: Date.now(),
+            settlementHistory: [settlement, ...state.faction.settlementHistory].slice(0, 20),
+          },
+        }));
+
+        get().addBattleLog(`阵营结算完成！获得${totalGold}金币，${totalSoulOrbs}魂珠`, 'victory');
+
+        return settlement;
+      },
+
+      getStrongholdsByFaction: (factionId) => {
+        const state = get();
+        return state.faction.strongholds.filter((s) => s.controllerFaction === factionId);
+      },
+
+      getControlledStrongholds: () => {
+        const state = get();
+        if (!state.faction.playerFaction) return [];
+        return state.faction.strongholds.filter(
+          (s) => s.controllerFaction === state.faction.playerFaction
+        );
+      },
+
+      getFactionShopItems: () => {
+        return FACTION_SHOP_ITEMS;
+      },
+
+      buyFactionShopItem: (itemId) => {
+        const state = get();
+        if (!state.faction.playerFaction) return false;
+
+        const item = FACTION_SHOP_ITEMS.find((i) => i.id === itemId);
+        if (!item) return false;
+
+        const reputation = get().getFactionReputation(state.faction.playerFaction);
+        if (reputation.points < item.cost) return false;
+
+        if (item.rewards.gold) {
+          get().addGold(item.rewards.gold);
+        }
+        if (item.rewards.soulOrbs) {
+          get().addSoulOrbs(item.rewards.soulOrbs);
+        }
+        if (item.rewards.exp) {
+          get().addExp(item.rewards.exp);
+        }
+
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            reputations: state.faction.reputations.map((r) =>
+              r.factionId === state.faction.playerFaction
+                ? { ...r, points: r.points - item.cost }
+                : r
+            ),
+          },
+        }));
+
+        get().addBattleLog(`兑换了${item.name}`, 'event');
+        return true;
+      },
+
+      setFactionTab: (tab) => {
+        set((state) => ({
+          faction: {
+            ...state.faction,
+            activeTab: tab,
+          },
+        }));
+      },
+
+      getFactionBonusStats: () => {
+        const state = get();
+        const faction = get().getPlayerFaction();
+        if (!faction) return [];
+
+        const isPreferredRace = faction.preferredRaces.includes(state.player.race);
+        const isPreferredClass = faction.preferredClasses.includes(state.player.class);
+
+        const multiplier = (isPreferredRace ? 1.5 : 1) * (isPreferredClass ? 1.5 : 1);
+
+        return faction.bonusStats.map((bs) => ({
+          stat: bs.stat,
+          value: Math.floor(bs.value * multiplier),
+        }));
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 13,
+      version: 14,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -8267,6 +8747,9 @@ export const useGameStore = create<GameState>()(
             history: [],
             activeTab: 'tasks',
           };
+        }
+        if (version < 14) {
+          state.faction = getInitialFactionState();
         }
         return state as unknown as GameState;
       },

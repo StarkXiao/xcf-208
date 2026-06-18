@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon' | 'season';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements' | 'relicdungeon' | 'season' | 'faction';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -2121,3 +2121,190 @@ export const SEASON_RANK_COLORS: Record<string, string> = {
   '精英挑战者': '#34d399',
   '参赛者': '#9ca3af',
 };
+
+export type FactionType = 'light' | 'shadow';
+
+export interface Faction {
+  id: FactionType;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  bgColor: string;
+  preferredRaces: string[];
+  preferredClasses: string[];
+  bonusStats: { stat: keyof PlayerStats; value: number }[];
+  lore: string;
+}
+
+export type StrongholdType = 'fortress' | 'tower' | 'mine' | 'shrine' | 'market';
+
+export interface Stronghold {
+  id: string;
+  name: string;
+  type: StrongholdType;
+  description: string;
+  icon: string;
+  areaId: string;
+  position: { x: number; y: number };
+  controlFaction: FactionType | null;
+  difficulty: number;
+  maxGarrison: number;
+  baseIncome: {
+    gold: number;
+    exp: number;
+    soulOrbs: number;
+    reputation: number;
+  };
+  bonusEffect?: {
+    type: 'attack' | 'defense' | 'goldBonus' | 'expBonus' | 'soulOrbBonus';
+    value: number;
+    isPercent: boolean;
+    targetAreas?: string[];
+  };
+  unlockLevel: number;
+  captureCost: number;
+}
+
+export interface GarrisonedCompanion {
+  companionId: string;
+  strongholdId: string;
+  deployedAt: number;
+  contribution: number;
+}
+
+export interface FactionReputation {
+  faction: FactionType;
+  points: number;
+  level: number;
+  title: string;
+}
+
+export type FactionEventChoiceType = 'support_light' | 'support_shadow' | 'neutral' | 'exploit';
+
+export interface FactionEventChoice {
+  id: string;
+  text: string;
+  type: FactionEventChoiceType;
+  effects: EventEffect[];
+  reputationChanges: {
+    light?: number;
+    shadow?: number;
+  };
+  consequences?: EventConsequence;
+  requiredReputation?: { faction: FactionType; minLevel: number };
+}
+
+export interface FactionEvent {
+  id: string;
+  title: string;
+  description: string;
+  areaId?: string;
+  minPlayerLevel: number;
+  baseWeight: number;
+  choices: FactionEventChoice[];
+  icon: string;
+}
+
+export interface FactionBattleLog {
+  id: number;
+  timestamp: number;
+  type: 'capture' | 'defend' | 'skirmish' | 'event' | 'income';
+  strongholdId?: string;
+  strongholdName?: string;
+  faction?: FactionType;
+  result: 'victory' | 'defeat' | 'neutral';
+  description: string;
+  rewards?: EventEffect[];
+}
+
+export interface FactionIncomeBreakdown {
+  strongholdId: string;
+  strongholdName: string;
+  gold: number;
+  exp: number;
+  soulOrbs: number;
+  reputation: number;
+  garrisonBonus: number;
+}
+
+export interface FactionSettlement {
+  periodStart: number;
+  periodEnd: number;
+  totalGold: number;
+  totalExp: number;
+  totalSoulOrbs: number;
+  totalReputation: number;
+  breakdown: FactionIncomeBreakdown[];
+  strongholdsHeld: number;
+  factionRank: number;
+}
+
+export interface FactionState {
+  playerFaction: FactionType | null;
+  joinedAt: number | null;
+  reputations: FactionReputation[];
+  strongholds: Stronghold[];
+  garrisons: GarrisonedCompanion[];
+  battleLogs: FactionBattleLog[];
+  currentFactionEvent: FactionEvent | null;
+  lastSettlementTime: number;
+  settlementHistory: FactionSettlement[];
+  totalContribution: number;
+  factionRank: number;
+  weeklyScore: number;
+  activeTab: FactionTab;
+}
+
+export type FactionTab = 'overview' | 'strongholds' | 'garrison' | 'battles' | 'shop';
+
+export const FACTION_TAB_NAMES: Record<FactionTab, string> = {
+  overview: '总览',
+  strongholds: '据点',
+  garrison: '驻防',
+  battles: '战绩',
+  shop: '商店',
+};
+
+export const FACTION_TAB_ICONS: Record<FactionTab, string> = {
+  overview: '📊',
+  strongholds: '🏰',
+  garrison: '⚔️',
+  battles: '📜',
+  shop: '🛒',
+};
+
+export const STRONGHOLD_TYPE_NAMES: Record<StrongholdType, string> = {
+  fortress: '要塞',
+  tower: '哨塔',
+  mine: '矿场',
+  shrine: '神殿',
+  market: '市集',
+};
+
+export const STRONGHOLD_TYPE_ICONS: Record<StrongholdType, string> = {
+  fortress: '🏰',
+  tower: '🗼',
+  mine: '⛏️',
+  shrine: '⛩️',
+  market: '🏪',
+};
+
+export const FACTION_REPUTATION_LEVELS: { level: number; name: string; minPoints: number; color: string }[] = [
+  { level: 0, name: '外人', minPoints: 0, color: '#9ca3af' },
+  { level: 1, name: '同情者', minPoints: 100, color: '#6ee7b7' },
+  { level: 2, name: '支持者', minPoints: 300, color: '#34d399' },
+  { level: 3, name: '战士', minPoints: 800, color: '#22d3ee' },
+  { level: 4, name: '精英', minPoints: 2000, color: '#60a5fa' },
+  { level: 5, name: '英雄', minPoints: 5000, color: '#fbbf24' },
+  { level: 6, name: '传奇', minPoints: 12000, color: '#f59e0b' },
+  { level: 7, name: '救世主', minPoints: 30000, color: '#ef4444' },
+];
+
+export function getFactionReputationLevel(points: number): number {
+  const levels = FACTION_REPUTATION_LEVELS;
+  for (let i = levels.length - 1; i >= 0; i--) {
+    if (points >= levels[i].minPoints) return levels[i].level;
+  }
+  return 0;
+}
