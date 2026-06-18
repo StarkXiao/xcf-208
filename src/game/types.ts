@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy' | 'codex' | 'achievements';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1621,3 +1621,125 @@ export interface AlchemyLevelConfig {
 }
 
 export type AlchemyTab = 'recipes' | 'inventory' | 'potions' | 'buffs' | 'cauldron';
+
+export interface MonsterCodexEntry {
+  monsterId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  firstDefeatedAt: number | null;
+  killCount: number;
+  maxTierDefeated: MonsterTier | null;
+}
+
+export interface EventCodexEntry {
+  eventId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  triggerCount: number;
+  choicesMade: Record<string, number>;
+}
+
+export interface RebirthRecord {
+  id: number;
+  timestamp: number;
+  level: number;
+  rebirthCount: number;
+  soulOrbsGained: number;
+  bonusesPurchased: string[];
+  totalRebirthBonus: number;
+}
+
+export type AchievementCategory = 'monster' | 'event' | 'companion' | 'rebirth' | 'exploration' | 'combat' | 'collection';
+export type AchievementRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type AchievementConditionType =
+  | 'monster_kills'
+  | 'monster_tier_kills'
+  | 'monster_codex_unlocked'
+  | 'event_triggered'
+  | 'event_choices'
+  | 'event_codex_unlocked'
+  | 'companion_recruited'
+  | 'companion_codex_unlocked'
+  | 'companion_stars'
+  | 'rebirth_count'
+  | 'rebirth_bonus_total'
+  | 'level_reached'
+  | 'gold_earned'
+  | 'soul_orbs_earned'
+  | 'area_unlocked'
+  | 'total_power';
+
+export interface AchievementCondition {
+  type: AchievementConditionType;
+  target: number;
+  monsterId?: string;
+  monsterTier?: MonsterTier;
+  eventId?: string;
+  choiceId?: string;
+  companionId?: string;
+  areaId?: string;
+  description: string;
+}
+
+export interface AchievementReward {
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'speed' | 'luck' | 'reputation';
+  value: number;
+  areaId?: string;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory;
+  rarity: AchievementRarity;
+  conditions: AchievementCondition[];
+  rewards: AchievementReward[];
+  hidden?: boolean;
+}
+
+export interface AchievementProgress {
+  achievementId: string;
+  unlocked: boolean;
+  unlockedAt: number | null;
+  claimed: boolean;
+  claimedAt: number | null;
+  progress: number;
+}
+
+export type CodexCategory = 'monsters' | 'events' | 'companions' | 'rebirth';
+
+export const ACHIEVEMENT_RARITY_COLORS: Record<AchievementRarity, string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#8b5cf6',
+  legendary: '#f59e0b',
+};
+
+export const ACHIEVEMENT_RARITY_NAMES: Record<AchievementRarity, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
+
+export const ACHIEVEMENT_CATEGORY_NAMES: Record<AchievementCategory, string> = {
+  monster: '怪物',
+  event: '事件',
+  companion: '伙伴',
+  rebirth: '转生',
+  exploration: '探索',
+  combat: '战斗',
+  collection: '收集',
+};
+
+export const ACHIEVEMENT_CATEGORY_ICONS: Record<AchievementCategory, string> = {
+  monster: '👹',
+  event: '✨',
+  companion: '🤝',
+  rebirth: '🔄',
+  exploration: '🗺️',
+  combat: '⚔️',
+  collection: '📚',
+};

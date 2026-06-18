@@ -84,6 +84,11 @@ import type {
   ActiveAlchemyBuff,
   AlchemyPotionEffect,
   AlchemyTab,
+  MonsterCodexEntry,
+  EventCodexEntry,
+  RebirthRecord,
+  Achievement,
+  AchievementProgress,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES } from './types';
 import {
@@ -137,6 +142,7 @@ import {
   ALCHEMY_CRAFT_FAIL_REFUND_RATE,
   ALCHEMY_BATTLE_BUFF_DURATION,
   ALCHEMY_EXP_PER_CRAFT,
+  ACHIEVEMENTS,
 } from './data';
 
 interface GameState {
@@ -603,6 +609,33 @@ interface GameState {
   unlockRecipe: (recipeId: string) => void;
   isRecipeUnlocked: (recipeId: string) => boolean;
   setAlchemyActiveTab: (tab: AlchemyTab) => void;
+
+  monsterCodex: MonsterCodexEntry[];
+  eventCodex: EventCodexEntry[];
+  rebirthRecords: RebirthRecord[];
+  achievementProgresses: AchievementProgress[];
+  totalGoldEarned: number;
+  totalSoulOrbsEarned: number;
+
+  unlockMonsterCodex: (monsterId: string, tier?: MonsterTier) => void;
+  getMonsterCodexEntry: (monsterId: string) => MonsterCodexEntry;
+  getMonsterCodexProgress: () => { total: number; unlocked: number; percentage: number };
+
+  unlockEventCodex: (eventId: string, choiceId?: string) => void;
+  getEventCodexEntry: (eventId: string) => EventCodexEntry;
+  getEventCodexProgress: () => { total: number; unlocked: number; percentage: number };
+
+  addRebirthRecord: (record: Omit<RebirthRecord, 'id'>) => void;
+  getRebirthRecords: () => RebirthRecord[];
+
+  checkAchievements: () => void;
+  getAchievementProgress: (achievementId: string) => AchievementProgress;
+  getAchievementsByCategory: (category: string) => { achievement: Achievement; progress: AchievementProgress }[];
+  getAchievementProgressValue: (achievement: Achievement) => number;
+  claimAchievementReward: (achievementId: string) => boolean;
+  canClaimAchievement: (achievementId: string) => boolean;
+  getAchievementSummary: () => { total: number; unlocked: number; claimed: number; percentage: number };
+  getUnclaimedAchievementCount: () => number;
 }
 
 let logIdCounter = 0;
@@ -723,6 +756,46 @@ function initRelicCodex(): RelicCodexEntry[] {
     unlockedAt: null,
     levelReached: 0,
     awakened: false,
+  }));
+}
+
+function initMonsterCodex(): MonsterCodexEntry[] {
+  const allMonsters: Monster[] = [];
+  MAP_AREAS.forEach((area) => {
+    area.monsters.forEach((monster) => {
+      if (!allMonsters.find((m) => m.id === monster.id)) {
+        allMonsters.push(monster);
+      }
+    });
+  });
+  return allMonsters.map((m) => ({
+    monsterId: m.id,
+    unlocked: false,
+    unlockedAt: null,
+    firstDefeatedAt: null,
+    killCount: 0,
+    maxTierDefeated: null,
+  }));
+}
+
+function initEventCodex(): EventCodexEntry[] {
+  return RANDOM_EVENTS.map((e) => ({
+    eventId: e.id,
+    unlocked: false,
+    unlockedAt: null,
+    triggerCount: 0,
+    choicesMade: {},
+  }));
+}
+
+function initAchievementProgresses(): AchievementProgress[] {
+  return ACHIEVEMENTS.map((a) => ({
+    achievementId: a.id,
+    unlocked: false,
+    unlockedAt: null,
+    claimed: false,
+    claimedAt: null,
+    progress: 0,
   }));
 }
 
@@ -849,6 +922,12 @@ export const useGameStore = create<GameState>()(
       tradeRecords: [],
       ownedRelics: [],
       relicCodex: initRelicCodex(),
+      monsterCodex: initMonsterCodex(),
+      eventCodex: initEventCodex(),
+      rebirthRecords: [],
+      achievementProgresses: initAchievementProgresses(),
+      totalGoldEarned: 0,
+      totalSoulOrbsEarned: 0,
 
       alchemyLevel: 1,
       alchemyExp: 0,
@@ -980,6 +1059,7 @@ export const useGameStore = create<GameState>()(
               gold: state.player.stats.gold + actualGold,
             },
           },
+          totalGoldEarned: state.totalGoldEarned + actualGold,
         }));
       },
 
@@ -992,6 +1072,7 @@ export const useGameStore = create<GameState>()(
               soulOrbs: state.player.stats.soulOrbs + amount,
             },
           },
+          totalSoulOrbsEarned: state.totalSoulOrbsEarned + amount,
         }));
       },
 
@@ -1333,6 +1414,8 @@ export const useGameStore = create<GameState>()(
         const choice = state.currentEvent.choices.find((c) => c.id === choiceId);
         if (!choice) return;
 
+        get().unlockEventCodex(state.currentEvent.id, choiceId);
+
         const currentAreaId = state.currentAreaId;
         const posMultiplier = get().getClassEventPositiveMultiplier();
         const negReduction = get().getClassEventNegativeReduction();
@@ -1598,6 +1681,15 @@ export const useGameStore = create<GameState>()(
             totalBossesDefeated: 0,
             history: [],
           },
+        });
+
+        get().addRebirthRecord({
+          rebirthCount: newRebirthCount,
+          timestamp: Date.now(),
+          level: state.player.stats.level,
+          soulOrbsGained: totalCost,
+          bonusesPurchased: bonusIds,
+          totalRebirthBonus: state.player.totalRebirthBonus + bonusIds.length,
         });
 
         return true;
@@ -3858,6 +3950,10 @@ export const useGameStore = create<GameState>()(
 
           return { monsterKillStats: newStats };
         });
+
+        if (monsterId) {
+          get().unlockMonsterCodex(monsterId, monsterTier);
+        }
 
         setTimeout(() => {
           get().checkRebirthChallenges();
@@ -6229,10 +6325,331 @@ export const useGameStore = create<GameState>()(
       isRecipeUnlocked: (recipeId) => get().unlockedRecipeIds.includes(recipeId),
 
       setAlchemyActiveTab: (tab) => set({ alchemyActiveTab: tab }),
+
+      unlockMonsterCodex: (monsterId, tier) => {
+        const state = get();
+        const entry = state.monsterCodex.find((e) => e.monsterId === monsterId);
+        if (!entry) return;
+
+        const now = Date.now();
+        const tierOrder: MonsterTier[] = ['normal', 'elite', 'boss'];
+        const currentTierIndex = entry.maxTierDefeated ? tierOrder.indexOf(entry.maxTierDefeated) : -1;
+        const newTierIndex = tier ? tierOrder.indexOf(tier) : 0;
+        const newMaxTier: MonsterTier | null = newTierIndex > currentTierIndex
+          ? (tier || 'normal')
+          : entry.maxTierDefeated;
+
+        set((s) => ({
+          monsterCodex: s.monsterCodex.map((e) => {
+            if (e.monsterId !== monsterId) return e;
+            return {
+              ...e,
+              unlocked: true,
+              unlockedAt: e.unlockedAt || now,
+              firstDefeatedAt: e.firstDefeatedAt || now,
+              killCount: e.killCount + 1,
+              maxTierDefeated: newMaxTier,
+            };
+          }),
+        }));
+
+        get().checkAchievements();
+      },
+
+      getMonsterCodexEntry: (monsterId) => {
+        const entry = get().monsterCodex.find((e) => e.monsterId === monsterId);
+        return entry || { monsterId, unlocked: false, unlockedAt: null, firstDefeatedAt: null, killCount: 0, maxTierDefeated: null };
+      },
+
+      getMonsterCodexProgress: () => {
+        const codex = get().monsterCodex;
+        const total = codex.length;
+        const unlocked = codex.filter((e) => e.unlocked).length;
+        const percentage = total > 0 ? (unlocked / total) * 100 : 0;
+        return { total, unlocked, percentage };
+      },
+
+      unlockEventCodex: (eventId, choiceId) => {
+        const state = get();
+        const entry = state.eventCodex.find((e) => e.eventId === eventId);
+        if (!entry) return;
+
+        const now = Date.now();
+        set((s) => ({
+          eventCodex: s.eventCodex.map((e) => {
+            if (e.eventId !== eventId) return e;
+            const newChoices = { ...e.choicesMade };
+            if (choiceId) {
+              newChoices[choiceId] = (newChoices[choiceId] || 0) + 1;
+            }
+            return {
+              ...e,
+              unlocked: true,
+              unlockedAt: e.unlockedAt || now,
+              triggerCount: e.triggerCount + 1,
+              choicesMade: newChoices,
+            };
+          }),
+        }));
+
+        get().checkAchievements();
+      },
+
+      getEventCodexEntry: (eventId) => {
+        const entry = get().eventCodex.find((e) => e.eventId === eventId);
+        return entry || { eventId, unlocked: false, unlockedAt: null, triggerCount: 0, choicesMade: {} };
+      },
+
+      getEventCodexProgress: () => {
+        const codex = get().eventCodex;
+        const total = codex.length;
+        const unlocked = codex.filter((e) => e.unlocked).length;
+        const percentage = total > 0 ? (unlocked / total) * 100 : 0;
+        return { total, unlocked, percentage };
+      },
+
+      addRebirthRecord: (record) => {
+        set((s) => ({
+          rebirthRecords: [
+            ...s.rebirthRecords,
+            { ...record, id: s.rebirthRecords.length + 1 },
+          ],
+        }));
+        get().checkAchievements();
+      },
+
+      getRebirthRecords: () => {
+        return get().rebirthRecords;
+      },
+
+      getAchievementProgress: (achievementId) => {
+        const progress = get().achievementProgresses.find((p) => p.achievementId === achievementId);
+        return progress || { achievementId, unlocked: false, unlockedAt: null, claimed: false, claimedAt: null, progress: 0 };
+      },
+
+      getAchievementsByCategory: (category) => {
+        const state = get();
+        return ACHIEVEMENTS
+          .filter((a) => a.category === category)
+          .map((achievement) => ({
+            achievement,
+            progress: state.achievementProgresses.find((p) => p.achievementId === achievement.id) || {
+              achievementId: achievement.id,
+              unlocked: false,
+              unlockedAt: null,
+              claimed: false,
+              claimedAt: null,
+              progress: 0,
+            },
+          }));
+      },
+
+      getAchievementProgressValue: (achievement) => {
+        const state = get();
+        let minProgress = Infinity;
+
+        for (const condition of achievement.conditions) {
+          let progress = 0;
+
+          switch (condition.type) {
+            case 'monster_kills':
+              progress = state.monsterKillStats.totalKills;
+              break;
+            case 'monster_tier_kills':
+              if (condition.monsterTier === 'elite') {
+                progress = state.monsterKillStats.eliteKills;
+              } else if (condition.monsterTier === 'boss') {
+                progress = state.monsterKillStats.bossKills;
+              } else {
+                progress = state.monsterKillStats.normalKills;
+              }
+              break;
+            case 'monster_codex_unlocked':
+              progress = state.monsterCodex.filter((e) => e.unlocked).length;
+              break;
+            case 'event_triggered':
+              progress = state.eventCodex.reduce((sum, e) => sum + e.triggerCount, 0);
+              break;
+            case 'event_choices':
+              progress = state.eventCodex.reduce((sum, e) => sum + Object.values(e.choicesMade).reduce((s, c) => s + c, 0), 0);
+              break;
+            case 'event_codex_unlocked':
+              progress = state.eventCodex.filter((e) => e.unlocked).length;
+              break;
+            case 'companion_recruited':
+              progress = state.ownedCompanions.length;
+              break;
+            case 'companion_codex_unlocked':
+              progress = state.companionCodex.filter((e) => e.unlocked).length;
+              break;
+            case 'companion_stars':
+              progress = state.ownedCompanions.length > 0 ? Math.max(...state.ownedCompanions.map((c) => c.stars)) : 0;
+              break;
+            case 'rebirth_count':
+              progress = state.player.rebirthCount;
+              break;
+            case 'rebirth_bonus_total':
+              progress = state.player.totalRebirthBonus;
+              break;
+            case 'level_reached':
+              progress = state.player.stats.level;
+              break;
+            case 'gold_earned':
+              progress = state.totalGoldEarned;
+              break;
+            case 'soul_orbs_earned':
+              progress = state.totalSoulOrbsEarned;
+              break;
+            case 'area_unlocked':
+              progress = state.mapAreas.filter((a) => a.unlocked).length;
+              break;
+            case 'total_power':
+              progress = get().getTotalPower();
+              break;
+            default:
+              progress = 0;
+          }
+
+          minProgress = Math.min(minProgress, progress);
+        }
+
+        return minProgress === Infinity ? 0 : minProgress;
+      },
+
+      checkAchievements: () => {
+        const state = get();
+        let hasNewUnlocks = false;
+
+        const newProgresses = state.achievementProgresses.map((progress) => {
+          if (progress.unlocked) return progress;
+
+          const achievement = ACHIEVEMENTS.find((a) => a.id === progress.achievementId);
+          if (!achievement) return progress;
+
+          const currentProgress = get().getAchievementProgressValue(achievement);
+          const target = Math.min(...achievement.conditions.map((c) => c.target));
+
+          if (currentProgress >= target) {
+            hasNewUnlocks = true;
+            get().addBattleLog(`🏆 达成成就：${achievement.name}！`, 'system');
+            return {
+              ...progress,
+              unlocked: true,
+              unlockedAt: Date.now(),
+              progress: currentProgress,
+            };
+          }
+
+          return { ...progress, progress: currentProgress };
+        });
+
+        if (hasNewUnlocks) {
+          set({ achievementProgresses: newProgresses });
+        }
+      },
+
+      claimAchievementReward: (achievementId) => {
+        const state = get();
+        const progress = state.achievementProgresses.find((p) => p.achievementId === achievementId);
+        if (!progress || !progress.unlocked || progress.claimed) return false;
+
+        const achievement = ACHIEVEMENTS.find((a) => a.id === achievementId);
+        if (!achievement) return false;
+
+        achievement.rewards.forEach((reward) => {
+          switch (reward.type) {
+            case 'gold':
+              get().addGold(reward.value);
+              break;
+            case 'exp':
+              get().addExp(reward.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(reward.value);
+              break;
+            case 'attack':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, attack: s.player.stats.attack + reward.value },
+                },
+              }));
+              break;
+            case 'defense':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, defense: s.player.stats.defense + reward.value },
+                },
+              }));
+              break;
+            case 'hp':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: {
+                    ...s.player.stats,
+                    maxHp: s.player.stats.maxHp + reward.value,
+                    hp: s.player.stats.hp + reward.value,
+                  },
+                },
+              }));
+              break;
+            case 'speed':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, speed: s.player.stats.speed + reward.value },
+                },
+              }));
+              break;
+            case 'luck':
+              set((s) => ({
+                player: {
+                  ...s.player,
+                  stats: { ...s.player.stats, luck: s.player.stats.luck + reward.value },
+                },
+              }));
+              break;
+            case 'reputation':
+              if (reward.areaId) {
+                get().addAreaReputation(reward.areaId, reward.value);
+              }
+              break;
+          }
+        });
+
+        set((s) => ({
+          achievementProgresses: s.achievementProgresses.map((p) =>
+            p.achievementId === achievementId ? { ...p, claimed: true, claimedAt: Date.now() } : p
+          ),
+        }));
+
+        get().addBattleLog(`🎁 领取了成就奖励：${achievement.name}`, 'system');
+        return true;
+      },
+
+      canClaimAchievement: (achievementId) => {
+        const progress = get().getAchievementProgress(achievementId);
+        return progress.unlocked && !progress.claimed;
+      },
+
+      getAchievementSummary: () => {
+        const progresses = get().achievementProgresses;
+        const total = progresses.length;
+        const unlocked = progresses.filter((p) => p.unlocked).length;
+        const claimed = progresses.filter((p) => p.claimed).length;
+        const percentage = total > 0 ? (unlocked / total) * 100 : 0;
+        return { total, unlocked, claimed, percentage };
+      },
+
+      getUnclaimedAchievementCount: () => {
+        return get().achievementProgresses.filter((p) => p.unlocked && !p.claimed).length;
+      },
     }),
     {
       name: 'isekai-idle-game',
-      version: 11,
+      version: 12,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -6328,6 +6745,14 @@ export const useGameStore = create<GameState>()(
           state.alchemyActiveTab = 'recipes';
           state.craftingInProgress = false;
           state.lastCraftTime = 0;
+        }
+        if (version < 12) {
+          state.monsterCodex = initMonsterCodex();
+          state.eventCodex = initEventCodex();
+          state.rebirthRecords = [];
+          state.achievementProgresses = initAchievementProgresses();
+          state.totalGoldEarned = 0;
+          state.totalSoulOrbsEarned = 0;
         }
         return state as unknown as GameState;
       },

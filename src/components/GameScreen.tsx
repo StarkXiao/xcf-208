@@ -18,6 +18,8 @@ import SkillTreePanel from './SkillTreePanel';
 import TownPanel from './TownPanel';
 import WorldBossPanel from './WorldBossPanel';
 import AlchemyWorkshopPanel from './AlchemyWorkshopPanel';
+import CodexPanel from './CodexPanel';
+import AchievementPanel from './AchievementPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -103,6 +105,8 @@ export default function GameScreen() {
     { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
     { id: 'skilltree' as const, label: '🌳 技能树', icon: '🌳' },
     { id: 'alchemy' as const, label: '⚗️ 炼金', icon: '⚗️' },
+    { id: 'codex' as const, label: '📖 图鉴', icon: '📖' },
+    { id: 'achievements' as const, label: '🏆 成就', icon: '🏆' },
     { id: 'events' as const, label: '🔄 转生', icon: '🔄' },
   ];
 
@@ -739,6 +743,10 @@ export default function GameScreen() {
         return <SkillTreePanel />;
       case 'alchemy':
         return <AlchemyWorkshopPanel />;
+      case 'codex':
+        return <CodexPanel />;
+      case 'achievements':
+        return <AchievementPanel />;
       case 'events':
         return (
           <div className="rebirth-panel">
