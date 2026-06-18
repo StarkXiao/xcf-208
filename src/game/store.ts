@@ -2326,6 +2326,16 @@ export const useGameStore = create<GameState>()(
           netGoldProfit,
           rewardComposition,
           mapComparison,
+          townRewards: (() => {
+            const town = state.calculateOfflineTownRewards();
+            return {
+              gold: town.gold,
+              exp: town.exp,
+              soulOrbs: town.soulOrbs,
+              buildingRewards: town.breakdown.buildingRewards,
+              stationBonus: town.breakdown.stationBonus,
+            };
+          })(),
         };
 
         return { exp: expReward, gold: goldReward, breakdown };
@@ -2349,6 +2359,14 @@ export const useGameStore = create<GameState>()(
             }
           });
         }
+
+        if (rewards.breakdown?.townRewards) {
+          const town = rewards.breakdown.townRewards;
+          if (town.gold > 0 || town.exp > 0 || town.soulOrbs > 0) {
+            get().collectOfflineTownRewards();
+          }
+        }
+
         get().updateLastOnlineTime();
       },
 

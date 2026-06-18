@@ -55,7 +55,6 @@ export default function TownPanel() {
     buyMerchantItem,
     checkMerchantEvents,
     getMerchantEventChance,
-    updateTownProduction,
   } = useGameStore();
 
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
@@ -65,10 +64,9 @@ export default function TownPanel() {
   useEffect(() => {
     const interval = setInterval(() => {
       setTick((t) => t + 1);
-      updateTownProduction();
     }, 1000);
     return () => clearInterval(interval);
-  }, [updateTownProduction]);
+  }, []);
 
   const totalProduction = useMemo(() => getTotalBuildingProduction(), [getTotalBuildingProduction]);
   const activeEvents = useMemo(() => getActiveMerchantEvents(), [getActiveMerchantEvents]);

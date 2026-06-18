@@ -50,7 +50,11 @@ export default function OfflineRewardsModal() {
       const offlineHours = Math.floor(offlineMinutes / 60);
       const offlineDays = Math.floor(offlineHours / 24);
 
-      if (result.exp > 0 || result.gold > 0) {
+      const townGold = result.breakdown?.townRewards?.gold || 0;
+      const townExp = result.breakdown?.townRewards?.exp || 0;
+      const townSoulOrbs = result.breakdown?.townRewards?.soulOrbs || 0;
+
+      if (result.exp > 0 || result.gold > 0 || townGold > 0 || townExp > 0 || townSoulOrbs > 0) {
         setRewards(result);
 
         if (offlineDays > 0) {
@@ -94,13 +98,20 @@ export default function OfflineRewardsModal() {
             <div className="reward-item">
               <span className="reward-icon">⭐</span>
               <span className="reward-label">经验</span>
-              <span className="reward-value">+{rewards.exp.toLocaleString()}</span>
+              <span className="reward-value">+{rewards.exp.toLocaleString()}{breakdown?.townRewards?.exp ? ` (+${breakdown.townRewards.exp.toLocaleString()}🏘️)` : ''}</span>
             </div>
             <div className="reward-item">
               <span className="reward-icon">💰</span>
               <span className="reward-label">金币</span>
-              <span className="reward-value">+{rewards.gold.toLocaleString()}</span>
+              <span className="reward-value">+{rewards.gold.toLocaleString()}{breakdown?.townRewards?.gold ? ` (+${breakdown.townRewards.gold.toLocaleString()}🏘️)` : ''}</span>
             </div>
+            {breakdown?.townRewards?.soulOrbs ? (
+              <div className="reward-item">
+                <span className="reward-icon">💎</span>
+                <span className="reward-label">魂珠</span>
+                <span className="reward-value">+{breakdown.townRewards.soulOrbs.toLocaleString()}</span>
+              </div>
+            ) : null}
           </div>
 
           {breakdown && (
@@ -160,6 +171,35 @@ export default function OfflineRewardsModal() {
                 </div>
               </div>
 
+              {breakdown.townRewards && (breakdown.townRewards.gold > 0 || breakdown.townRewards.exp > 0 || breakdown.townRewards.soulOrbs > 0) && (
+                <div className="breakdown-section town-breakdown-section">
+                  <div className="breakdown-row breakdown-section-title">
+                    <span className="breakdown-label">🏘️ 城镇收益</span>
+                    <span className="breakdown-value">
+                      {breakdown.townRewards.stationBonus > 0 && `驻守+${(breakdown.townRewards.stationBonus * 100).toFixed(0)}%`}
+                    </span>
+                  </div>
+                  {breakdown.townRewards.buildingRewards.map((br) => (
+                    <div key={br.buildingId} className="breakdown-row">
+                      <span className="breakdown-label">{br.name}</span>
+                      <span className="breakdown-value">
+                        {br.gold > 0 && `${br.gold.toLocaleString()}💰 `}
+                        {br.exp > 0 && `${br.exp.toLocaleString()}⭐ `}
+                        {br.soulOrbs > 0 && `${br.soulOrbs.toLocaleString()}💎`}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="breakdown-row town-total-row">
+                    <span className="breakdown-label">城镇合计</span>
+                    <span className="breakdown-value">
+                      {breakdown.townRewards.gold > 0 && `${breakdown.townRewards.gold.toLocaleString()}💰 `}
+                      {breakdown.townRewards.exp > 0 && `${breakdown.townRewards.exp.toLocaleString()}⭐ `}
+                      {breakdown.townRewards.soulOrbs > 0 && `${breakdown.townRewards.soulOrbs.toLocaleString()}💎`}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="breakdown-summary">
                 <div className="summary-row">
                   <span>基础经验</span>
@@ -169,14 +209,32 @@ export default function OfflineRewardsModal() {
                   <span>基础金币</span>
                   <span>{breakdown.baseGold.toLocaleString()}</span>
                 </div>
+                {breakdown.townRewards && (breakdown.townRewards.exp > 0 || breakdown.townRewards.gold > 0) && (
+                  <>
+                    <div className="summary-row">
+                      <span>🏘️ 城镇经验</span>
+                      <span>+{breakdown.townRewards.exp.toLocaleString()}</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>🏘️ 城镇金币</span>
+                      <span>+{breakdown.townRewards.gold.toLocaleString()}</span>
+                    </div>
+                    {breakdown.townRewards.soulOrbs > 0 && (
+                      <div className="summary-row">
+                        <span>🏘️ 城镇魂珠</span>
+                        <span>+{breakdown.townRewards.soulOrbs.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="summary-divider"></div>
                 <div className="summary-row final">
                   <span>🎁 最终经验</span>
-                  <span className="highlight">+{breakdown.finalExp.toLocaleString()}</span>
+                  <span className="highlight">+{(breakdown.finalExp + (breakdown.townRewards?.exp || 0)).toLocaleString()}</span>
                 </div>
                 <div className="summary-row final">
                   <span>🎁 最终金币</span>
-                  <span className="highlight">+{breakdown.finalGold.toLocaleString()}</span>
+                  <span className="highlight">+{(breakdown.finalGold + (breakdown.townRewards?.gold || 0)).toLocaleString()}</span>
                 </div>
               </div>
 

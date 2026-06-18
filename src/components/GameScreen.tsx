@@ -35,6 +35,8 @@ export default function GameScreen() {
     player,
     rebirthBonuses,
     updateLastOnlineTime,
+    checkMerchantEvents,
+    updateTownProduction,
     areaReputations,
     mapAreas,
     ownedCompanions,
@@ -62,20 +64,25 @@ export default function GameScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       updateLastOnlineTime();
+      updateTownProduction();
     }, 30000);
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         updateLastOnlineTime();
+      } else {
+        checkMerchantEvents();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    checkMerchantEvents();
 
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [updateLastOnlineTime]);
+  }, [updateLastOnlineTime, updateTownProduction, checkMerchantEvents]);
 
   const tabs = [
     { id: 'map' as const, label: '🗺️ 地图', icon: '🗺️' },

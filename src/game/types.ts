@@ -588,6 +588,13 @@ export interface OfflineRewardBreakdown {
     goldPercent: number;
   }[];
   mapComparison: OfflineRewardMapComparison[];
+  townRewards: {
+    gold: number;
+    exp: number;
+    soulOrbs: number;
+    buildingRewards: { buildingId: string; name: string; gold: number; exp: number; soulOrbs: number }[];
+    stationBonus: number;
+  };
 }
 
 export type TalentCategory = 'combat' | 'survival' | 'growth' | 'fortune' | 'class_special' | 'race_special';
