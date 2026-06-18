@@ -108,12 +108,13 @@ import type {
   FactionReputation,
   Stronghold,
   GarrisonedCompanion,
-  FactionEvent,
-  FactionBattleLog,
   FactionSettlement,
   FactionTab,
+  FactionType,
+  FactionIncomeBreakdown,
+  FactionBattleLog,
 } from './types';
-import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES } from './types';
+import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES, RELIC_DUNGEON_ROOM_TYPE_NAMES, getFactionReputationLevel, FACTION_REPUTATION_LEVELS } from './types';
 import {
   INITIAL_STATS,
   MAP_AREAS,
@@ -174,7 +175,6 @@ import {
   SEASON_CHALLENGE_SEASONS,
   SEASON_CHALLENGE_SIMULATED_LEADERBOARD,
   FACTIONS,
-  STRONGHOLDS,
   FACTION_EVENTS,
   FACTION_SHOP_ITEMS,
   getInitialFactionState,
@@ -8204,10 +8204,10 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           faction: {
             ...state.faction,
-            playerFaction: factionId as FactionType,
+            playerFaction: faction.id,
             joinedAt: Date.now(),
             reputations: state.faction.reputations.map((r) =>
-              r.factionId === factionId ? { ...r, points: r.points + 100 } : r
+              r.faction === faction.id ? { ...r, points: r.points + 100, level: getFactionReputationLevel(r.points + 100) } : r
             ),
           },
         }));
@@ -8236,11 +8236,18 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           faction: {
             ...state.faction,
-            reputations: state.faction.reputations.map((r) =>
-              r.factionId === factionId
-                ? { ...r, points: Math.max(0, r.points + points) }
-                : r
-            ),
+            reputations: state.faction.reputations.map((r) => {
+              if (r.faction === factionId) {
+                const newPoints = Math.max(0, r.points + points);
+                return {
+                  ...r,
+                  points: newPoints,
+                  level: getFactionReputationLevel(newPoints),
+                  title: FACTION_REPUTATION_LEVELS.find((l) => l.level === getFactionReputationLevel(newPoints))?.name || r.title,
+                };
+              }
+              return r;
+            }),
             totalContribution:
               state.faction.playerFaction === factionId
                 ? state.faction.totalContribution + Math.max(0, points)
@@ -8251,13 +8258,14 @@ export const useGameStore = create<GameState>()(
 
       getFactionReputation: (factionId) => {
         const state = get();
-        return (
-          state.faction.reputations.find((r) => r.factionId === factionId) || {
-            factionId,
-            points: 0,
-            level: 0,
-          }
-        );
+        const rep = state.faction.reputations.find((r) => r.faction === factionId);
+        if (rep) return rep;
+        return {
+          faction: factionId as FactionType,
+          points: 0,
+          level: 0,
+          title: FACTION_REPUTATION_LEVELS[0]?.name || '外人',
+        };
       },
 
       getStrongholdById: (strongholdId) => {
@@ -8270,7 +8278,8 @@ export const useGameStore = create<GameState>()(
         if (!state.faction.playerFaction) return false;
         const stronghold = state.faction.strongholds.find((s) => s.id === strongholdId);
         if (!stronghold) return false;
-        if (stronghold.controllerFaction === state.faction.playerFaction) return false;
+        if (stronghold.controlFaction === state.faction.playerFaction) return false;
+        if (state.player.stats.level < stronghold.unlockLevel) return false;
         return true;
       },
 
@@ -8283,7 +8292,7 @@ export const useGameStore = create<GameState>()(
         if (!stronghold) return false;
 
         const playerPower = get().getTotalPower();
-        const strongholdPower = stronghold.defensePower;
+        const strongholdPower = stronghold.difficulty * 500;
 
         if (playerPower < strongholdPower * 0.8) {
           get().addBattleLog(`战力不足，无法攻占${stronghold.name}`, 'damage');
@@ -8294,48 +8303,48 @@ export const useGameStore = create<GameState>()(
         const success = Math.random() < successChance;
 
         if (success) {
+          const logId = Date.now();
+          const newLog: FactionBattleLog = {
+            id: logId,
+            type: 'capture',
+            strongholdId,
+            strongholdName: stronghold.name,
+            faction: state.faction.playerFaction!,
+            result: 'victory',
+            timestamp: Date.now(),
+            description: `成功攻占了${stronghold.name}！`,
+          };
           set((state) => ({
             faction: {
               ...state.faction,
               strongholds: state.faction.strongholds.map((s) =>
                 s.id === strongholdId
-                  ? { ...s, controllerFaction: state.faction.playerFaction!, lastCapturedAt: Date.now() }
+                  ? { ...s, controlFaction: state.faction.playerFaction! }
                   : s
               ),
-              battleLogs: [
-                {
-                  id: Date.now().toString(),
-                  type: 'capture',
-                  strongholdId,
-                  strongholdName: stronghold.name,
-                  result: 'victory',
-                  timestamp: Date.now(),
-                  description: `成功攻占了${stronghold.name}！`,
-                },
-                ...state.faction.battleLogs,
-              ].slice(0, FACTION_MAX_BATTLE_LOGS),
+              battleLogs: [newLog, ...state.faction.battleLogs].slice(0, FACTION_MAX_BATTLE_LOGS),
             },
           }));
 
           get().addFactionReputation(state.faction.playerFaction, 50);
-          get().addBattleLog(`成功攻占${stronghold.name}！获得50点声望`, 'victory');
+          get().addBattleLog(`成功攻占${stronghold.name}！获得50点声望`, 'event');
           return true;
         } else {
+          const logId = Date.now() - 1;
+          const newLog: FactionBattleLog = {
+            id: logId,
+            type: 'capture',
+            strongholdId,
+            strongholdName: stronghold.name,
+            faction: state.faction.playerFaction!,
+            result: 'defeat',
+            timestamp: Date.now(),
+            description: `攻占${stronghold.name}失败`,
+          };
           set((state) => ({
             faction: {
               ...state.faction,
-              battleLogs: [
-                {
-                  id: Date.now().toString(),
-                  type: 'capture',
-                  strongholdId,
-                  strongholdName: stronghold.name,
-                  result: 'defeat',
-                  timestamp: Date.now(),
-                  description: `攻占${stronghold.name}失败`,
-                },
-                ...state.faction.battleLogs,
-              ].slice(0, FACTION_MAX_BATTLE_LOGS),
+              battleLogs: [newLog, ...state.faction.battleLogs].slice(0, FACTION_MAX_BATTLE_LOGS),
             },
           }));
 
@@ -8349,7 +8358,7 @@ export const useGameStore = create<GameState>()(
         if (!state.faction.playerFaction) return false;
 
         const stronghold = state.faction.strongholds.find((s) => s.id === strongholdId);
-        if (!stronghold || stronghold.controllerFaction !== state.faction.playerFaction) {
+        if (!stronghold || stronghold.controlFaction !== state.faction.playerFaction) {
           return false;
         }
 
@@ -8364,7 +8373,7 @@ export const useGameStore = create<GameState>()(
         const currentGarrison = state.faction.garrisons.filter(
           (g) => g.strongholdId === strongholdId
         );
-        if (currentGarrison.length >= 3) return false;
+        if (currentGarrison.length >= stronghold.maxGarrison) return false;
 
         set((state) => ({
           faction: {
@@ -8374,7 +8383,8 @@ export const useGameStore = create<GameState>()(
               {
                 companionId,
                 strongholdId,
-                assignedAt: Date.now(),
+                deployedAt: Date.now(),
+                contribution: 0,
               },
             ],
           },
@@ -8419,7 +8429,7 @@ export const useGameStore = create<GameState>()(
         if (state.faction.currentFactionEvent) return;
 
         const availableEvents = FACTION_EVENTS.filter(
-          (e) => e.factionId === state.faction.playerFaction || e.factionId === 'all'
+          (e) => e.minPlayerLevel <= state.player.stats.level
         );
 
         if (availableEvents.length === 0) return;
@@ -8442,19 +8452,35 @@ export const useGameStore = create<GameState>()(
         const choice = event.choices.find((c) => c.id === choiceId);
         if (!choice) return;
 
-        if (choice.effects.reputation) {
-          Object.entries(choice.effects.reputation).forEach(([factionId, points]) => {
-            get().addFactionReputation(factionId, points);
-          });
+        if (choice.reputationChanges) {
+          if (choice.reputationChanges.light) {
+            get().addFactionReputation('light', choice.reputationChanges.light);
+          }
+          if (choice.reputationChanges.shadow) {
+            get().addFactionReputation('shadow', choice.reputationChanges.shadow);
+          }
         }
 
-        if (choice.effects.gold) {
-          get().addGold(choice.effects.gold);
-        }
-
-        if (choice.effects.soulOrbs) {
-          get().addSoulOrbs(choice.effects.soulOrbs);
-        }
+        choice.effects.forEach((effect) => {
+          switch (effect.type) {
+            case 'gold':
+              get().addGold(effect.value);
+              break;
+            case 'exp':
+              get().addExp(effect.value);
+              break;
+            case 'soulOrbs':
+              get().addSoulOrbs(effect.value);
+              break;
+            case 'hp':
+              if (effect.value > 0) {
+                get().healHp(effect.value);
+              } else {
+                get().takeDamage(Math.abs(effect.value));
+              }
+              break;
+          }
+        });
 
         set((state) => ({
           faction: {
@@ -8463,7 +8489,7 @@ export const useGameStore = create<GameState>()(
           },
         }));
 
-        get().addBattleLog(choice.resultText, 'event');
+        get().addBattleLog(`${event.title}: ${choice.text}`, 'event');
       },
 
       closeFactionEvent: () => {
@@ -8478,7 +8504,7 @@ export const useGameStore = create<GameState>()(
       canSettle: () => {
         const state = get();
         if (!state.faction.playerFaction) return false;
-        return Date.now() - state.faction.lastSettlementTime >= FACTION_SETTLEMENT_INTERVAL;
+        return Date.now() - state.faction.lastSettlementTime >= FACTION_SETTLEMENT_INTERVAL * 1000;
       },
 
       performFactionSettlement: () => {
@@ -8487,31 +8513,37 @@ export const useGameStore = create<GameState>()(
         if (!get().canSettle()) return null;
 
         const controlledStrongholds = state.faction.strongholds.filter(
-          (s) => s.controllerFaction === state.faction.playerFaction
+          (s) => s.controlFaction === state.faction.playerFaction
         );
 
         let totalGold = 0;
         let totalSoulOrbs = 0;
         let totalExp = 0;
         let totalReputation = 0;
-        const strongholdRewards: { strongholdId: string; strongholdName: string; gold: number; soulOrbs: number }[] = [];
+        const breakdown: FactionIncomeBreakdown[] = [];
 
         controlledStrongholds.forEach((sh) => {
           const garrisonPower = get().getStrongholdPower(sh.id);
           const efficiencyBonus = 1 + garrisonPower / 1000;
 
-          const goldReward = Math.floor(sh.resourceGeneration.gold * efficiencyBonus);
-          const soulOrbsReward = Math.floor(sh.resourceGeneration.soulOrbs * efficiencyBonus);
+          const goldReward = Math.floor(sh.baseIncome.gold * efficiencyBonus);
+          const expReward = Math.floor(sh.baseIncome.exp * efficiencyBonus);
+          const soulOrbsReward = Math.floor(sh.baseIncome.soulOrbs * efficiencyBonus);
+          const repReward = Math.floor(sh.baseIncome.reputation * efficiencyBonus);
 
           totalGold += goldReward;
           totalSoulOrbs += soulOrbsReward;
-          totalReputation += 10;
+          totalExp += expReward;
+          totalReputation += repReward;
 
-          strongholdRewards.push({
+          breakdown.push({
             strongholdId: sh.id,
             strongholdName: sh.name,
             gold: goldReward,
+            exp: expReward,
             soulOrbs: soulOrbsReward,
+            reputation: repReward,
+            garrisonBonus: Math.floor(garrisonPower / 1000 * 100),
           });
         });
 
@@ -8521,14 +8553,15 @@ export const useGameStore = create<GameState>()(
         if (totalReputation > 0) get().addFactionReputation(state.faction.playerFaction, totalReputation);
 
         const settlement: FactionSettlement = {
-          id: Date.now().toString(),
-          timestamp: Date.now(),
-          gold: totalGold,
-          soulOrbs: totalSoulOrbs,
-          exp: totalExp,
-          reputation: totalReputation,
-          strongholdCount: controlledStrongholds.length,
-          strongholdRewards,
+          periodStart: state.faction.lastSettlementTime,
+          periodEnd: Date.now(),
+          totalGold,
+          totalExp,
+          totalSoulOrbs,
+          totalReputation,
+          breakdown,
+          strongholdsHeld: controlledStrongholds.length,
+          factionRank: state.faction.factionRank,
         };
 
         set((state) => ({
@@ -8539,21 +8572,21 @@ export const useGameStore = create<GameState>()(
           },
         }));
 
-        get().addBattleLog(`阵营结算完成！获得${totalGold}金币，${totalSoulOrbs}魂珠`, 'victory');
+        get().addBattleLog(`阵营结算完成！获得${totalGold}金币，${totalSoulOrbs}魂珠`, 'event');
 
         return settlement;
       },
 
       getStrongholdsByFaction: (factionId) => {
         const state = get();
-        return state.faction.strongholds.filter((s) => s.controllerFaction === factionId);
+        return state.faction.strongholds.filter((s) => s.controlFaction === factionId);
       },
 
       getControlledStrongholds: () => {
         const state = get();
         if (!state.faction.playerFaction) return [];
         return state.faction.strongholds.filter(
-          (s) => s.controllerFaction === state.faction.playerFaction
+          (s) => s.controlFaction === state.faction.playerFaction
         );
       },
 
@@ -8570,6 +8603,7 @@ export const useGameStore = create<GameState>()(
 
         const reputation = get().getFactionReputation(state.faction.playerFaction);
         if (reputation.points < item.cost) return false;
+        if (reputation.level < item.requiredLevel) return false;
 
         if (item.rewards.gold) {
           get().addGold(item.rewards.gold);
@@ -8580,15 +8614,33 @@ export const useGameStore = create<GameState>()(
         if (item.rewards.exp) {
           get().addExp(item.rewards.exp);
         }
+        if (item.rewards.attack) {
+          get().upgradeStat('attack', item.rewards.attack);
+        }
+        if (item.rewards.defense) {
+          get().upgradeStat('defense', item.rewards.defense);
+        }
+        if (item.rewards.maxHp) {
+          get().upgradeStat('maxHp', item.rewards.maxHp);
+        }
+        if (item.rewards.speed) {
+          get().upgradeStat('speed', item.rewards.speed);
+        }
 
         set((state) => ({
           faction: {
             ...state.faction,
-            reputations: state.faction.reputations.map((r) =>
-              r.factionId === state.faction.playerFaction
-                ? { ...r, points: r.points - item.cost }
-                : r
-            ),
+            reputations: state.faction.reputations.map((r) => {
+              if (r.faction === state.faction.playerFaction) {
+                const newPoints = r.points - item.cost;
+                return {
+                  ...r,
+                  points: newPoints,
+                  level: getFactionReputationLevel(newPoints),
+                };
+              }
+              return r;
+            }),
           },
         }));
 

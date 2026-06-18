@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useGameStore } from '../game/store';
 import {
-  SEASON_TASK_TYPE_NAMES,
   SEASON_RANK_COLORS,
   getSeasonRankTitle,
 } from '../game/types';

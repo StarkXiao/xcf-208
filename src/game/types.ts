@@ -96,7 +96,7 @@ export interface StarCondition {
 }
 
 export interface StarReward {
-  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed';
+  type: 'gold' | 'exp' | 'soulOrbs' | 'attack' | 'defense' | 'hp' | 'reputation' | 'speed' | 'luck';
   value: number;
 }
 
@@ -2240,6 +2240,25 @@ export interface FactionSettlement {
   factionRank: number;
 }
 
+export interface FactionShopItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  cost: number;
+  requiredLevel: number;
+  rewards: {
+    gold?: number;
+    exp?: number;
+    soulOrbs?: number;
+    attack?: number;
+    defense?: number;
+    maxHp?: number;
+    speed?: number;
+  };
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+}
+
 export interface FactionState {
   playerFaction: FactionType | null;
   joinedAt: number | null;
@@ -2256,22 +2275,24 @@ export interface FactionState {
   activeTab: FactionTab;
 }
 
-export type FactionTab = 'overview' | 'strongholds' | 'garrison' | 'battles' | 'shop';
+export type FactionTab = 'overview' | 'strongholds' | 'garrison' | 'events' | 'shop' | 'battlelog';
 
 export const FACTION_TAB_NAMES: Record<FactionTab, string> = {
   overview: '总览',
   strongholds: '据点',
   garrison: '驻防',
-  battles: '战绩',
+  events: '事件',
   shop: '商店',
+  battlelog: '战报',
 };
 
 export const FACTION_TAB_ICONS: Record<FactionTab, string> = {
   overview: '📊',
   strongholds: '🏰',
   garrison: '⚔️',
-  battles: '📜',
+  events: '📜',
   shop: '🛒',
+  battlelog: '📋',
 };
 
 export const STRONGHOLD_TYPE_NAMES: Record<StrongholdType, string> = {

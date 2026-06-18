@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useGameStore } from '../game/store';
-import { FACTIONS, FACTION_SHOP_ITEMS } from '../game/data';
+import { FACTIONS, FACTION_SHOP_ITEMS, FACTION_SETTLEMENT_INTERVAL } from '../game/data';
 import {
   getFactionReputationLevel,
   FACTION_REPUTATION_LEVELS,
   STRONGHOLD_TYPE_NAMES,
 } from '../game/types';
-import type { FactionTab, Stronghold, FactionShopItem } from '../game/types';
+import type { FactionTab, FactionSettlement } from '../game/types';
 
 const TAB_CONFIG: { id: FactionTab; label: string; icon: string }[] = [
   { id: 'overview', label: '总览', icon: '🏛️' },
@@ -23,6 +23,14 @@ const STAT_NAMES: Record<string, string> = {
   maxHp: '生命',
   speed: '速度',
   luck: '幸运',
+  hp: '生命',
+};
+
+const RARITY_COLORS: Record<string, string> = {
+  common: '#9ca3af',
+  rare: '#3b82f6',
+  epic: '#8b5cf6',
+  legendary: '#f59e0b',
 };
 
 export default function FactionPanel() {
@@ -53,9 +61,8 @@ export default function FactionPanel() {
     getTotalPower,
   } = useGameStore();
 
-  const [selectedStrongholdId, setSelectedStrongholdId] = useState<string | null>(null);
   const [showSettlementResult, setShowSettlementResult] = useState(false);
-  const [lastSettlement, setLastSettlement] = useState<ReturnType<typeof performFactionSettlement>>(null);
+  const [lastSettlement, setLastSettlement] = useState<FactionSettlement | null>(null);
 
   const playerFaction = getPlayerFaction();
   const activeTab = faction.activeTab;
@@ -95,6 +102,14 @@ export default function FactionPanel() {
 
   const handleTriggerEvent = () => {
     triggerFactionEvent();
+  };
+
+  const formatTimeUntilSettle = (lastTime: number) => {
+    const elapsed = Date.now() - lastTime;
+    const remaining = Math.max(0, FACTION_SETTLEMENT_INTERVAL * 1000 - elapsed);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    return `${minutes}分${seconds}秒`;
   };
 
   const renderFactionSelect = () => (
@@ -184,7 +199,7 @@ export default function FactionPanel() {
 
     const lightStrongholds = getStrongholdsByFaction('light').length;
     const shadowStrongholds = getStrongholdsByFaction('shadow').length;
-    const neutralStrongholds = faction.strongholds.filter((s) => s.controllerFaction === 'neutral').length;
+    const neutralStrongholds = faction.strongholds.filter((s) => s.controlFaction === null).length;
 
     const bonusStats = getFactionBonusStats();
 
@@ -195,7 +210,7 @@ export default function FactionPanel() {
             <span className="faction-big-icon">{playerFaction.icon}</span>
             <div>
               <h2 className="faction-title" style={{ color: playerFaction.color }}>{playerFaction.name}</h2>
-              <p className="faction-subtitle">{reputationLevelData.title}</p>
+              <p className="faction-subtitle">{reputationLevelData.name}</p>
             </div>
           </div>
           <div className="faction-header-right">
@@ -327,14 +342,6 @@ export default function FactionPanel() {
     );
   };
 
-  const formatTimeUntilSettle = (lastTime: number) => {
-    const elapsed = Date.now() - lastTime;
-    const remaining = Math.max(0, 3600000 - elapsed); // 1小时
-    const minutes = Math.floor(remaining / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-    return `${minutes}分${seconds}秒`;
-  };
-
   const renderStrongholds = () => {
     if (!playerFaction) return null;
 
@@ -345,17 +352,17 @@ export default function FactionPanel() {
 
         <div className="strongholds-grid">
           {faction.strongholds.map((sh) => {
-            const isControlled = sh.controllerFaction === playerFaction.id;
-            const isEnemy = sh.controllerFaction !== 'neutral' && sh.controllerFaction !== playerFaction.id;
+            const isControlled = sh.controlFaction === playerFaction.id;
+            const isEnemy = sh.controlFaction !== null && sh.controlFaction !== playerFaction.id;
             const canCapture = canCaptureStronghold(sh.id);
             const garrisonPower = getStrongholdPower(sh.id);
+            const strongholdPower = sh.difficulty * 500;
 
             return (
               <div
                 key={sh.id}
                 className={`stronghold-card ${isControlled ? 'controlled' : ''} ${isEnemy ? 'enemy' : ''}`}
                 style={{ borderColor: isControlled ? playerFaction.color : isEnemy ? '#ef4444' : '#6b7280' }}
-                onClick={() => setSelectedStrongholdId(sh.id)}
               >
                 <div className="stronghold-header">
                   <span className="stronghold-icon">{sh.icon}</span>
@@ -365,8 +372,8 @@ export default function FactionPanel() {
                       {STRONGHOLD_TYPE_NAMES[sh.type] || sh.type}
                     </span>
                   </div>
-                  <span className={`controller-badge ${sh.controllerFaction}`}>
-                    {sh.controllerFaction === 'light' ? '光明' : sh.controllerFaction === 'shadow' ? '暗影' : '中立'}
+                  <span className={`controller-badge ${sh.controlFaction || 'neutral'}`}>
+                    {sh.controlFaction === 'light' ? '光明' : sh.controlFaction === 'shadow' ? '暗影' : '中立'}
                   </span>
                 </div>
 
@@ -375,7 +382,7 @@ export default function FactionPanel() {
                 <div className="stronghold-stats">
                   <div className="sh-stat">
                     <span>防守战力</span>
-                    <span className="sh-stat-value">{sh.defensePower}</span>
+                    <span className="sh-stat-value">{strongholdPower}</span>
                   </div>
                   <div className="sh-stat">
                     <span>难度</span>
@@ -386,13 +393,13 @@ export default function FactionPanel() {
                 </div>
 
                 <div className="stronghold-resources">
-                  <span>💰 {sh.resourceGeneration.gold}/时</span>
-                  <span>💎 {sh.resourceGeneration.soulOrbs}/时</span>
+                  <span>💰 {sh.baseIncome.gold}/时</span>
+                  <span>💎 {sh.baseIncome.soulOrbs}/时</span>
                 </div>
 
-                {sh.strategicBonus && (
+                {sh.bonusEffect && (
                   <div className="strategic-bonus">
-                    <span>🏆 战略价值: {sh.strategicBonus}</span>
+                    <span>🏆 战略价值: {sh.bonusEffect.type}{sh.bonusEffect.isPercent ? ` +${sh.bonusEffect.value * 100}%` : ` +${sh.bonusEffect.value}`}</span>
                   </div>
                 )}
 
@@ -405,10 +412,7 @@ export default function FactionPanel() {
                 {!isControlled && (
                   <button
                     className={`capture-btn ${canCapture ? 'can-capture' : 'cannot-capture'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      captureStronghold(sh.id);
-                    }}
+                    onClick={() => captureStronghold(sh.id)}
                     disabled={!canCapture}
                   >
                     {canCapture ? '攻占' : '无法攻占'}
@@ -446,7 +450,7 @@ export default function FactionPanel() {
                     <div className="gs-header">
                       <span className="gs-icon">{sh.icon}</span>
                       <span className="gs-name">{sh.name}</span>
-                      <span className="gs-count">{garrisons.length}/3</span>
+                      <span className="gs-count">{garrisons.length}/{sh.maxGarrison}</span>
                     </div>
                     <div className="gs-companions">
                       {garrisons.length === 0 ? (
@@ -469,7 +473,7 @@ export default function FactionPanel() {
                         })
                       )}
                     </div>
-                    {garrisons.length < 3 && availableCompanions.length > 0 && (
+                    {garrisons.length < sh.maxGarrison && availableCompanions.length > 0 && (
                       <select
                         className="garrison-select"
                         onChange={(e) => {
@@ -503,7 +507,9 @@ export default function FactionPanel() {
                 {availableCompanions.map((c) => (
                   <div key={c.id} className="available-companion-item">
                     <span className="companion-name">{c.name}</span>
-                    <span className="companion-rarity">{c.rarity}</span>
+                    <span className="companion-rarity" style={{ color: RARITY_COLORS[c.rarity] || '#9ca3af' }}>
+                      {c.rarity}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -529,9 +535,6 @@ export default function FactionPanel() {
             <div className="event-header">
               <span className="event-icon">{currentEvent.icon}</span>
               <h4 className="event-title">{currentEvent.title}</h4>
-              <span className={`event-type ${currentEvent.type}`}>
-                {currentEvent.type === 'battle' ? '战斗' : currentEvent.type === 'diplomacy' ? '外交' : '随机'}
-              </span>
             </div>
             <p className="event-description">{currentEvent.description}</p>
             <div className="event-choices">
@@ -542,16 +545,18 @@ export default function FactionPanel() {
                   onClick={() => handleFactionEventChoice(choice.id)}
                 >
                   <span className="choice-text">{choice.text}</span>
-                  {choice.effects.reputation && (
+                  {choice.reputationChanges && (
                     <div className="choice-effects">
-                      {Object.entries(choice.effects.reputation).map(([fId, points]) => (
-                        <span
-                          key={fId}
-                          className={`effect-rep ${points > 0 ? 'positive' : 'negative'}`}
-                        >
-                          {fId === 'light' ? '光明' : fId === 'shadow' ? '暗影' : fId} {points > 0 ? '+' : ''}{points}
+                      {choice.reputationChanges.light !== undefined && (
+                        <span className={`effect-rep ${choice.reputationChanges.light > 0 ? 'positive' : 'negative'}`}>
+                          光明 {choice.reputationChanges.light > 0 ? '+' : ''}{choice.reputationChanges.light}
                         </span>
-                      ))}
+                      )}
+                      {choice.reputationChanges.shadow !== undefined && (
+                        <span className={`effect-rep ${choice.reputationChanges.shadow > 0 ? 'positive' : 'negative'}`}>
+                          暗影 {choice.reputationChanges.shadow > 0 ? '+' : ''}{choice.reputationChanges.shadow}
+                        </span>
+                      )}
                     </div>
                   )}
                 </button>
@@ -591,16 +596,24 @@ export default function FactionPanel() {
               <div
                 key={item.id}
                 className={`shop-item-card ${locked ? 'locked' : ''} ${canBuy ? 'can-buy' : ''}`}
+                style={{ borderColor: RARITY_COLORS[item.rarity] || '#9ca3af' }}
               >
                 <div className="shop-item-header">
                   <span className="shop-item-icon">{item.icon}</span>
                   <h4 className="shop-item-name">{item.name}</h4>
+                  <span className="shop-item-rarity" style={{ color: RARITY_COLORS[item.rarity] || '#9ca3af' }}>
+                    {item.rarity}
+                  </span>
                 </div>
                 <p className="shop-item-desc">{item.description}</p>
                 <div className="shop-item-rewards">
                   {item.rewards.gold && <span>💰 {item.rewards.gold}</span>}
                   {item.rewards.soulOrbs && <span>💎 {item.rewards.soulOrbs}</span>}
                   {item.rewards.exp && <span>⭐ {item.rewards.exp}</span>}
+                  {item.rewards.attack && <span>⚔️ +{item.rewards.attack}</span>}
+                  {item.rewards.defense && <span>🛡️ +{item.rewards.defense}</span>}
+                  {item.rewards.maxHp && <span>❤️ +{item.rewards.maxHp}</span>}
+                  {item.rewards.speed && <span>👟 +{item.rewards.speed}</span>}
                 </div>
                 <div className="shop-item-footer">
                   <span className={`item-cost ${canBuy ? 'affordable' : 'unaffordable'}`}>
@@ -641,13 +654,13 @@ export default function FactionPanel() {
               <div key={log.id} className={`battlelog-item ${log.result}`}>
                 <div className="log-header">
                   <span className="log-icon">
-                    {log.type === 'capture' ? '🏰' : log.type === 'defense' ? '🛡️' : '📜'}
+                    {log.type === 'capture' ? '🏰' : log.type === 'defend' ? '🛡️' : log.type === 'income' ? '💰' : '📜'}
                   </span>
                   <span className="log-title">
-                    {log.type === 'capture' ? '攻占据点' : log.type === 'defense' ? '防守据点' : '阵营事件'}
+                    {log.type === 'capture' ? '攻占据点' : log.type === 'defend' ? '防守据点' : log.type === 'income' ? '收益结算' : '阵营事件'}
                   </span>
                   <span className={`log-result ${log.result}`}>
-                    {log.result === 'victory' ? '胜利' : log.result === 'defeat' ? '失败' : '进行中'}
+                    {log.result === 'victory' ? '胜利' : log.result === 'defeat' ? '失败' : '中性'}
                   </span>
                 </div>
                 <p className="log-desc">{log.description}</p>
@@ -665,20 +678,20 @@ export default function FactionPanel() {
             <p className="empty-text">暂无结算记录</p>
           ) : (
             <div className="settlement-list">
-              {faction.settlementHistory.map((settle) => (
-                <div key={settle.id} className="settlement-item">
+              {faction.settlementHistory.map((settle, idx) => (
+                <div key={`settle-${idx}`} className="settlement-item">
                   <div className="settle-header">
                     <span className="settle-icon">💎</span>
                     <span className="settle-title">周期结算</span>
                     <span className="settle-time">
-                      {new Date(settle.timestamp).toLocaleString('zh-CN')}
+                      {new Date(settle.periodEnd).toLocaleString('zh-CN')}
                     </span>
                   </div>
                   <div className="settle-rewards">
-                    <span>🏰 {settle.strongholdCount} 个据点</span>
-                    <span>💰 {settle.gold}</span>
-                    <span>💎 {settle.soulOrbs}</span>
-                    <span>🏛️ +{settle.reputation}</span>
+                    <span>🏰 {settle.strongholdsHeld} 个据点</span>
+                    <span>💰 {settle.totalGold}</span>
+                    <span>💎 {settle.totalSoulOrbs}</span>
+                    <span>🏛️ +{settle.totalReputation}</span>
                   </div>
                 </div>
               ))}
@@ -713,29 +726,34 @@ export default function FactionPanel() {
           <h3 className="modal-title">🎉 收益结算完成！</h3>
           <div className="modal-content">
             <div className="settle-summary">
-              <p>控制据点: <strong>{lastSettlement.strongholdCount} 个</strong></p>
+              <p>控制据点: <strong>{lastSettlement.strongholdsHeld} 个</strong></p>
             </div>
             <div className="settle-rewards-grid">
               <div className="reward-item">
                 <span className="reward-icon">💰</span>
                 <span className="reward-label">金币</span>
-                <span className="reward-value">+{lastSettlement.gold}</span>
+                <span className="reward-value">+{lastSettlement.totalGold}</span>
               </div>
               <div className="reward-item">
                 <span className="reward-icon">💎</span>
                 <span className="reward-label">魂珠</span>
-                <span className="reward-value">+{lastSettlement.soulOrbs}</span>
+                <span className="reward-value">+{lastSettlement.totalSoulOrbs}</span>
+              </div>
+              <div className="reward-item">
+                <span className="reward-icon">⭐</span>
+                <span className="reward-label">经验</span>
+                <span className="reward-value">+{lastSettlement.totalExp}</span>
               </div>
               <div className="reward-item">
                 <span className="reward-icon">🏛️</span>
                 <span className="reward-label">声望</span>
-                <span className="reward-value">+{lastSettlement.reputation}</span>
+                <span className="reward-value">+{lastSettlement.totalReputation}</span>
               </div>
             </div>
-            {lastSettlement.strongholdRewards && lastSettlement.strongholdRewards.length > 0 && (
+            {lastSettlement.breakdown && lastSettlement.breakdown.length > 0 && (
               <div className="settle-details">
                 <h4>据点明细</h4>
-                {lastSettlement.strongholdRewards.map((sr) => (
+                {lastSettlement.breakdown.map((sr) => (
                   <div key={sr.strongholdId} className="detail-item">
                     <span>{sr.strongholdName}</span>
                     <span>💰 {sr.gold} 💎 {sr.soulOrbs}</span>
