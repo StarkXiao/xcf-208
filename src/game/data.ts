@@ -1,4 +1,4 @@
-import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent } from './types';
+import type { MapArea, Companion, GameEvent, RebirthOption, ReputationLevel, ShopItem, ExpeditionMission, ExpeditionEvent, Bond, StarUpConfig, Skill, MonsterPhase, LevelStarConfig, FirstClearReward, RebirthChallengeTarget, EquipmentBase, EquipmentAffix, EquipmentRarityConfig, EquipmentDropConfig, ForgeRecipe, EquipmentSlotType, EquipmentRarity, StoryDialogue, Chapter, RareMaterial, Commission, CommissionEvent, CommissionRarity, CommissionType, TradeItem, TradeItemRarity, TradeItemCategory, PriceFluctuationConfig, TradeEvent, BlackMarketConfig, SkillTreeBranch, SkillTreeNode, ProfessionSpec, SkillTreeCompanionSynergy, Relic, RelicSet, Building, MerchantEvent, WorldBoss, WorldBossRotation } from './types';
 
 export const RACES = ['人类', '精灵', '矮人', '兽人', '魔族', '龙族'];
 export const CLASSES = ['战士', '法师', '盗贼', '牧师', '弓箭手', '骑士'];
@@ -6619,6 +6619,148 @@ export const TOWN_BUILDING_PRODUCTION_INTERVAL = 60000;
 export const TOWN_MERCHANT_EVENT_BASE_CHANCE = 0.02;
 export const TOWN_MAX_OFFLINE_HOURS = 24;
 export const TOWN_OFFLINE_EFFICIENCY = 0.5;
+
+export const WORLD_BOSSES: WorldBoss[] = [
+  {
+    id: 'wb_forest_guardian',
+    name: '世界树守卫',
+    description: '远古森林深处沉睡的世界树守卫苏醒了，它的根须蔓延整个森林，无人能逃！',
+    icon: '🌳',
+    color: '#22c55e',
+    baseHp: 50000,
+    attack: 60,
+    defense: 20,
+    speed: 3,
+    areaId: 'forest',
+    minPlayerLevel: 5,
+    timeLimitSeconds: 1800,
+    phaseThresholds: [
+      { hpPercent: 0.7, name: '苏醒', attackMultiplier: 1.2, defenseMultiplier: 1.0, color: '#4ade80', description: '世界树守卫缓缓苏醒，枝叶开始狂舞！' },
+      { hpPercent: 0.4, name: '根须狂乱', attackMultiplier: 1.5, defenseMultiplier: 1.3, color: '#16a34a', description: '树根从地下暴涌而出，地面震颤不止！' },
+      { hpPercent: 0.15, name: '自然之怒', attackMultiplier: 2.0, defenseMultiplier: 1.5, color: '#15803d', description: '世界树守卫释放自然之怒，万物颤抖！' },
+    ],
+    mechanics: [
+      { id: 'root_bind', name: '根须束缚', description: '地面涌出根须束缚所有敌人', type: 'aoe', hpPercent: 0.6, damageMultiplier: 1.5, icon: '🌿' },
+      { id: 'life_drain', name: '生命汲取', description: '从大地中汲取生命之力', type: 'heal', hpPercent: 0.35, damageMultiplier: 0, icon: '💚' },
+      { id: 'forest_wrath', name: '森林之怒', description: '召唤森林之力进行全力攻击', type: 'berserk', hpPercent: 0.15, damageMultiplier: 2.5, icon: '🔥' },
+    ],
+    rewardTiers: [
+      { minDamagePercent: 0.01, rewards: [{ type: 'gold', value: 500 }, { type: 'exp', value: 300 }], title: '参与者' },
+      { minDamagePercent: 0.05, rewards: [{ type: 'gold', value: 1500 }, { type: 'exp', value: 1000 }, { type: 'soulOrbs', value: 2 }], title: '贡献者' },
+      { minDamagePercent: 0.15, rewards: [{ type: 'gold', value: 5000 }, { type: 'exp', value: 3000 }, { type: 'soulOrbs', value: 5 }, { type: 'attack', value: 3 }], title: '精英讨伐者' },
+      { minDamagePercent: 0.30, rewards: [{ type: 'gold', value: 12000 }, { type: 'exp', value: 8000 }, { type: 'soulOrbs', value: 12 }, { type: 'attack', value: 8 }, { type: 'defense', value: 5 }], title: '首席英雄' },
+    ],
+    participationReward: [{ type: 'gold', value: 200 }, { type: 'exp', value: 150 }],
+    killBonus: [{ type: 'soulOrbs', value: 10 }, { type: 'attack', value: 5 }],
+  },
+  {
+    id: 'wb_cave_lich_king',
+    name: '深渊巫妖王',
+    description: '洞穴最深处的深渊巫妖王，统御着地下世界的一切亡灵！',
+    icon: '💀',
+    color: '#8b5cf6',
+    baseHp: 120000,
+    attack: 100,
+    defense: 35,
+    speed: 5,
+    areaId: 'cave',
+    minPlayerLevel: 15,
+    timeLimitSeconds: 1800,
+    phaseThresholds: [
+      { hpPercent: 0.75, name: '亡灵召唤', attackMultiplier: 1.3, defenseMultiplier: 1.1, color: '#a78bfa', description: '巫妖王召唤亡灵军团，幽暗之力弥漫！' },
+      { hpPercent: 0.45, name: '暗影护盾', attackMultiplier: 1.5, defenseMultiplier: 1.6, color: '#7c3aed', description: '巫妖王凝聚暗影护盾，防御力飙升！' },
+      { hpPercent: 0.2, name: '死亡凝视', attackMultiplier: 2.2, defenseMultiplier: 1.2, color: '#5b21b6', description: '巫妖王释放死亡凝视，注视者皆将陨灭！' },
+    ],
+    mechanics: [
+      { id: 'soul_steal', name: '灵魂窃取', description: '窃取目标的灵魂能量', type: 'dot', hpPercent: 0.65, damageMultiplier: 1.8, icon: '👻' },
+      { id: 'bone_shield', name: '骸骨护盾', description: '用骸骨构建坚不可摧的护盾', type: 'shield', hpPercent: 0.4, damageMultiplier: 0, icon: '🦴' },
+      { id: 'death_gaze', name: '死亡凝视', description: '凝视深渊，深渊也将凝视你', type: 'aoe', hpPercent: 0.2, damageMultiplier: 3.0, icon: '👁️' },
+    ],
+    rewardTiers: [
+      { minDamagePercent: 0.01, rewards: [{ type: 'gold', value: 1000 }, { type: 'exp', value: 800 }], title: '参与者' },
+      { minDamagePercent: 0.05, rewards: [{ type: 'gold', value: 3000 }, { type: 'exp', value: 2500 }, { type: 'soulOrbs', value: 4 }], title: '贡献者' },
+      { minDamagePercent: 0.15, rewards: [{ type: 'gold', value: 8000 }, { type: 'exp', value: 6000 }, { type: 'soulOrbs', value: 8 }, { type: 'attack', value: 5 }], title: '精英讨伐者' },
+      { minDamagePercent: 0.30, rewards: [{ type: 'gold', value: 20000 }, { type: 'exp', value: 15000 }, { type: 'soulOrbs', value: 20 }, { type: 'attack', value: 12 }, { type: 'defense', value: 8 }], title: '首席英雄' },
+    ],
+    participationReward: [{ type: 'gold', value: 500 }, { type: 'exp', value: 400 }],
+    killBonus: [{ type: 'soulOrbs', value: 20 }, { type: 'attack', value: 8 }, { type: 'defense', value: 3 }],
+  },
+  {
+    id: 'wb_ruins_colossus',
+    name: '远古巨像',
+    description: '远古遗迹中沉睡千年的巨像被唤醒，它的每一步都让大地震裂！',
+    icon: '🗿',
+    color: '#f59e0b',
+    baseHp: 250000,
+    attack: 150,
+    defense: 60,
+    speed: 2,
+    areaId: 'ruins',
+    minPlayerLevel: 30,
+    timeLimitSeconds: 1800,
+    phaseThresholds: [
+      { hpPercent: 0.7, name: '觉醒', attackMultiplier: 1.3, defenseMultiplier: 1.2, color: '#fbbf24', description: '远古巨像的眼中亮起神秘光芒！' },
+      { hpPercent: 0.4, name: '地裂', attackMultiplier: 1.7, defenseMultiplier: 1.4, color: '#f59e0b', description: '巨像猛烈跺脚，大地裂开深渊！' },
+      { hpPercent: 0.15, name: '灭世之力', attackMultiplier: 2.5, defenseMultiplier: 1.6, color: '#d97706', description: '远古巨像释放封印的灭世之力！' },
+    ],
+    mechanics: [
+      { id: 'earthquake', name: '大地震颤', description: '巨像引发地震波', type: 'aoe', hpPercent: 0.55, damageMultiplier: 2.0, icon: '🌋' },
+      { id: 'stone_skin', name: '岩石护甲', description: '全身覆盖坚硬岩石', type: 'shield', hpPercent: 0.35, damageMultiplier: 0, icon: '🪨' },
+      { id: 'apocalypse', name: '末日崩塌', description: '释放全部力量进行毁灭性攻击', type: 'berserk', hpPercent: 0.1, damageMultiplier: 3.5, icon: '💥' },
+    ],
+    rewardTiers: [
+      { minDamagePercent: 0.01, rewards: [{ type: 'gold', value: 2000 }, { type: 'exp', value: 1500 }], title: '参与者' },
+      { minDamagePercent: 0.05, rewards: [{ type: 'gold', value: 6000 }, { type: 'exp', value: 5000 }, { type: 'soulOrbs', value: 6 }], title: '贡献者' },
+      { minDamagePercent: 0.15, rewards: [{ type: 'gold', value: 15000 }, { type: 'exp', value: 12000 }, { type: 'soulOrbs', value: 12 }, { type: 'attack', value: 8 }, { type: 'defense', value: 5 }], title: '精英讨伐者' },
+      { minDamagePercent: 0.30, rewards: [{ type: 'gold', value: 35000 }, { type: 'exp', value: 25000 }, { type: 'soulOrbs', value: 30 }, { type: 'attack', value: 20 }, { type: 'defense', value: 15 }, { type: 'hp', value: 200 }], title: '首席英雄' },
+    ],
+    participationReward: [{ type: 'gold', value: 1000 }, { type: 'exp', value: 800 }],
+    killBonus: [{ type: 'soulOrbs', value: 30 }, { type: 'attack', value: 12 }, { type: 'defense', value: 8 }],
+  },
+  {
+    id: 'wb_volcano_dragon_god',
+    name: '炎龙神',
+    description: '火山之巅的终极存在——炎龙神降世，天地将化为灰烬！',
+    icon: '🐉',
+    color: '#ef4444',
+    baseHp: 500000,
+    attack: 220,
+    defense: 80,
+    speed: 7,
+    areaId: 'volcano',
+    minPlayerLevel: 50,
+    timeLimitSeconds: 1800,
+    phaseThresholds: [
+      { hpPercent: 0.75, name: '龙威', attackMultiplier: 1.4, defenseMultiplier: 1.2, color: '#f87171', description: '炎龙神释放霸道龙威，万物臣服！' },
+      { hpPercent: 0.45, name: '烈焰风暴', attackMultiplier: 1.8, defenseMultiplier: 1.3, color: '#ef4444', description: '龙口喷出烈焰风暴，焚尽一切！' },
+      { hpPercent: 0.2, name: '灭世龙息', attackMultiplier: 2.8, defenseMultiplier: 1.5, color: '#b91c1c', description: '炎龙神蓄力灭世龙息，天崩地裂！' },
+    ],
+    mechanics: [
+      { id: 'flame_breath', name: '龙息吐息', description: '喷射毁天灭地的龙息', type: 'aoe', hpPercent: 0.6, damageMultiplier: 2.5, icon: '🔥' },
+      { id: 'dragon_scale', name: '龙鳞硬化', description: '龙鳞变得坚不可摧', type: 'shield', hpPercent: 0.4, damageMultiplier: 0, icon: '🔰' },
+      { id: 'inferno', name: '炼狱降临', description: '将整个战场化为炼狱', type: 'berserk', hpPercent: 0.15, damageMultiplier: 4.0, icon: '☄️' },
+    ],
+    rewardTiers: [
+      { minDamagePercent: 0.01, rewards: [{ type: 'gold', value: 5000 }, { type: 'exp', value: 3000 }], title: '参与者' },
+      { minDamagePercent: 0.05, rewards: [{ type: 'gold', value: 15000 }, { type: 'exp', value: 10000 }, { type: 'soulOrbs', value: 10 }], title: '贡献者' },
+      { minDamagePercent: 0.15, rewards: [{ type: 'gold', value: 40000 }, { type: 'exp', value: 30000 }, { type: 'soulOrbs', value: 20 }, { type: 'attack', value: 15 }, { type: 'defense', value: 10 }], title: '精英讨伐者' },
+      { minDamagePercent: 0.30, rewards: [{ type: 'gold', value: 80000 }, { type: 'exp', value: 60000 }, { type: 'soulOrbs', value: 50 }, { type: 'attack', value: 30 }, { type: 'defense', value: 25 }, { type: 'hp', value: 500 }, { type: 'speed', value: 10 }], title: '首席英雄' },
+    ],
+    participationReward: [{ type: 'gold', value: 2000 }, { type: 'exp', value: 1500 }],
+    killBonus: [{ type: 'soulOrbs', value: 50 }, { type: 'attack', value: 20 }, { type: 'defense', value: 15 }, { type: 'hp', value: 300 }],
+  },
+];
+
+export const WORLD_BOSS_ROTATION: WorldBossRotation = {
+  bossIds: ['wb_forest_guardian', 'wb_cave_lich_king', 'wb_ruins_colossus', 'wb_volcano_dragon_god'],
+  rotationIntervalSeconds: 1800,
+  restIntervalSeconds: 300,
+};
+
+export const WORLD_BOSS_REVIVE_COST_GOLD = 500;
+export const WORLD_BOSS_REVIVE_COST_SOUL_ORBS = 3;
+export const WORLD_BOSS_MAX_REVIVES = 5;
+export const WORLD_BOSS_SIMULATED_PARTICIPANTS = ['剑圣·云逸', '暗影刺客·无痕', '圣骑士·光耀', '元素法师·星陨', '狂战士·裂魂', '神射手·追风', '治愈者·暖阳', '召唤师·万灵', '龙战士·焚天', '暗夜猎手·月华'];
 
 export {
   RELIC_RARITY_NAMES,

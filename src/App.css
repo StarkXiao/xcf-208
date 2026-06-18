@@ -9016,3 +9016,769 @@
   }
 }
 
+.worldboss-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.worldboss-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.worldboss-panel-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.worldboss-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.status-active {
+  font-weight: 600;
+}
+
+.status-waiting {
+  color: #9ca3af;
+}
+
+.status-defeated {
+  color: #fbbf24;
+}
+
+.worldboss-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.worldboss-tab {
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.worldboss-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+.worldboss-tab.active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.worldboss-content {
+  flex: 1;
+}
+
+.worldboss-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.worldboss-waiting-icon {
+  font-size: 48px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.worldboss-countdown {
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.countdown-time {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.worldboss-next-info {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.worldboss-start-btn {
+  padding: 12px 32px;
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.worldboss-start-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  transform: scale(1.05);
+}
+
+.worldboss-battle {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.worldboss-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border-left: 4px solid;
+}
+
+.worldboss-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.worldboss-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.worldboss-info h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.worldboss-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worldboss-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.timer-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.timer-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.worldboss-phase {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.phase-name {
+  font-weight: 700;
+}
+
+.phase-desc {
+  color: #d1d5db;
+}
+
+.worldboss-mechanic {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid;
+  background: rgba(239, 68, 68, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mechanic-icon {
+  font-size: 16px;
+}
+
+.mechanic-name {
+  font-weight: 700;
+  color: #f87171;
+}
+
+.mechanic-desc {
+  color: #d1d5db;
+}
+
+.worldboss-hp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worldboss-hp-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #d1d5db;
+}
+
+.worldboss-hp-bar {
+  position: relative;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.worldboss-hp-fill {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.worldboss-hp-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px 12px 0 0;
+}
+
+.worldboss-phase-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-left: 2px dashed;
+  opacity: 0.6;
+  z-index: 1;
+}
+
+.worldboss-stats-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.worldboss-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.worldboss-player-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.worldboss-player-stats > div {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.damage-value {
+  color: #f87171;
+  font-weight: 700;
+}
+
+.rank-value {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.percent-value {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.deaths-value {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.worldboss-actions {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+.worldboss-attack-btn {
+  flex: 1;
+  padding: 14px;
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+
+.worldboss-attack-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  transform: scale(1.02);
+}
+
+.worldboss-attack-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.worldboss-attack-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.worldboss-auto-btn {
+  padding: 14px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.worldboss-auto-btn.active {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.worldboss-auto-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.worldboss-auto-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.damage-popup {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  animation: damageFloat 0.6s ease-out forwards;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.damage-popup.critical {
+  background: rgba(251, 191, 36, 0.95);
+  color: #1a1a2e;
+  font-size: 20px;
+}
+
+@keyframes damageFloat {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-40px);
+  }
+}
+
+.worldboss-defeated,
+.worldboss-dead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.worldboss-defeated h3 {
+  color: #fbbf24;
+  font-size: 20px;
+  margin: 0;
+}
+
+.worldboss-dead h3 {
+  color: #ef4444;
+  font-size: 20px;
+  margin: 0;
+}
+
+.worldboss-claim-btn {
+  padding: 12px 32px;
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.worldboss-claim-btn:hover {
+  background: rgba(251, 191, 36, 0.3);
+  transform: scale(1.05);
+}
+
+.rewards-claimed {
+  color: #4ade80;
+  font-size: 14px;
+}
+
+.rewards-claimed-banner {
+  text-align: center;
+  padding: 12px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 8px;
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.worldboss-revive-btn {
+  padding: 12px 24px;
+  border: 2px solid #60a5fa;
+  border-radius: 12px;
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.worldboss-revive-btn:hover {
+  background: rgba(96, 165, 250, 0.3);
+  transform: scale(1.05);
+}
+
+.revive-unavailable {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.worldboss-damage-log {
+  margin-top: 8px;
+}
+
+.worldboss-damage-log h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.damage-log-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.damage-log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+}
+
+.damage-log-item.critical {
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.log-source {
+  color: #d1d5db;
+  min-width: 60px;
+}
+
+.log-damage {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.log-mechanic {
+  font-size: 14px;
+}
+
+.log-time {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.worldboss-ranking h4,
+.worldboss-rewards h4,
+.worldboss-history h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ranking-item.player {
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.ranking-item.rank-1 {
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.ranking-item.rank-2 {
+  background: rgba(156, 163, 175, 0.1);
+}
+
+.ranking-item.rank-3 {
+  background: rgba(180, 83, 9, 0.1);
+}
+
+.rank-badge {
+  font-size: 16px;
+  min-width: 36px;
+  text-align: center;
+}
+
+.rank-name {
+  flex: 1;
+  color: #e5e7eb;
+}
+
+.rank-damage {
+  color: #f87171;
+  font-weight: 600;
+  min-width: 60px;
+  text-align: right;
+}
+
+.rank-percent {
+  color: #60a5fa;
+  font-size: 12px;
+  min-width: 50px;
+  text-align: right;
+}
+
+.reward-tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reward-tier {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reward-tier.reached {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.tier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tier-title {
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.tier-requirement {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.tier-status.yes {
+  color: #4ade80;
+}
+
+.tier-status.no {
+  color: #ef4444;
+}
+
+.tier-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tier-reward-item {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.participation-reward {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+.participation-reward h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.participation-items {
+  display: flex;
+  gap: 8px;
+}
+
+.participation-item {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.worldboss-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-stats {
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 8px;
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border-left: 4px solid;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.history-boss {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.history-time {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.history-details {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.worldboss-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+

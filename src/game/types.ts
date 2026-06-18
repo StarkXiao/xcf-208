@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1441,3 +1441,105 @@ export interface OfflineTownRewards {
 }
 
 export type TownTab = 'buildings' | 'merchant' | 'station' | 'overview';
+
+export interface WorldBoss {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  baseHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  areaId: string;
+  minPlayerLevel: number;
+  phaseThresholds: WorldBossPhase[];
+  mechanics: WorldBossMechanic[];
+  timeLimitSeconds: number;
+  rewardTiers: WorldBossRewardTier[];
+  participationReward: EventEffect[];
+  killBonus: EventEffect[];
+}
+
+export interface WorldBossPhase {
+  hpPercent: number;
+  name: string;
+  attackMultiplier: number;
+  defenseMultiplier: number;
+  color: string;
+  description: string;
+}
+
+export interface WorldBossMechanic {
+  id: string;
+  name: string;
+  description: string;
+  type: 'aoe' | 'dot' | 'summon' | 'shield' | 'berserk' | 'heal';
+  hpPercent: number;
+  damageMultiplier: number;
+  icon: string;
+}
+
+export interface WorldBossRewardTier {
+  minDamagePercent: number;
+  rewards: EventEffect[];
+  title: string;
+}
+
+export interface WorldBossRankingEntry {
+  name: string;
+  damage: number;
+  timestamp: number;
+}
+
+export interface WorldBossSession {
+  bossId: string;
+  currentHp: number;
+  maxHp: number;
+  phaseIndex: number;
+  startTime: number;
+  endTime: number | null;
+  isDefeated: boolean;
+  playerDamage: number;
+  playerDeaths: number;
+  reviveCount: number;
+  isDead: boolean;
+  lastDamageTime: number;
+  mechanicActive: string | null;
+  ranking: WorldBossRankingEntry[];
+  damageLog: WorldBossDamageLogEntry[];
+  rewardsClaimed: boolean;
+}
+
+export interface WorldBossDamageLogEntry {
+  timestamp: number;
+  source: string;
+  damage: number;
+  mechanic?: string;
+  isCritical: boolean;
+}
+
+export interface WorldBossRotation {
+  bossIds: string[];
+  rotationIntervalSeconds: number;
+  restIntervalSeconds: number;
+}
+
+export interface WorldBossState {
+  currentSession: WorldBossSession | null;
+  rotationIndex: number;
+  nextBossTime: number;
+  isActive: boolean;
+  totalBossesDefeated: number;
+  history: WorldBossHistoryEntry[];
+}
+
+export interface WorldBossHistoryEntry {
+  bossId: string;
+  defeatedAt: number;
+  playerDamage: number;
+  playerRank: number;
+  totalParticipants: number;
+  rewardsClaimed: boolean;
+}

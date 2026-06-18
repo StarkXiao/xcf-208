@@ -16,6 +16,7 @@ import TradeMarketPanel from './TradeMarketPanel';
 import BlackMarketPanel from './BlackMarketPanel';
 import SkillTreePanel from './SkillTreePanel';
 import TownPanel from './TownPanel';
+import WorldBossPanel from './WorldBossPanel';
 import {
   REBIRTH_OPTIONS,
   REPUTATION_LEVELS,
@@ -95,6 +96,7 @@ export default function GameScreen() {
     { id: 'expedition' as const, label: '🏔️ 远征', icon: '🏔️' },
     { id: 'guild' as const, label: '🏰 公会', icon: '🏰' },
     { id: 'town' as const, label: '🏘️ 城镇', icon: '🏘️' },
+    { id: 'worldboss' as const, label: '🐉 Boss', icon: '🐉' },
     { id: 'equipment' as const, label: '⚒️ 装备', icon: '⚒️' },
     { id: 'relics' as const, label: '🏆 神器', icon: '🏆' },
     { id: 'talents' as const, label: '🌟 天赋', icon: '🌟' },
@@ -723,6 +725,8 @@ export default function GameScreen() {
         return <GuildPanel />;
       case 'town':
         return <TownPanel />;
+      case 'worldboss':
+        return <WorldBossPanel />;
       case 'equipment':
         return <EquipmentPanel />;
       case 'relics':

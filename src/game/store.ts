@@ -71,6 +71,12 @@ import type {
   ActiveMerchantEvent,
   OfflineTownRewards,
   TownTab,
+  WorldBoss,
+  WorldBossState,
+  WorldBossSession,
+  WorldBossRankingEntry,
+  WorldBossDamageLogEntry,
+  WorldBossHistoryEntry,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES } from './types';
 import {
@@ -112,6 +118,12 @@ import {
   TOWN_MERCHANT_EVENT_BASE_CHANCE,
   TOWN_MAX_OFFLINE_HOURS,
   TOWN_OFFLINE_EFFICIENCY,
+  WORLD_BOSSES,
+  WORLD_BOSS_ROTATION,
+  WORLD_BOSS_REVIVE_COST_GOLD,
+  WORLD_BOSS_REVIVE_COST_SOUL_ORBS,
+  WORLD_BOSS_MAX_REVIVES,
+  WORLD_BOSS_SIMULATED_PARTICIPANTS,
 } from './data';
 
 interface GameState {
@@ -524,6 +536,24 @@ interface GameState {
   updateTownProduction: () => void;
 
   setTownActiveTab: (tab: TownTab) => void;
+
+  worldBossState: WorldBossState;
+  getCurrentWorldBoss: () => WorldBoss | undefined;
+  getWorldBossSession: () => WorldBossSession | null;
+  startWorldBossSession: () => void;
+  dealWorldBossDamage: () => number;
+  reviveInWorldBoss: () => boolean;
+  canReviveInWorldBoss: () => boolean;
+  checkWorldBossRotation: () => void;
+  claimWorldBossRewards: () => boolean;
+  canClaimWorldBossRewards: () => boolean;
+  getPlayerWorldBossRank: () => number;
+  getPlayerDamagePercent: () => number;
+  getWorldBossPhaseInfo: () => { index: number; name: string; color: string; description: string } | null;
+  getWorldBossActiveMechanic: () => { id: string; name: string; description: string; icon: string } | null;
+  getWorldBossTimeRemaining: () => number;
+  isWorldBossAvailable: () => boolean;
+  tickWorldBoss: () => void;
 }
 
 let logIdCounter = 0;
@@ -1502,6 +1532,14 @@ export const useGameStore = create<GameState>()(
           recruitPullCounters: initRecruitCounters(),
           lastRecruitResults: null,
           ownedRelics: [],
+          worldBossState: {
+            currentSession: null,
+            rotationIndex: 0,
+            nextBossTime: Date.now() + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+            isActive: false,
+            totalBossesDefeated: 0,
+            history: [],
+          },
         });
 
         return true;
@@ -4648,6 +4686,504 @@ export const useGameStore = create<GameState>()(
       townActiveTab: 'overview',
       lastTownProductionTime: Date.now(),
 
+      worldBossState: {
+        currentSession: null,
+        rotationIndex: 0,
+        nextBossTime: Date.now() + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+        isActive: false,
+        totalBossesDefeated: 0,
+        history: [],
+      },
+
+      getCurrentWorldBoss: () => {
+        const state = get();
+        if (!state.worldBossState.currentSession) return undefined;
+        return WORLD_BOSSES.find((b) => b.id === state.worldBossState.currentSession!.bossId);
+      },
+
+      getWorldBossSession: () => {
+        return get().worldBossState.currentSession;
+      },
+
+      startWorldBossSession: () => {
+        const state = get();
+        if (state.worldBossState.currentSession) return;
+
+        const bossId = WORLD_BOSS_ROTATION.bossIds[state.worldBossState.rotationIndex % WORLD_BOSS_ROTATION.bossIds.length];
+        const boss = WORLD_BOSSES.find((b) => b.id === bossId);
+        if (!boss) return;
+
+        if (state.player.stats.level < boss.minPlayerLevel) return;
+
+        const simulatedRanking: WorldBossRankingEntry[] = [];
+        const participantCount = 3 + Math.floor(Math.random() * 5);
+        for (let i = 0; i < participantCount; i++) {
+          const name = WORLD_BOSS_SIMULATED_PARTICIPANTS[Math.floor(Math.random() * WORLD_BOSS_SIMULATED_PARTICIPANTS.length)];
+          simulatedRanking.push({
+            name,
+            damage: Math.floor(Math.random() * boss.baseHp * 0.15),
+            timestamp: Date.now() - Math.floor(Math.random() * 60000),
+          });
+        }
+
+        const session: WorldBossSession = {
+          bossId,
+          currentHp: boss.baseHp,
+          maxHp: boss.baseHp,
+          phaseIndex: 0,
+          startTime: Date.now(),
+          endTime: null,
+          isDefeated: false,
+          playerDamage: 0,
+          playerDeaths: 0,
+          reviveCount: 0,
+          isDead: false,
+          lastDamageTime: Date.now(),
+          mechanicActive: null,
+          ranking: simulatedRanking,
+          damageLog: [],
+          rewardsClaimed: false,
+        };
+
+        set({
+          worldBossState: {
+            ...state.worldBossState,
+            currentSession: session,
+            isActive: true,
+          },
+        });
+
+        get().addBattleLog(`⚔️ 世界Boss ${boss.icon} ${boss.name} 降临！限时${boss.timeLimitSeconds / 60}分钟讨伐！`, 'system');
+      },
+
+      dealWorldBossDamage: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || session.isDefeated || session.isDead) return 0;
+
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return 0;
+
+        const playerAttack = get().getTotalAttack();
+        const companionAttack = get().getFormationCompanions().reduce((sum, c) => sum + get().getCompanionEffectiveAttack(c), 0);
+        const totalDamage = playerAttack + companionAttack;
+
+        const phase = boss.phaseThresholds[session.phaseIndex];
+        const phaseAtkMult = phase ? phase.attackMultiplier : 1;
+        const phaseDefMult = phase ? phase.defenseMultiplier : 1;
+
+        const defense = boss.defense * phaseDefMult;
+        const actualDamage = Math.max(1, Math.floor(totalDamage - defense * 0.5));
+
+        const isCritical = Math.random() < (state.player.stats.luck * 0.01 + 0.05);
+        const finalDamage = isCritical ? Math.floor(actualDamage * 1.5) : actualDamage;
+
+        const mechanic = session.mechanicActive
+          ? boss.mechanics.find((m) => m.id === session.mechanicActive)
+          : null;
+        const mechanicDamage = mechanic && mechanic.type !== 'shield' && mechanic.type !== 'heal'
+          ? Math.floor(finalDamage * (mechanic.damageMultiplier - 1))
+          : 0;
+        const totalFinalDamage = finalDamage + mechanicDamage;
+
+        const newHp = Math.max(0, session.currentHp - totalFinalDamage);
+        let newPhaseIndex = session.phaseIndex;
+        const hpPercent = newHp / session.maxHp;
+        for (let i = boss.phaseThresholds.length - 1; i >= 0; i--) {
+          if (hpPercent <= boss.phaseThresholds[i].hpPercent) {
+            newPhaseIndex = i;
+            break;
+          }
+        }
+
+        if (newPhaseIndex > session.phaseIndex) {
+          const newPhase = boss.phaseThresholds[newPhaseIndex];
+          get().addBattleLog(`📊 ${boss.name}进入【${newPhase.name}】阶段！${newPhase.description}`, 'phase');
+        }
+
+        let newMechanicActive = session.mechanicActive;
+        for (const m of boss.mechanics) {
+          if (hpPercent <= m.hpPercent && (!session.mechanicActive || session.mechanicActive !== m.id)) {
+            const alreadyTriggered = session.damageLog.some(
+              (l) => l.mechanic === m.id
+            );
+            if (!alreadyTriggered) {
+              newMechanicActive = m.id;
+              get().addBattleLog(`${m.icon} ${boss.name}释放【${m.name}】！${m.description}`, 'skill');
+              if (m.type === 'shield') {
+                get().addBattleLog(`🛡️ ${boss.name}激活护盾，防御力大幅提升！`, 'system');
+              } else if (m.type === 'heal') {
+                const healAmount = Math.floor(session.maxHp * 0.05);
+                const healedHp = Math.min(session.maxHp, newHp + healAmount);
+                set({
+                  worldBossState: {
+                    ...get().worldBossState,
+                    currentSession: {
+                      ...get().worldBossState.currentSession!,
+                      currentHp: healedHp,
+                      mechanicActive: m.id,
+                    },
+                  },
+                });
+                get().addBattleLog(`💚 ${boss.name}恢复了${healAmount}点生命！`, 'heal');
+              }
+              break;
+            }
+          }
+        }
+
+        const logEntry: WorldBossDamageLogEntry = {
+          timestamp: Date.now(),
+          source: state.player.name || '你',
+          damage: totalFinalDamage,
+          mechanic: newMechanicActive || undefined,
+          isCritical,
+        };
+
+        const isDefeated = newHp <= 0;
+
+        const updatedRanking = [...session.ranking];
+        const existingEntry = updatedRanking.find((e) => e.name === (state.player.name || '你'));
+        if (existingEntry) {
+          existingEntry.damage += totalFinalDamage;
+          existingEntry.timestamp = Date.now();
+        } else {
+          updatedRanking.push({
+            name: state.player.name || '你',
+            damage: session.playerDamage + totalFinalDamage,
+            timestamp: Date.now(),
+          });
+        }
+        updatedRanking.sort((a, b) => b.damage - a.damage);
+
+        if (Math.random() < 0.3) {
+          const randomName = WORLD_BOSS_SIMULATED_PARTICIPANTS[Math.floor(Math.random() * WORLD_BOSS_SIMULATED_PARTICIPANTS.length)];
+          const existingSim = updatedRanking.find((e) => e.name === randomName);
+          if (existingSim) {
+            existingSim.damage += Math.floor(Math.random() * totalDamage * 1.5);
+          }
+          updatedRanking.sort((a, b) => b.damage - a.damage);
+        }
+
+        set({
+          worldBossState: {
+            ...state.worldBossState,
+            currentSession: {
+              ...session,
+              currentHp: newHp,
+              phaseIndex: newPhaseIndex,
+              isDefeated,
+              playerDamage: session.playerDamage + totalFinalDamage,
+              lastDamageTime: Date.now(),
+              mechanicActive: newMechanicActive,
+              endTime: isDefeated ? Date.now() : null,
+              ranking: updatedRanking,
+              damageLog: [...session.damageLog, logEntry],
+            },
+          },
+        });
+
+        if (isDefeated) {
+          get().addBattleLog(`🎉 世界Boss ${boss.icon} ${boss.name} 已被击败！`, 'levelup');
+          boss.killBonus.forEach((effect) => {
+            switch (effect.type) {
+              case 'soulOrbs': get().addSoulOrbs(effect.value); break;
+              case 'attack': set((s) => ({ player: { ...s.player, stats: { ...s.player.stats, attack: s.player.stats.attack + effect.value } } })); break;
+              case 'defense': set((s) => ({ player: { ...s.player, stats: { ...s.player.stats, defense: s.player.stats.defense + effect.value } } })); break;
+              case 'hp': get().healHp(effect.value); break;
+            }
+          });
+
+          const playerRank = updatedRanking.findIndex((e) => e.name === (state.player.name || '你')) + 1;
+          const historyEntry: WorldBossHistoryEntry = {
+            bossId: boss.id,
+            defeatedAt: Date.now(),
+            playerDamage: session.playerDamage + totalFinalDamage,
+            playerRank,
+            totalParticipants: updatedRanking.length,
+            rewardsClaimed: false,
+          };
+          set((s) => ({
+            worldBossState: {
+              ...s.worldBossState,
+              totalBossesDefeated: s.worldBossState.totalBossesDefeated + 1,
+              history: [...s.worldBossState.history, historyEntry],
+            },
+          }));
+        }
+
+        return totalFinalDamage;
+      },
+
+      reviveInWorldBoss: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || !session.isDead) return false;
+        if (session.reviveCount >= WORLD_BOSS_MAX_REVIVES) return false;
+        if (state.player.stats.gold < WORLD_BOSS_REVIVE_COST_GOLD) return false;
+        if (state.player.stats.soulOrbs < WORLD_BOSS_REVIVE_COST_SOUL_ORBS) return false;
+
+        set((s) => ({
+          player: {
+            ...s.player,
+            stats: {
+              ...s.player.stats,
+              gold: s.player.stats.gold - WORLD_BOSS_REVIVE_COST_GOLD,
+              soulOrbs: s.player.stats.soulOrbs - WORLD_BOSS_REVIVE_COST_SOUL_ORBS,
+              hp: Math.floor(s.player.stats.maxHp * 0.5),
+            },
+          },
+          worldBossState: {
+            ...s.worldBossState,
+            currentSession: session
+              ? {
+                  ...session,
+                  isDead: false,
+                  reviveCount: session.reviveCount + 1,
+                }
+              : null,
+          },
+        }));
+
+        get().addBattleLog(`💫 你已复活！消耗💰${WORLD_BOSS_REVIVE_COST_GOLD} 💎${WORLD_BOSS_REVIVE_COST_SOUL_ORBS}`, 'heal');
+        return true;
+      },
+
+      canReviveInWorldBoss: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || !session.isDead) return false;
+        if (session.reviveCount >= WORLD_BOSS_MAX_REVIVES) return false;
+        if (state.player.stats.gold < WORLD_BOSS_REVIVE_COST_GOLD) return false;
+        if (state.player.stats.soulOrbs < WORLD_BOSS_REVIVE_COST_SOUL_ORBS) return false;
+        return true;
+      },
+
+      checkWorldBossRotation: () => {
+        const state = get();
+        const now = Date.now();
+
+        if (state.worldBossState.isActive && state.worldBossState.currentSession) {
+          const boss = WORLD_BOSSES.find((b) => b.id === state.worldBossState.currentSession!.bossId);
+          if (boss) {
+            const elapsed = (now - state.worldBossState.currentSession.startTime) / 1000;
+            if (elapsed >= boss.timeLimitSeconds && !state.worldBossState.currentSession.isDefeated) {
+              get().addBattleLog(`⏰ 世界Boss ${boss.icon} ${boss.name} 讨伐时间结束，Boss撤退了！`, 'system');
+
+              const playerRank = state.worldBossState.currentSession.ranking.findIndex(
+                (e) => e.name === (state.player.name || '你')
+              ) + 1;
+
+              const historyEntry: WorldBossHistoryEntry = {
+                bossId: boss.id,
+                defeatedAt: now,
+                playerDamage: state.worldBossState.currentSession.playerDamage,
+                playerRank,
+                totalParticipants: state.worldBossState.currentSession.ranking.length,
+                rewardsClaimed: false,
+              };
+
+              set({
+                worldBossState: {
+                  ...state.worldBossState,
+                  currentSession: null,
+                  isActive: false,
+                  rotationIndex: (state.worldBossState.rotationIndex + 1) % WORLD_BOSS_ROTATION.bossIds.length,
+                  nextBossTime: now + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+                  history: [...state.worldBossState.history, historyEntry],
+                },
+              });
+              return;
+            }
+          }
+
+          if (state.worldBossState.currentSession.isDefeated) {
+            const timeSinceDefeat = now - (state.worldBossState.currentSession.endTime || now);
+            if (timeSinceDefeat >= 10000) {
+              set({
+                worldBossState: {
+                  ...state.worldBossState,
+                  currentSession: null,
+                  isActive: false,
+                  rotationIndex: (state.worldBossState.rotationIndex + 1) % WORLD_BOSS_ROTATION.bossIds.length,
+                  nextBossTime: now + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+                },
+              });
+            }
+          }
+          return;
+        }
+
+        if (!state.worldBossState.isActive && now >= state.worldBossState.nextBossTime) {
+          const nextBossId = WORLD_BOSS_ROTATION.bossIds[state.worldBossState.rotationIndex % WORLD_BOSS_ROTATION.bossIds.length];
+          const nextBoss = WORLD_BOSSES.find((b) => b.id === nextBossId);
+
+          if (nextBoss && state.player.stats.level >= nextBoss.minPlayerLevel) {
+            get().addBattleLog(`📢 世界Boss即将降临：${nextBoss.icon} ${nextBoss.name}！`, 'system');
+            get().startWorldBossSession();
+          } else {
+            set({
+              worldBossState: {
+                ...state.worldBossState,
+                rotationIndex: (state.worldBossState.rotationIndex + 1) % WORLD_BOSS_ROTATION.bossIds.length,
+                nextBossTime: now + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+              },
+            });
+          }
+        }
+      },
+
+      claimWorldBossRewards: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || session.rewardsClaimed) return false;
+        if (session.playerDamage <= 0) return false;
+
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return false;
+
+        const damagePercent = session.playerDamage / session.maxHp;
+        let bestTier = boss.rewardTiers[boss.rewardTiers.length - 1];
+        for (const tier of boss.rewardTiers) {
+          if (damagePercent >= tier.minDamagePercent) {
+            bestTier = tier;
+            break;
+          }
+        }
+
+        bestTier.rewards.forEach((effect) => {
+          switch (effect.type) {
+            case 'gold': get().addGold(effect.value); break;
+            case 'exp': get().addExp(effect.value); break;
+            case 'soulOrbs': get().addSoulOrbs(effect.value); break;
+            case 'attack': set((s) => ({ player: { ...s.player, stats: { ...s.player.stats, attack: s.player.stats.attack + effect.value } } })); break;
+            case 'defense': set((s) => ({ player: { ...s.player, stats: { ...s.player.stats, defense: s.player.stats.defense + effect.value } } })); break;
+            case 'hp': get().healHp(effect.value); break;
+            case 'speed': set((s) => ({ player: { ...s.player, stats: { ...s.player.stats, speed: s.player.stats.speed + effect.value } } })); break;
+          }
+        });
+
+        get().addBattleLog(`🎁 获得世界Boss【${bestTier.title}】奖励！`, 'drop');
+
+        set((s) => ({
+          worldBossState: {
+            ...s.worldBossState,
+            currentSession: session ? { ...session, rewardsClaimed: true } : null,
+            history: s.worldBossState.history.map((h, i) =>
+              i === s.worldBossState.history.length - 1 ? { ...h, rewardsClaimed: true } : h
+            ),
+          },
+        }));
+
+        return true;
+      },
+
+      canClaimWorldBossRewards: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || session.rewardsClaimed) return false;
+        return session.playerDamage > 0;
+      },
+
+      getPlayerWorldBossRank: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session) return 0;
+        const idx = session.ranking.findIndex((e) => e.name === (state.player.name || '你'));
+        return idx >= 0 ? idx + 1 : session.ranking.length + 1;
+      },
+
+      getPlayerDamagePercent: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || session.maxHp === 0) return 0;
+        return session.playerDamage / session.maxHp;
+      },
+
+      getWorldBossPhaseInfo: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session) return null;
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss || session.phaseIndex >= boss.phaseThresholds.length) return null;
+        const phase = boss.phaseThresholds[session.phaseIndex];
+        return { index: session.phaseIndex, name: phase.name, color: phase.color, description: phase.description };
+      },
+
+      getWorldBossActiveMechanic: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || !session.mechanicActive) return null;
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return null;
+        const mechanic = boss.mechanics.find((m) => m.id === session.mechanicActive);
+        if (!mechanic) return null;
+        return { id: mechanic.id, name: mechanic.name, description: mechanic.description, icon: mechanic.icon };
+      },
+
+      getWorldBossTimeRemaining: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session) {
+          if (!state.worldBossState.isActive) {
+            return Math.max(0, state.worldBossState.nextBossTime - Date.now());
+          }
+          return 0;
+        }
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return 0;
+        const elapsed = (Date.now() - session.startTime) / 1000;
+        return Math.max(0, (boss.timeLimitSeconds - elapsed) * 1000);
+      },
+
+      isWorldBossAvailable: () => {
+        const state = get();
+        if (!state.worldBossState.isActive) return false;
+        const session = state.worldBossState.currentSession;
+        if (!session || session.isDefeated) return false;
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return false;
+        return state.player.stats.level >= boss.minPlayerLevel;
+      },
+
+      tickWorldBoss: () => {
+        const state = get();
+        const session = state.worldBossState.currentSession;
+        if (!session || session.isDefeated || session.isDead) return;
+
+        const boss = WORLD_BOSSES.find((b) => b.id === session.bossId);
+        if (!boss) return;
+
+        if (Math.random() < boss.speed * 0.08) {
+          const phase = boss.phaseThresholds[session.phaseIndex];
+          const atkMult = phase ? phase.attackMultiplier : 1;
+          const bossDamage = Math.floor(boss.attack * atkMult * (0.5 + Math.random() * 0.5));
+          const playerDef = get().getTotalDefense();
+          const mitigated = Math.max(1, bossDamage - Math.floor(playerDef * 0.3));
+
+          const mechanic = session.mechanicActive
+            ? boss.mechanics.find((m) => m.id === session.mechanicActive)
+            : null;
+          const mechanicExtra = mechanic && mechanic.type !== 'shield' && mechanic.type !== 'heal'
+            ? Math.floor(mitigated * (mechanic.damageMultiplier - 1) * 0.3)
+            : 0;
+
+          const totalDamage = mitigated + mechanicExtra;
+          get().takeDamage(totalDamage);
+
+          const newHp = state.player.stats.hp - totalDamage;
+          if (newHp <= 0) {
+            set((s) => ({
+              worldBossState: {
+                ...s.worldBossState,
+                currentSession: session ? { ...session, isDead: true, playerDeaths: session.playerDeaths + 1 } : null,
+              },
+            }));
+            get().addBattleLog(`💀 你被${boss.icon} ${boss.name}击倒了！需要复活才能继续战斗`, 'death');
+          }
+        }
+      },
+
       getBuilding: (buildingId) => BUILDINGS.find((b) => b.id === buildingId),
 
       getOwnedBuilding: (buildingId) => {
@@ -5264,7 +5800,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'isekai-idle-game',
-      version: 9,
+      version: 10,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -5340,6 +5876,16 @@ export const useGameStore = create<GameState>()(
         if (version < 9) {
           state.ownedRelics = [];
           state.relicCodex = initRelicCodex();
+        }
+        if (version < 10) {
+          state.worldBossState = {
+            currentSession: null,
+            rotationIndex: 0,
+            nextBossTime: Date.now() + WORLD_BOSS_ROTATION.restIntervalSeconds * 1000,
+            isActive: false,
+            totalBossesDefeated: 0,
+            history: [],
+          };
         }
         return state as unknown as GameState;
       },
