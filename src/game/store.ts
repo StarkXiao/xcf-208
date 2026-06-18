@@ -77,6 +77,13 @@ import type {
   WorldBossRankingEntry,
   WorldBossDamageLogEntry,
   WorldBossHistoryEntry,
+  AlchemyRecipe,
+  Potion,
+  AlchemyLevelConfig,
+  OwnedPotion,
+  ActiveAlchemyBuff,
+  AlchemyPotionEffect,
+  AlchemyTab,
 } from './types';
 import { getAffinityLevel, MAP_MODIFIER_ICONS, AFFINITY_LEVEL_NAMES, AFFINITY_LEVEL_COLORS, MONSTER_TIER_CONFIGS, MONSTER_TIER_NAMES, RELIC_RARITY_NAMES } from './types';
 import {
@@ -124,6 +131,17 @@ import {
   WORLD_BOSS_REVIVE_COST_SOUL_ORBS,
   WORLD_BOSS_MAX_REVIVES,
   WORLD_BOSS_SIMULATED_PARTICIPANTS,
+  ALCHEMY_RECIPES,
+  POTIONS,
+  ALCHEMY_LEVEL_CONFIGS,
+  ALCHEMY_RARITY_COLORS,
+  ALCHEMY_RARITY_NAMES,
+  POTION_TYPE_NAMES,
+  POTION_TYPE_ICONS,
+  BUFF_DURATION_NAMES,
+  ALCHEMY_CRAFT_FAIL_REFUND_RATE,
+  ALCHEMY_BATTLE_BUFF_DURATION,
+  ALCHEMY_EXP_PER_CRAFT,
 } from './data';
 
 interface GameState {
@@ -554,6 +572,42 @@ interface GameState {
   getWorldBossTimeRemaining: () => number;
   isWorldBossAvailable: () => boolean;
   tickWorldBoss: () => void;
+
+  alchemyLevel: number;
+  alchemyExp: number;
+  ownedPotions: OwnedPotion[];
+  activeAlchemyBuffs: ActiveAlchemyBuff[];
+  unlockedRecipeIds: string[];
+  alchemyActiveTab: AlchemyTab;
+  craftingInProgress: boolean;
+  lastCraftTime: number;
+
+  getAlchemyLevelConfig: () => AlchemyLevelConfig;
+  getAlchemyExpToNext: () => number;
+  addAlchemyExp: (exp: number) => void;
+  getAlchemySuccessRate: (recipe: AlchemyRecipe) => number;
+  getAlchemyEffectMultiplier: () => number;
+  canCraftPotion: (recipeId: string) => boolean;
+  craftPotion: (recipeId: string) => { success: boolean; potionId: string | null; count: number };
+  usePotion: (potionId: string) => boolean;
+  usePotionInCombat: (potionId: string) => boolean;
+  applyAlchemyBuffs: (potionId: string) => void;
+  tickAlchemyBuffs: () => void;
+  consumeBattleBuff: () => void;
+  getActiveAlchemyBonus: (type: AlchemyPotionEffect['type']) => { flat: number; percent: number };
+  getAlchemyBuffDamageReduction: () => number;
+  getAlchemyBuffCritRate: () => number;
+  getAlchemyBuffCritDamage: () => number;
+  getAlchemyBuffExpBonus: () => number;
+  getAlchemyBuffGoldBonus: () => number;
+  getAlchemyBuffSoulOrbBonus: () => number;
+  getPotionInfo: (potionId: string) => Potion | undefined;
+  getOwnedPotionCount: (potionId: string) => number;
+  addPotion: (potionId: string, count: number) => void;
+  sellPotion: (potionId: string, count: number) => boolean;
+  unlockRecipe: (recipeId: string) => void;
+  isRecipeUnlocked: (recipeId: string) => boolean;
+  setAlchemyActiveTab: (tab: AlchemyTab) => void;
 }
 
 let logIdCounter = 0;
@@ -800,6 +854,15 @@ export const useGameStore = create<GameState>()(
       tradeRecords: [],
       ownedRelics: [],
       relicCodex: initRelicCodex(),
+
+      alchemyLevel: 1,
+      alchemyExp: 0,
+      ownedPotions: [],
+      activeAlchemyBuffs: [],
+      unlockedRecipeIds: ALCHEMY_RECIPES.filter(r => r.requiredAlchemyLevel <= 1).map(r => r.id),
+      alchemyActiveTab: 'recipes',
+      craftingInProgress: false,
+      lastCraftTime: 0,
 
       setScreen: (screen) => set({ screen }),
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -5797,10 +5860,385 @@ export const useGameStore = create<GameState>()(
       },
 
       setTownActiveTab: (tab) => set({ townActiveTab: tab }),
+
+      getAlchemyLevelConfig: () => {
+        const level = get().alchemyLevel;
+        return ALCHEMY_LEVEL_CONFIGS.find(c => c.level === level) || ALCHEMY_LEVEL_CONFIGS[0];
+      },
+
+      getAlchemyExpToNext: () => {
+        const level = get().alchemyLevel;
+        const config = ALCHEMY_LEVEL_CONFIGS.find(c => c.level === level);
+        const nextConfig = ALCHEMY_LEVEL_CONFIGS.find(c => c.level === level + 1);
+        if (!nextConfig) return 0;
+        return (nextConfig.expRequired || 0) - (config?.expRequired || 0);
+      },
+
+      addAlchemyExp: (exp) => {
+        set((state) => {
+          let newExp = state.alchemyExp + exp;
+          let newLevel = state.alchemyLevel;
+          const maxLevel = ALCHEMY_LEVEL_CONFIGS.length;
+
+          while (newLevel < maxLevel) {
+            const nextConfig = ALCHEMY_LEVEL_CONFIGS.find(c => c.level === newLevel + 1);
+            if (!nextConfig) break;
+            const currentConfigExp = ALCHEMY_LEVEL_CONFIGS.find(c => c.level === newLevel)?.expRequired || 0;
+            const needed = nextConfig.expRequired - currentConfigExp;
+            if (newExp >= needed) {
+              newExp -= needed;
+              newLevel += 1;
+              get().addBattleLog(`⚗️ 炼金等级提升至 ${newLevel} 级！`, 'levelup');
+            } else {
+              break;
+            }
+          }
+
+          const newUnlocked = ALCHEMY_RECIPES.filter(r => r.requiredAlchemyLevel <= newLevel).map(r => r.id);
+          const mergedUnlocked = [...new Set([...state.unlockedRecipeIds, ...newUnlocked])];
+
+          return { alchemyExp: newExp, alchemyLevel: newLevel, unlockedRecipeIds: mergedUnlocked };
+        });
+      },
+
+      getAlchemySuccessRate: (recipe) => {
+        const config = get().getAlchemyLevelConfig();
+        return Math.min(1.0, recipe.successRate + config.successRateBonus);
+      },
+
+      getAlchemyEffectMultiplier: () => {
+        const config = get().getAlchemyLevelConfig();
+        return config.bonusEffectMultiplier;
+      },
+
+      canCraftPotion: (recipeId) => {
+        const state = get();
+        const recipe = ALCHEMY_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return false;
+        if (state.alchemyLevel < recipe.requiredAlchemyLevel) return false;
+        if (!state.unlockedRecipeIds.includes(recipeId)) return false;
+        if (state.player.stats.gold < recipe.goldCost) return false;
+
+        for (const input of recipe.inputs) {
+          const count = get().getMaterialCount(input.materialId);
+          if (count < input.count) return false;
+        }
+
+        return true;
+      },
+
+      craftPotion: (recipeId) => {
+        const state = get();
+        const recipe = ALCHEMY_RECIPES.find(r => r.id === recipeId);
+        if (!recipe || !get().canCraftPotion(recipeId)) {
+          return { success: false, potionId: null, count: 0 };
+        }
+
+        const successRate = get().getAlchemySuccessRate(recipe);
+        const roll = Math.random();
+        const success = roll <= successRate;
+
+        set((s) => ({
+          player: {
+            ...s.player,
+            stats: {
+              ...s.player.stats,
+              gold: s.player.stats.gold - recipe.goldCost,
+            },
+          },
+        }));
+
+        for (const input of recipe.inputs) {
+          const currentCount = get().getMaterialCount(input.materialId);
+          const newCount = success ? currentCount - input.count : currentCount - Math.ceil(input.count * (1 - ALCHEMY_CRAFT_FAIL_REFUND_RATE));
+          set((s) => ({
+            materialInventory: newCount <= 0
+              ? s.materialInventory.filter(m => m.materialId !== input.materialId)
+              : s.materialInventory.map(m => m.materialId === input.materialId ? { ...m, count: newCount } : m),
+          }));
+        }
+
+        const expGain = ALCHEMY_EXP_PER_CRAFT[recipe.rarity] || 10;
+        get().addAlchemyExp(expGain);
+
+        if (success) {
+          const multiplier = get().getAlchemyEffectMultiplier();
+          const outputCount = Math.max(1, Math.floor(recipe.outputCount * multiplier));
+          get().addPotion(recipe.outputPotionId, outputCount);
+
+          const potion = POTIONS.find(p => p.id === recipe.outputPotionId);
+          get().addBattleLog(
+            `⚗️ 炼制成功！获得 ${potion?.icon || '🧪'} ${potion?.name || recipe.outputPotionId} ×${outputCount}`,
+            'event'
+          );
+
+          set({ lastCraftTime: Date.now() });
+          return { success: true, potionId: recipe.outputPotionId, count: outputCount };
+        } else {
+          get().addBattleLog('⚗️ 炼制失败...部分材料已消耗', 'system');
+          set({ lastCraftTime: Date.now() });
+          return { success: false, potionId: null, count: 0 };
+        }
+      },
+
+      usePotion: (potionId) => {
+        const state = get();
+        const owned = state.ownedPotions.find(p => p.potionId === potionId);
+        if (!owned || owned.count <= 0) return false;
+
+        const potion = POTIONS.find(p => p.id === potionId);
+        if (!potion) return false;
+
+        if (potion.combatUsable && potion.duration !== 'instant') return false;
+
+        if (potion.duration === 'instant') {
+          const multiplier = get().getAlchemyEffectMultiplier();
+          for (const effect of potion.effects) {
+            const value = effect.isPercent ? effect.value : Math.floor(effect.value * multiplier);
+            switch (effect.type) {
+              case 'hp':
+                if (effect.isPercent) get().healHp(Math.floor(state.player.stats.maxHp * value / 100));
+                else get().healHp(value);
+                break;
+              case 'mp':
+                if (effect.isPercent) get().healMp(Math.floor(state.player.stats.maxMp * value / 100));
+                else get().healMp(value);
+                break;
+              case 'maxHp':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, maxHp: s.player.stats.maxHp + value, hp: s.player.stats.hp + value } } }));
+                break;
+              case 'maxMp':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, maxMp: s.player.stats.maxMp + value, mp: s.player.stats.mp + value } } }));
+                break;
+              case 'attack':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, attack: s.player.stats.attack + value } } }));
+                break;
+              case 'defense':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, defense: s.player.stats.defense + value } } }));
+                break;
+              case 'speed':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, speed: s.player.stats.speed + value } } }));
+                break;
+              case 'luck':
+                set(s => ({ player: { ...s.player, stats: { ...s.player.stats, luck: s.player.stats.luck + value } } }));
+                break;
+            }
+          }
+          get().addBattleLog(`${potion.icon} 使用了 ${potion.name}`, 'heal');
+        } else {
+          get().applyAlchemyBuffs(potionId);
+        }
+
+        set((s) => ({
+          ownedPotions: s.ownedPotions.map(p =>
+            p.potionId === potionId ? { ...p, count: p.count - 1 } : p
+          ).filter(p => p.count > 0),
+        }));
+
+        return true;
+      },
+
+      usePotionInCombat: (potionId) => {
+        const state = get();
+        const potion = POTIONS.find(p => p.id === potionId);
+        if (!potion || !potion.combatUsable) return false;
+
+        const owned = state.ownedPotions.find(p => p.potionId === potionId);
+        if (!owned || owned.count <= 0) return false;
+
+        const multiplier = get().getAlchemyEffectMultiplier();
+        for (const effect of potion.effects) {
+          const value = effect.isPercent ? effect.value : Math.floor(effect.value * multiplier);
+          switch (effect.type) {
+            case 'hp':
+              if (effect.isPercent) get().healHp(Math.floor(state.player.stats.maxHp * value / 100));
+              else get().healHp(value);
+              break;
+            case 'mp':
+              if (effect.isPercent) get().healMp(Math.floor(state.player.stats.maxMp * value / 100));
+              else get().healMp(value);
+              break;
+            case 'damageReduction':
+              get().applyAlchemyBuffs(potionId);
+              break;
+          }
+        }
+
+        get().addBattleLog(`${potion.icon} 使用了 ${potion.name}`, 'heal');
+
+        set((s) => ({
+          ownedPotions: s.ownedPotions.map(p =>
+            p.potionId === potionId ? { ...p, count: p.count - 1 } : p
+          ).filter(p => p.count > 0),
+        }));
+
+        return true;
+      },
+
+      applyAlchemyBuffs: (potionId) => {
+        const potion = POTIONS.find(p => p.id === potionId);
+        if (!potion) return;
+
+        const existing = get().activeAlchemyBuffs.find(b => b.potionId === potionId);
+        if (existing) {
+          if (existing.duration === 'battle' && existing.remainingBattles !== undefined) {
+            set((s) => ({
+              activeAlchemyBuffs: s.activeAlchemyBuffs.map(b =>
+                b.potionId === potionId
+                  ? { ...b, remainingBattles: (b.remainingBattles || 0) + ALCHEMY_BATTLE_BUFF_DURATION }
+                  : b
+              ),
+            }));
+          } else if (existing.duration === 'timed' && existing.expiresAt !== null) {
+            set((s) => ({
+              activeAlchemyBuffs: s.activeAlchemyBuffs.map(b =>
+                b.potionId === potionId
+                  ? { ...b, expiresAt: b.expiresAt! + (potion.durationSeconds || 600) * 1000 }
+                  : b
+              ),
+            }));
+          }
+        } else {
+          const buff: ActiveAlchemyBuff = {
+            potionId: potion.id,
+            potionName: potion.name,
+            icon: potion.icon,
+            effects: potion.effects,
+            appliedAt: Date.now(),
+            expiresAt: potion.duration === 'timed' ? Date.now() + (potion.durationSeconds || 600) * 1000 : null,
+            duration: potion.duration,
+            remainingBattles: potion.duration === 'battle' ? ALCHEMY_BATTLE_BUFF_DURATION : undefined,
+          };
+          set((s) => ({ activeAlchemyBuffs: [...s.activeAlchemyBuffs, buff] }));
+        }
+
+        get().addBattleLog(`${potion.icon} 获得了 ${potion.name} 的增益效果`, 'event');
+      },
+
+      tickAlchemyBuffs: () => {
+        const now = Date.now();
+        set((s) => ({
+          activeAlchemyBuffs: s.activeAlchemyBuffs.filter(b => {
+            if (b.duration === 'timed' && b.expiresAt !== null) {
+              return b.expiresAt > now;
+            }
+            if (b.duration === 'battle' && b.remainingBattles !== undefined) {
+              return b.remainingBattles > 0;
+            }
+            return true;
+          }),
+        }));
+      },
+
+      consumeBattleBuff: () => {
+        set((s) => ({
+          activeAlchemyBuffs: s.activeAlchemyBuffs.map(b => {
+            if (b.duration === 'battle' && b.remainingBattles !== undefined && b.remainingBattles > 0) {
+              return { ...b, remainingBattles: b.remainingBattles - 1 };
+            }
+            return b;
+          }),
+        }));
+        get().tickAlchemyBuffs();
+      },
+
+      getActiveAlchemyBonus: (type) => {
+        const buffs = get().activeAlchemyBuffs;
+        let flat = 0;
+        let percent = 0;
+        const multiplier = get().getAlchemyEffectMultiplier();
+
+        for (const buff of buffs) {
+          for (const effect of buff.effects) {
+            if (effect.type === type) {
+              if (effect.isPercent) {
+                percent += effect.value * multiplier;
+              } else {
+                flat += Math.floor(effect.value * multiplier);
+              }
+            }
+          }
+        }
+        return { flat, percent };
+      },
+
+      getAlchemyBuffDamageReduction: () => get().getActiveAlchemyBonus('damageReduction').percent / 100,
+
+      getAlchemyBuffCritRate: () => get().getActiveAlchemyBonus('critRate').percent,
+
+      getAlchemyBuffCritDamage: () => get().getActiveAlchemyBonus('critDamage').percent,
+
+      getAlchemyBuffExpBonus: () => get().getActiveAlchemyBonus('expBonus').percent / 100,
+
+      getAlchemyBuffGoldBonus: () => get().getActiveAlchemyBonus('goldBonus').percent / 100,
+
+      getAlchemyBuffSoulOrbBonus: () => get().getActiveAlchemyBonus('soulOrbBonus').percent / 100,
+
+      getPotionInfo: (potionId) => POTIONS.find(p => p.id === potionId),
+
+      getOwnedPotionCount: (potionId) => {
+        const owned = get().ownedPotions.find(p => p.potionId === potionId);
+        return owned?.count || 0;
+      },
+
+      addPotion: (potionId, count) => {
+        const potion = POTIONS.find(p => p.id === potionId);
+        if (!potion) return;
+        const stackLimit = potion.stackLimit;
+
+        set((s) => {
+          const existing = s.ownedPotions.find(p => p.potionId === potionId);
+          if (existing) {
+            return {
+              ownedPotions: s.ownedPotions.map(p =>
+                p.potionId === potionId
+                  ? { ...p, count: Math.min(p.count + count, stackLimit) }
+                  : p
+              ),
+            };
+          }
+          return { ownedPotions: [...s.ownedPotions, { potionId, count: Math.min(count, stackLimit) }] };
+        });
+      },
+
+      sellPotion: (potionId, count) => {
+        const state = get();
+        const owned = state.ownedPotions.find(p => p.potionId === potionId);
+        if (!owned || owned.count < count) return false;
+
+        const potion = POTIONS.find(p => p.id === potionId);
+        if (!potion) return false;
+
+        const goldGained = potion.sellPrice * count;
+        get().addGold(goldGained);
+
+        set((s) => ({
+          ownedPotions: s.ownedPotions.map(p =>
+            p.potionId === potionId ? { ...p, count: p.count - count } : p
+          ).filter(p => p.count > 0),
+        }));
+
+        get().addBattleLog(`💰 出售 ${potion.icon} ${potion.name} ×${count}，获得 ${goldGained} 金币`, 'gold');
+        return true;
+      },
+
+      unlockRecipe: (recipeId) => {
+        const recipe = ALCHEMY_RECIPES.find(r => r.id === recipeId);
+        if (!recipe) return;
+        set((s) => {
+          if (s.unlockedRecipeIds.includes(recipeId)) return s;
+          return { unlockedRecipeIds: [...s.unlockedRecipeIds, recipeId] };
+        });
+        get().addBattleLog(`📜 解锁了新配方：${recipe.name}`, 'event');
+      },
+
+      isRecipeUnlocked: (recipeId) => get().unlockedRecipeIds.includes(recipeId),
+
+      setAlchemyActiveTab: (tab) => set({ alchemyActiveTab: tab }),
     }),
     {
       name: 'isekai-idle-game',
-      version: 10,
+      version: 11,
       migrate: (persistedState, version) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
@@ -5886,6 +6324,16 @@ export const useGameStore = create<GameState>()(
             totalBossesDefeated: 0,
             history: [],
           };
+        }
+        if (version < 11) {
+          state.alchemyLevel = 1;
+          state.alchemyExp = 0;
+          state.ownedPotions = [];
+          state.activeAlchemyBuffs = [];
+          state.unlockedRecipeIds = ALCHEMY_RECIPES.filter(r => r.requiredAlchemyLevel <= 1).map(r => r.id);
+          state.alchemyActiveTab = 'recipes';
+          state.craftingInProgress = false;
+          state.lastCraftTime = 0;
         }
         return state as unknown as GameState;
       },

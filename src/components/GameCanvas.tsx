@@ -42,6 +42,7 @@ export default function GameCanvas() {
   const skillCooldownsRef = useRef<Record<string, number>>({});
   const mpRegenTimerRef = useRef(0);
   const monsterPhaseCheckedRef = useRef(false);
+  const alchemyBuffTickRef = useRef(0);
 
   const {
     currentAreaId,
@@ -79,6 +80,15 @@ export default function GameCanvas() {
     tryDropRelic,
     addRelic,
     addRelicShards,
+    getActiveAlchemyBonus,
+    getAlchemyBuffDamageReduction,
+    getAlchemyBuffCritRate,
+    getAlchemyBuffCritDamage,
+    getAlchemyBuffExpBonus,
+    getAlchemyBuffGoldBonus,
+    getAlchemyBuffSoulOrbBonus,
+    consumeBattleBuff,
+    tickAlchemyBuffs,
   } = useGameStore();
 
   const currentArea = mapAreas.find((a) => a.id === currentAreaId);
@@ -186,8 +196,13 @@ export default function GameCanvas() {
     }
     
     isCrit = isCriticalHit(luck);
+    const alchemyCritRate = getAlchemyBuffCritRate();
+    if (!isCrit && alchemyCritRate > 0 && Math.random() * 100 < alchemyCritRate) {
+      isCrit = true;
+    }
     if (isCrit) {
-      damage = Math.floor(damage * 1.5);
+      const critMultiplier = 1.5 + getAlchemyBuffCritDamage() / 100;
+      damage = Math.floor(damage * critMultiplier);
     }
     
     const actualDamage = Math.floor(damage * (0.9 + Math.random() * 0.2));
@@ -207,9 +222,12 @@ export default function GameCanvas() {
       addParticles(monsterX, monsterY - 20, currentMonster.color, 20);
       
       const drops = getMonsterDropReward(currentMonster);
-      const expReward = drops.exp;
-      const goldReward = drops.gold;
-      const soulOrbs = drops.soulOrbs;
+      const alchemyExpBonus = getAlchemyBuffExpBonus();
+      const alchemyGoldBonus = getAlchemyBuffGoldBonus();
+      const alchemySoulOrbBonus = getAlchemyBuffSoulOrbBonus();
+      const expReward = Math.floor(drops.exp * (1 + alchemyExpBonus));
+      const goldReward = Math.floor(drops.gold * (1 + alchemyGoldBonus));
+      const soulOrbs = drops.soulOrbs > 0 ? Math.max(1, Math.floor(drops.soulOrbs * (1 + alchemySoulOrbBonus))) : 0;
       const shardChance = drops.shardChance;
       
       addExp(expReward);
@@ -217,6 +235,8 @@ export default function GameCanvas() {
       if (soulOrbs > 0) {
         addSoulOrbs(soulOrbs);
       }
+
+      consumeBattleBuff();
       
       const repGain = Math.max(1, Math.floor(currentMonster.baseExpReward / 10));
       addAreaReputation(currentAreaId, repGain);
@@ -231,6 +251,9 @@ export default function GameCanvas() {
         dropMsg += `, +${soulOrbs} 魂珠`;
       }
       dropMsg += `, +${repGain} 声望`;
+      if (alchemyExpBonus > 0 || alchemyGoldBonus > 0 || alchemySoulOrbBonus > 0) {
+        dropMsg += ` (⚗️药剂加成)`;
+      }
       addBattleLog(dropMsg, 'drop');
       
       if (currentMonster.tier === 'boss') {
@@ -309,7 +332,12 @@ export default function GameCanvas() {
     }
     
     const damage = Math.max(1, currentMonster.attack - totalDefense / 2);
-    const actualDamage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+    let actualDamage = Math.floor(damage * (0.9 + Math.random() * 0.2));
+    
+    const alchemyReduction = getAlchemyBuffDamageReduction();
+    if (alchemyReduction > 0) {
+      actualDamage = Math.floor(actualDamage * (1 - alchemyReduction));
+    }
     
     addParticles(playerX, playerY - 20, '#ef4444', 6);
     addDamageNumber(playerX + (Math.random() - 0.5) * 20, playerY - 30, actualDamage, true);
@@ -554,6 +582,12 @@ export default function GameCanvas() {
             performMonsterAttack(playerX, playerYRef.current);
           }, 200);
         }
+      }
+
+      alchemyBuffTickRef.current += deltaTime;
+      if (alchemyBuffTickRef.current >= 5000) {
+        alchemyBuffTickRef.current = 0;
+        tickAlchemyBuffs();
       }
 
       animationRef.current = requestAnimationFrame(gameLoop);

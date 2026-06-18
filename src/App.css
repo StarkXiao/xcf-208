@@ -9782,3 +9782,571 @@
   color: #9ca3af;
 }
 
+.alchemy-workshop {
+  padding: 10px;
+}
+
+.alchemy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.alchemy-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #e5e7eb;
+}
+
+.alchemy-level-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid #8b5cf6;
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #c4b5fd;
+}
+
+.level-title {
+  font-size: 11px;
+  color: #a78bfa;
+}
+
+.alchemy-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.alchemy-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 56px;
+}
+
+.alchemy-tab.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
+.alchemy-tab .tab-icon {
+  font-size: 16px;
+}
+
+.alchemy-content {
+  min-height: 400px;
+}
+
+.cauldron-level-card {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.level-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.level-icon {
+  font-size: 28px;
+}
+
+.level-info {
+  flex: 1;
+}
+
+.level-info h4 {
+  margin: 0 0 4px;
+  color: #c4b5fd;
+  font-size: 14px;
+}
+
+.exp-bar {
+  height: 6px;
+  background: #374151;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.exp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.exp-text {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.level-bonuses {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #9ca3af;
+  flex-wrap: wrap;
+}
+
+.craft-result {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+  font-size: 13px;
+  animation: fadeIn 0.3s;
+}
+
+.craft-result.success {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid #22c55e;
+  color: #4ade80;
+}
+
+.craft-result.fail {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #f87171;
+}
+
+.quick-craft-list h4 {
+  margin: 0 0 8px;
+  color: #d1d5db;
+  font-size: 14px;
+}
+
+.quick-craft-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: #1f2937;
+}
+
+.quick-icon {
+  font-size: 18px;
+}
+
+.quick-name {
+  flex: 1;
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.quick-craft-btn {
+  padding: 4px 10px;
+  border: 1px solid #8b5cf6;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.quick-craft-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.recipe-filters {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.filter-btn {
+  padding: 4px 10px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-btn.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
+.recipe-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.alchemy-recipe-card {
+  background: #1f2937;
+  border: 1px solid;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.recipe-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.recipe-icon {
+  font-size: 22px;
+}
+
+.recipe-info {
+  flex: 1;
+}
+
+.recipe-info h5 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.recipe-category {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.recipe-rarity {
+  font-size: 10px;
+}
+
+.recipe-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 4px 0;
+}
+
+.recipe-output,
+.recipe-inputs,
+.recipe-cost {
+  font-size: 11px;
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.recipe-label {
+  color: #6b7280;
+  font-size: 10px;
+  min-width: 36px;
+}
+
+.recipe-material {
+  color: #d1d5db;
+  font-size: 11px;
+}
+
+.recipe-material.insufficient {
+  color: #f87171;
+}
+
+.recipe-gold {
+  color: #fbbf24;
+}
+
+.recipe-gold.insufficient {
+  color: #f87171;
+}
+
+.level-req {
+  color: #f87171;
+  font-size: 10px;
+}
+
+.success-rate {
+  color: #4ade80;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.craft-btn {
+  width: 100%;
+  padding: 6px;
+  margin-top: 6px;
+  border: 1px solid #8b5cf6;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.25);
+  color: #c4b5fd;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.craft-btn:hover:not(.disabled) {
+  background: rgba(139, 92, 246, 0.4);
+}
+
+.craft-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.locked-recipes {
+  margin-top: 16px;
+}
+
+.locked-recipes h4 {
+  margin: 0 0 8px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.locked-recipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.locked-recipe-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #111827;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.material-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid;
+  border-radius: 8px;
+  background: #1f2937;
+}
+
+.material-icon {
+  font-size: 18px;
+}
+
+.material-info {
+  flex: 1;
+}
+
+.material-name {
+  display: block;
+  font-size: 11px;
+}
+
+.material-count {
+  font-size: 12px;
+  color: #d1d5db;
+  font-weight: bold;
+}
+
+.material-rarity {
+  font-size: 9px;
+}
+
+.potion-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.alchemy-potion-card {
+  background: #1f2937;
+  border: 1px solid;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.potion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.potion-icon {
+  font-size: 22px;
+}
+
+.potion-info {
+  flex: 1;
+}
+
+.potion-info h5 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.potion-meta {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.potion-rarity {
+  font-size: 10px;
+}
+
+.potion-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 4px 0;
+}
+
+.potion-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.effect-tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  background: #111827;
+}
+
+.effect-tag.positive {
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.effect-tag.negative {
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.potion-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.potion-use-btn {
+  padding: 4px 10px;
+  border: 1px solid #22c55e;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.potion-combat-btn {
+  padding: 4px 10px;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.potion-sell-btn {
+  padding: 4px 10px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.buff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alchemy-buff-card {
+  background: #1f2937;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.buff-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.buff-icon {
+  font-size: 16px;
+}
+
+.buff-name {
+  flex: 1;
+  font-size: 12px;
+  color: #c4b5fd;
+}
+
+.buff-time {
+  font-size: 10px;
+  color: #fbbf24;
+}
+
+.buff-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.empty-text {
+  text-align: center;
+  color: #6b7280;
+  padding: 20px;
+  font-size: 13px;
+}
+
+.alchemy-inventory h4,
+.alchemy-potions h4,
+.alchemy-buffs h4 {
+  margin: 0 0 10px;
+  color: #d1d5db;
+  font-size: 15px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

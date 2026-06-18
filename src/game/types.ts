@@ -439,7 +439,7 @@ export interface BattleLog {
 }
 
 export type GameScreen = 'rebirth' | 'game';
-export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss';
+export type GameTab = 'stats' | 'map' | 'companions' | 'events' | 'expedition' | 'talents' | 'equipment' | 'trade' | 'chapters' | 'commissions' | 'blackmarket' | 'guild' | 'skilltree' | 'relics' | 'town' | 'worldboss' | 'alchemy';
 
 export type ExpeditionDifficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 
@@ -1543,3 +1543,81 @@ export interface WorldBossHistoryEntry {
   totalParticipants: number;
   rewardsClaimed: boolean;
 }
+
+export type AlchemyRecipeRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export type PotionType = 'healing' | 'mana' | 'buff' | 'cure' | 'special';
+
+export type PotionRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export type BuffDuration = 'instant' | 'battle' | 'timed';
+
+export interface AlchemyRecipeInput {
+  materialId: string;
+  count: number;
+}
+
+export interface AlchemyRecipe {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: AlchemyRecipeRarity;
+  inputs: AlchemyRecipeInput[];
+  goldCost: number;
+  outputPotionId: string;
+  outputCount: number;
+  requiredAlchemyLevel: number;
+  successRate: number;
+  areaId?: string;
+  unlockCondition?: string;
+  category: string;
+}
+
+export interface Potion {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: PotionRarity;
+  type: PotionType;
+  effects: AlchemyPotionEffect[];
+  duration: BuffDuration;
+  durationSeconds?: number;
+  sellPrice: number;
+  combatUsable: boolean;
+  stackLimit: number;
+}
+
+export interface AlchemyPotionEffect {
+  type: 'hp' | 'mp' | 'attack' | 'defense' | 'speed' | 'luck' | 'critRate' | 'critDamage' | 'dodge' | 'expBonus' | 'goldBonus' | 'soulOrbBonus' | 'maxHp' | 'maxMp' | 'damageReduction';
+  value: number;
+  isPercent: boolean;
+}
+
+export interface OwnedPotion {
+  potionId: string;
+  count: number;
+}
+
+export interface ActiveAlchemyBuff {
+  potionId: string;
+  potionName: string;
+  icon: string;
+  effects: AlchemyPotionEffect[];
+  appliedAt: number;
+  expiresAt: number | null;
+  duration: BuffDuration;
+  remainingBattles?: number;
+}
+
+export interface AlchemyLevelConfig {
+  level: number;
+  expRequired: number;
+  successRateBonus: number;
+  unlockSlotCount: number;
+  bonusEffectMultiplier: number;
+  title: string;
+}
+
+export type AlchemyTab = 'recipes' | 'inventory' | 'potions' | 'buffs' | 'cauldron';
